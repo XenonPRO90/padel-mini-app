@@ -31,15 +31,14 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
   const posterRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
 
-  // Ranked with proper tie handling
+  // Dense ranking: ties share a place, next distinct score increments by 1.
+  // Avoids the visual "where's #2 / #4 / #6?" gap when many pairs tie up.
   const ranked: { place: number; p: ScoredPlayer }[] = [];
   let lastPts = -1;
   let placeNum = 0;
-  let seen = 0;
   for (const p of leaderboard) {
-    seen += 1;
     if (p.points !== lastPts) {
-      placeNum = seen;
+      placeNum += 1;
       lastPts = p.points;
     }
     ranked.push({ place: placeNum, p });
