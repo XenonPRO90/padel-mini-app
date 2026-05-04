@@ -447,3 +447,213 @@ async def finish_tournament(tid: int):
         )
         await db.commit()
     return {"ok": True}
+
+
+# ─── Player CRUD ───────────────────────────────────────────
+
+VALID_LEVELS = {"A+", "A", "B+", "B", "C+", "C", "C- strong", "C-strong", "C-", "D"}
+VALID_SIDES = {"right", "left", "both", "R", "L", "U"}
+
+
+def _normalize_side(side: str) -> str:
+    return {"R": "right", "L": "left", "U": "both"}.get(side, side)
+
+
+def _normalize_level(level: str) -> str:
+    return "C- strong" if level == "C-strong" else level
+
+
+async def create_player(name: str, level: str, side: str) -> dict:
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("name required")
+    level = _normalize_level(level)
+    side = _normalize_side(side)
+    if level not in VALID_LEVELS:
+        raise ValueError(f"invalid level: {level}")
+    if side not in {"right", "left", "both"}:
+        raise ValueError(f"invalid side: {side}")
+    async with conn() as db:
+        cur = await db.execute(
+            "INSERT INTO players(name, level, side) VALUES(?,?,?)",
+            (name, level, side),
+        )
+        await db.commit()
+        pid = cur.lastrowid
+    return {"id": pid, "name": name, "level": level, "side": side}
+
+
+async def update_player(pid: int, name: str, level: str, side: str) -> dict:
+    level = _normalize_level(level)
+    side = _normalize_side(side)
+    async with conn() as db:
+        await db.execute(
+            "UPDATE players SET name=?, level=?, side=? WHERE id=?",
+            (name.strip(), level, side, pid),
+        )
+        await db.commit()
+    return {"id": pid, "name": name, "level": level, "side": side}
+
+
+async def delete_player(pid: int):
+    async with conn() as db:
+        # Block delete if player is in an active tournament
+        cur = await db.execute(
+            """SELECT 1 FROM tournament_players tp
+               JOIN tournaments t ON t.id=tp.tournament_id
+               WHERE tp.player_id=? AND t.status IN ('setup','active') LIMIT 1""",
+            (pid,),
+        )
+        if await cur.fetchone():
+            raise ValueError("Player is part of an active tournament")
+        await db.execute("DELETE FROM players WHERE id=?", (pid,))
+        await db.commit()
+    return {"ok": True}
+
+
+# ─── Tournament create ────────────────────────────────────
+
+async def create_tournament(
+    name: str,
+    num_courts: int,
+    mode: str,
+    initial_order: str,
+    initial_points: int,
+    start_round: int,
+    court_points: dict[int, int],
+    player_ids: list[int],
+) -> dict:
+    """Create a new tournament with players, generate round 1, and activate it."""
+    from .pairing import assign_courts
+    import random
+
+    if mode not in ("rotating", "fixed"):
+        raise ValueError("mode must be 'rotating' or 'fixed'")
+    if initial_order not in ("keep", "random"):
+        raise ValueError("initial_order must be 'keep' or 'random'")
+    if num_courts < 1 or num_courts > 8:
+        raise ValueError("num_courts out of range")
+    if len(player_ids) % 4 != 0:
+        raise ValueError("player count must be divisible by 4")
+    if len(player_ids) // 4 < num_courts:
+        raise ValueError("Not enough players for the requested number of courts")
+
+    # Apply ordering
+    ordered = list(player_ids)
+    if initial_order == "random":
+        random.shuffle(ordered)
+
+    async with conn() as db:
+        await db.execute("BEGIN")
+        try:
+            cur = await db.execute(
+                """INSERT INTO tournaments(name, num_courts, mode, initial_order, initial_points, start_round, status, current_round)
+                   VALUES(?,?,?,?,?,?,'active',1)""",
+                (name.strip(), num_courts, mode, initial_order, initial_points, start_round),
+            )
+            tid = cur.lastrowid
+
+            # tournament_players
+            for pos, pid in enumerate(ordered, start=1):
+                court = ((pos - 1) // 4) + 1  # initial court by position
+                if court > num_courts:
+                    court = num_courts
+                await db.execute(
+                    "INSERT INTO tournament_players(tournament_id, player_id, position, current_court) VALUES(?,?,?,?)",
+                    (tid, pid, pos, court),
+                )
+
+            # court points
+            for cn, pts in court_points.items():
+                await db.execute(
+                    "INSERT INTO court_points(tournament_id, court_num, points) VALUES(?,?,?)",
+                    (tid, cn, pts),
+                )
+
+            # round 1
+            cur = await db.execute(
+                "INSERT INTO rounds(tournament_id, round_num) VALUES(?,1)", (tid,)
+            )
+            r1_id = cur.lastrowid
+
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    # Build round-1 matches outside the transaction (assign_courts reads players)
+    tp = await get_tournament_players(tid)
+    if mode == "fixed":
+        sorted_players = sorted(tp, key=lambda x: (x["current_court"] or 999, x["position"]))
+        courts_out = []
+        for ci in range(num_courts):
+            chunk = sorted_players[ci*4:ci*4+4]
+            if len(chunk) < 4:
+                break
+            courts_out.append({
+                "court_num": ci + 1,
+                "team1": [chunk[0], chunk[1]],
+                "team2": [chunk[2], chunk[3]],
+            })
+    else:
+        courts_out = assign_courts(tp, num_courts, {}, None)
+
+    async with conn() as db:
+        for c in courts_out:
+            t1, t2 = c["team1"], c["team2"]
+            await db.execute(
+                "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
+                (r1_id, c["court_num"],
+                 t1[0]["player_id"], t1[1]["player_id"], t2[0]["player_id"], t2[1]["player_id"]),
+            )
+            if mode == "rotating":
+                pa, pb = sorted([t1[0]["player_id"], t1[1]["player_id"]])
+                pc, pd = sorted([t2[0]["player_id"], t2[1]["player_id"]])
+                for (a, b) in ((pa, pb), (pc, pd)):
+                    await db.execute(
+                        """INSERT INTO pair_history(tournament_id, player_a, player_b, last_round, count)
+                           VALUES(?,?,?,1,1)
+                           ON CONFLICT(tournament_id, player_a, player_b)
+                           DO UPDATE SET last_round=excluded.last_round, count=count+1""",
+                        (tid, a, b),
+                    )
+        await db.commit()
+
+    return {"ok": True, "tournament_id": tid}
+
+
+# ─── Share text ────────────────────────────────────────────
+
+async def get_share_text(tid: int) -> str:
+    """Build a forwardable text describing the current round."""
+    t = await get_tournament(tid)
+    if not t:
+        return "No tournament"
+    round_obj = await get_current_round(tid)
+    target_round = round_obj
+    if not target_round:
+        # use last finished round
+        rounds = await get_tournament_rounds(tid)
+        target_round = rounds[-1] if rounds else None
+    if not target_round:
+        return f"📋 {t['name']}\nNo rounds yet."
+    matches = await get_round_matches(target_round["id"])
+    lines = [
+        f"📋 Расписание · Раунд {target_round['round_num']}",
+        f"*{t['name']}*",
+        "",
+    ]
+    for m in matches:
+        n1 = " & ".join(p["name"] for p in m["team1"])
+        n2 = " & ".join(p["name"] for p in m["team2"])
+        l1 = "/".join(p["level"] for p in m["team1"])
+        l2 = "/".join(p["level"] for p in m["team2"])
+        lines.append(f"🏟 КОРТ {m['court_num']}")
+        lines.append(f"  {n1}  ({l1})")
+        lines.append(f"  vs")
+        lines.append(f"  {n2}  ({l2})")
+        if m["winner"]:
+            w = "TEAM 1" if m["winner"] == 1 else "TEAM 2"
+            lines.append(f"  ✓ {w} won")
+        lines.append("")
+    return "\n".join(lines)

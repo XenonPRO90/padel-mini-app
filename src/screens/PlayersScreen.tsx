@@ -6,7 +6,12 @@ import { LevelBadge, SideBadge } from '../components/Badges';
 import { Label } from '../components/CourtCard';
 import type { Player } from '../lib/types';
 
-export function PlayersScreen() {
+interface PlayersScreenProps {
+  onOpenPlayer?: (p: Player) => void;
+  onAddPlayer?: () => void;
+}
+
+export function PlayersScreen({ onOpenPlayer, onAddPlayer }: PlayersScreenProps = {}) {
   const [q, setQ] = useState('');
   const { data, isLoading, error, refetch } = useQuery<{ items: Player[] }>({
     queryKey: ['players'],
@@ -51,10 +56,14 @@ export function PlayersScreen() {
         ) : (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '0 16px' }}>
             {filtered.map((p, i) => (
-              <div key={p.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
-                borderBottom: i < filtered.length - 1 ? `1px solid ${T.border}` : 'none',
-              }}>
+              <div
+                key={p.id}
+                onClick={() => onOpenPlayer?.(p)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+                  borderBottom: i < filtered.length - 1 ? `1px solid ${T.border}` : 'none',
+                  cursor: onOpenPlayer ? 'pointer' : 'default',
+                }}>
                 <Avatar name={p.name} size={36} />
                 <span style={{ flex: 1, fontSize: 16, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {p.name}
@@ -71,6 +80,23 @@ export function PlayersScreen() {
           </div>
         )}
       </div>
+      {onAddPlayer && (
+        <button
+          onClick={onAddPlayer}
+          style={{
+            position: 'absolute', right: 16, bottom: 84,
+            width: 56, height: 56, borderRadius: '50%',
+            background: T.accent, color: '#0B0E12',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: 'none', cursor: 'pointer',
+            boxShadow: `0 0 24px ${T.accent}66`,
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12h14" stroke="#0B0E12" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

@@ -5,14 +5,26 @@ import { HomeScreen } from './screens/HomeScreen';
 import { PlayersScreen } from './screens/PlayersScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { LiveRoundScreen } from './screens/LiveRoundScreen';
+import { PlayerEditScreen } from './screens/PlayerEditScreen';
+import { WizardScreen } from './screens/WizardScreen';
+import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
+import { RoundDetailScreen } from './screens/RoundDetailScreen';
 import { T } from './lib/tokens';
+import type { Player } from './lib/types';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 5_000, retry: 1 } },
 });
 
 type Tab = 'tournament' | 'players' | 'history';
-type Screen = 'home' | 'liveRound';
+
+type Screen =
+  | { name: 'home' }
+  | { name: 'liveRound' }
+  | { name: 'wizard' }
+  | { name: 'playerEdit'; player: Player | null }
+  | { name: 'tournamentDetail'; tid: number }
+  | { name: 'roundDetail'; tid: number; roundNum: number };
 
 declare global {
   interface Window {
@@ -38,7 +50,11 @@ declare global {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('tournament');
-  const [screen, setScreen] = useState<Screen>('home');
+  const [stack, setStack] = useState<Screen[]>([{ name: 'home' }]);
+
+  const top = stack[stack.length - 1];
+  const push = (s: Screen) => setStack((prev) => [...prev, s]);
+  const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -48,23 +64,25 @@ export default function App() {
         tg.expand();
         tg.setHeaderColor?.(T.bg);
         tg.setBackgroundColor?.(T.bg);
-      } catch { /* not in Telegram, fine */ }
+      } catch { /* not in Telegram */ }
     }
   }, []);
 
-  // Telegram BackButton wiring: show on inner screens, fire goHome on tap
+  // Telegram BackButton wiring: show on inner screens, fire pop on tap
   useEffect(() => {
     const back = window.Telegram?.WebApp?.BackButton;
     if (!back) return;
-    const goHome = () => setScreen('home');
-    if (screen !== 'home') {
+    const goBack = () => pop();
+    if (top.name !== 'home') {
       back.show();
-      back.onClick(goHome);
+      back.onClick(goBack);
     } else {
       back.hide();
     }
-    return () => back.offClick(goHome);
-  }, [screen]);
+    return () => back.offClick(goBack);
+  }, [top.name]);
+
+  const showTabBar = top.name === 'home';
 
   return (
     <QueryClientProvider client={qc}>
@@ -73,17 +91,45 @@ export default function App() {
         background: T.bg, color: T.textPrimary,
       }}>
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {tab === 'tournament' && screen === 'home' && (
-            <HomeScreen onOpenLiveRound={() => setScreen('liveRound')} />
+          {top.name === 'home' && tab === 'tournament' && (
+            <HomeScreen
+              onOpenLiveRound={() => push({ name: 'liveRound' })}
+              onCreateTournament={() => push({ name: 'wizard' })}
+            />
           )}
-          {tab === 'tournament' && screen === 'liveRound' && (
-            <LiveRoundScreen onBack={() => setScreen('home')} />
+          {top.name === 'home' && tab === 'players' && (
+            <PlayersScreen
+              onOpenPlayer={(p) => push({ name: 'playerEdit', player: p })}
+              onAddPlayer={() => push({ name: 'playerEdit', player: null })}
+            />
           )}
-          {tab === 'players' && <PlayersScreen />}
-          {tab === 'history' && <HistoryScreen />}
+          {top.name === 'home' && tab === 'history' && (
+            <HistoryScreen
+              onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
+            />
+          )}
+          {top.name === 'liveRound' && (
+            <LiveRoundScreen onBack={pop} />
+          )}
+          {top.name === 'wizard' && (
+            <WizardScreen onClose={pop} />
+          )}
+          {top.name === 'playerEdit' && (
+            <PlayerEditScreen player={top.player} onClose={pop} />
+          )}
+          {top.name === 'tournamentDetail' && (
+            <TournamentDetailScreen
+              tid={top.tid}
+              onBack={pop}
+              onOpenRound={(rn) => push({ name: 'roundDetail', tid: top.tid, roundNum: rn })}
+            />
+          )}
+          {top.name === 'roundDetail' && (
+            <RoundDetailScreen tid={top.tid} roundNum={top.roundNum} onBack={pop} />
+          )}
         </div>
-        {screen === 'home' && (
-          <TabBar active={tab} onChange={(t) => { setTab(t); setScreen('home'); }} />
+        {showTabBar && (
+          <TabBar active={tab} onChange={(t) => { setTab(t); }} />
         )}
       </div>
     </QueryClientProvider>

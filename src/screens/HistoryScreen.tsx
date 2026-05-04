@@ -4,7 +4,11 @@ import { T } from '../lib/tokens';
 import { Label } from '../components/CourtCard';
 import type { HistoryItem } from '../lib/types';
 
-export function HistoryScreen() {
+interface HistoryScreenProps {
+  onOpenTournament?: (tid: number) => void;
+}
+
+export function HistoryScreen({ onOpenTournament }: HistoryScreenProps = {}) {
   const { data, isLoading, error, refetch } = useQuery<{ items: HistoryItem[] }>({
     queryKey: ['history'],
     queryFn: () => api('/api/tournaments/history'),
@@ -31,9 +35,13 @@ export function HistoryScreen() {
           </div>
         ) : (
           items.map((it) => (
-            <div key={it.id} style={{
-              background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px',
-            }}>
+            <div
+              key={it.id}
+              onClick={() => onOpenTournament?.(it.id)}
+              style={{
+                background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px',
+                cursor: onOpenTournament ? 'pointer' : 'default',
+              }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{it.name}</div>

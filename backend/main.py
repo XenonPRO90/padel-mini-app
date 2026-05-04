@@ -150,6 +150,75 @@ async def finish(tid: int, _user=Depends(get_tg_user)):
     return await q.finish_tournament(tid)
 
 
+# ─── Player CRUD ───────────────────────────────────────────
+
+class PlayerBody(BaseModel):
+    name: str
+    level: str
+    side: str  # 'right' | 'left' | 'both' (or 'R'/'L'/'U')
+
+
+@app.post("/api/players")
+async def players_create(body: PlayerBody, _user=Depends(get_tg_user)):
+    try:
+        return await q.create_player(body.name, body.level, body.side)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/players/{pid}")
+async def players_update(pid: int, body: PlayerBody, _user=Depends(get_tg_user)):
+    try:
+        return await q.update_player(pid, body.name, body.level, body.side)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/players/{pid}")
+async def players_delete(pid: int, _user=Depends(get_tg_user)):
+    try:
+        return await q.delete_player(pid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ─── Tournament create ────────────────────────────────────
+
+class TournamentCreateBody(BaseModel):
+    name: str
+    num_courts: int
+    mode: str  # 'rotating' | 'fixed'
+    initial_order: str  # 'keep' | 'random'
+    initial_points: int
+    start_round: int
+    court_points: dict[int, int]  # {court_num: points}
+    player_ids: list[int]
+
+
+@app.post("/api/tournaments")
+async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_tg_user)):
+    try:
+        return await q.create_tournament(
+            name=body.name,
+            num_courts=body.num_courts,
+            mode=body.mode,
+            initial_order=body.initial_order,
+            initial_points=body.initial_points,
+            start_round=body.start_round,
+            court_points=body.court_points,
+            player_ids=body.player_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ─── Share text ───────────────────────────────────────────
+
+@app.get("/api/tournaments/{tid}/share")
+async def share_text(tid: int, _user=Depends(get_tg_user)):
+    return {"text": await q.get_share_text(tid)}
+
+
 # ─── Misc ──────────────────────────────────────────────────
 
 @app.get("/api/me")
