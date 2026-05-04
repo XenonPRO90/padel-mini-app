@@ -225,48 +225,50 @@ function CourtRow({ match }: { match: Match }) {
           <TennisBallSmall />
         </div>
       </div>
-      {/* Players card */}
+      {/* Players card — each player on its own line so long names don't truncate */}
       <div style={{
-        flex: 1,
+        flex: 1, minWidth: 0,
         background: P.card,
         border: `1px solid ${P.cardBorder}`,
         borderLeft: 'none',
         borderTopRightRadius: 12,
         borderBottomRightRadius: 12,
-        padding: '10px 14px',
-        display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '12px 14px',
+        display: 'flex', flexDirection: 'column', gap: 6,
       }}>
-        <PlayerLine a={match.team1[0]} b={match.team1[1]} />
+        <PlayerLine p={match.team1[0]} />
+        <PlayerLine p={match.team1[1]} />
         <div style={{
-          height: 1, background: P.cardBorder, margin: '8px 0',
-          position: 'relative',
+          height: 1, background: P.cardBorder, margin: '4px 0', position: 'relative',
         }}>
           <span style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)',
             background: P.card,
-            padding: '0 8px',
+            padding: '0 10px',
             fontFamily: P.serif, fontSize: 13, fontStyle: 'italic',
             color: P.accentGold, fontWeight: 500,
-          }}>и</span>
+          }}>VS</span>
         </div>
-        <PlayerLine a={match.team2[0]} b={match.team2[1]} />
+        <PlayerLine p={match.team2[0]} />
+        <PlayerLine p={match.team2[1]} />
       </div>
     </div>
   );
 }
 
-function PlayerLine({ a, b }: { a: MatchPlayer; b: MatchPlayer }) {
+function PlayerLine({ p }: { p: MatchPlayer }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      fontFamily: P.serif,
+      display: 'flex', alignItems: 'baseline', gap: 6,
+      fontFamily: P.serif, minWidth: 0,
     }}>
-      <span style={{ fontSize: 17, fontWeight: 600, color: P.textPrimary, flexShrink: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
-      <span style={{ fontSize: 12, color: P.textDim, flexShrink: 0 }}>({a.level})</span>
-      <span style={{ fontStyle: 'italic', fontSize: 12, color: P.accentGold, margin: '0 4px', flexShrink: 0 }}>и</span>
-      <span style={{ fontSize: 17, fontWeight: 600, color: P.textPrimary, flexShrink: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
-      <span style={{ fontSize: 12, color: P.textDim, flexShrink: 0 }}>({b.level})</span>
+      <span style={{
+        fontSize: 17, fontWeight: 600, color: P.textPrimary,
+        flex: 1, minWidth: 0,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{p.name}</span>
+      <span style={{ fontSize: 12, color: P.textDim, flexShrink: 0 }}>({p.level})</span>
     </div>
   );
 }
