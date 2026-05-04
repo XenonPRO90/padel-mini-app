@@ -7,6 +7,7 @@ Run from inside backend/:
 """
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from .auth import get_tg_user
 from . import queries as q
@@ -116,6 +117,37 @@ async def player_detail(pid: int, _user=Depends(get_tg_user)):
         raise HTTPException(404, "Player not found")
     stats = await q.get_player_stats(pid)
     return {"player": p, "stats": stats}
+
+
+# ─── Misc ──────────────────────────────────────────────────
+
+# ─── Mutations ─────────────────────────────────────────────
+
+class WinnerBody(BaseModel):
+    winner: int  # 1 or 2
+
+
+@app.post("/api/matches/{match_id}/winner")
+async def set_match_winner(match_id: int, body: WinnerBody, _user=Depends(get_tg_user)):
+    if body.winner not in (1, 2):
+        raise HTTPException(400, "winner must be 1 or 2")
+    try:
+        return await q.record_match_winner(match_id, body.winner)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/tournaments/{tid}/next-round")
+async def next_round(tid: int, _user=Depends(get_tg_user)):
+    try:
+        return await q.advance_to_next_round(tid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/tournaments/{tid}/finish")
+async def finish(tid: int, _user=Depends(get_tg_user)):
+    return await q.finish_tournament(tid)
 
 
 # ─── Misc ──────────────────────────────────────────────────

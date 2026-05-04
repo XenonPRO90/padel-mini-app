@@ -193,3 +193,257 @@ async def is_admin(tg_id: int) -> bool:
     async with conn() as db:
         cur = await db.execute("SELECT 1 FROM admins WHERE tg_id=?", (tg_id,))
         return bool(await cur.fetchone())
+
+
+# ─── Mutations ────────────────────────────────────────────
+
+async def get_match(match_id: int):
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT m.*, r.tournament_id, r.round_num
+               FROM matches m JOIN rounds r ON r.id=m.round_id
+               WHERE m.id=?""",
+            (match_id,),
+        )
+        return row_to_dict(await cur.fetchone())
+
+
+async def record_match_winner(match_id: int, winner: int):
+    """Set the winner of a match. If a winner was already set, undo it first
+    (subtract points/wins/losses) so re-records are idempotent.
+    Updates scores, pair_history, and the matches.winner column in one tx."""
+    if winner not in (1, 2):
+        raise ValueError("winner must be 1 or 2")
+
+    async with conn() as db:
+        await db.execute("BEGIN")
+        try:
+            cur = await db.execute(
+                """SELECT m.*, r.tournament_id, r.round_num,
+                          t.start_round, t.initial_points
+                   FROM matches m
+                   JOIN rounds r ON r.id=m.round_id
+                   JOIN tournaments t ON t.id=r.tournament_id
+                   WHERE m.id=?""",
+                (match_id,),
+            )
+            m = await cur.fetchone()
+            if not m:
+                raise ValueError("Match not found")
+
+            # Determine points awarded for this match
+            if m["round_num"] >= m["start_round"]:
+                cur = await db.execute(
+                    "SELECT points FROM court_points WHERE tournament_id=? AND court_num=?",
+                    (m["tournament_id"], m["court_num"]),
+                )
+                row = await cur.fetchone()
+                pts = row["points"] if row else m["initial_points"]
+            else:
+                pts = m["initial_points"]
+
+            # Undo previous result if any
+            if m["winner"] is not None:
+                old_winners = (m["p1"], m["p2"]) if m["winner"] == 1 else (m["p3"], m["p4"])
+                old_losers  = (m["p3"], m["p4"]) if m["winner"] == 1 else (m["p1"], m["p2"])
+                for pid in old_winners:
+                    await db.execute(
+                        "UPDATE scores SET points=points-?, wins=wins-1 WHERE tournament_id=? AND player_id=?",
+                        (pts, m["tournament_id"], pid),
+                    )
+                for pid in old_losers:
+                    await db.execute(
+                        "UPDATE scores SET losses=losses-1 WHERE tournament_id=? AND player_id=?",
+                        (m["tournament_id"], pid),
+                    )
+
+            # Apply new result
+            new_winners = (m["p1"], m["p2"]) if winner == 1 else (m["p3"], m["p4"])
+            new_losers  = (m["p3"], m["p4"]) if winner == 1 else (m["p1"], m["p2"])
+            for pid in new_winners:
+                await db.execute(
+                    """INSERT INTO scores(tournament_id, player_id, points, wins, losses)
+                       VALUES(?,?,?,1,0)
+                       ON CONFLICT(tournament_id, player_id)
+                       DO UPDATE SET points=points+excluded.points, wins=wins+1""",
+                    (m["tournament_id"], pid, pts),
+                )
+            for pid in new_losers:
+                await db.execute(
+                    """INSERT INTO scores(tournament_id, player_id, points, wins, losses)
+                       VALUES(?,?,0,0,1)
+                       ON CONFLICT(tournament_id, player_id)
+                       DO UPDATE SET losses=losses+1""",
+                    (m["tournament_id"], pid),
+                )
+
+            # pair_history is recorded once per round when matches are first
+            # generated; we don't touch it on result records — winners losing
+            # status doesn't change who they paired with.
+
+            # Finally — set winner
+            await db.execute("UPDATE matches SET winner=? WHERE id=?", (winner, match_id))
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    return {"ok": True, "match_id": match_id, "winner": winner, "points_awarded": pts}
+
+
+async def get_pair_history(tid: int) -> dict:
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT player_a, player_b, count FROM pair_history WHERE tournament_id=?",
+            (tid,),
+        )
+        rows = await cur.fetchall()
+        return {(r["player_a"], r["player_b"]): r["count"] for r in rows}
+
+
+async def get_previous_round_partners(tid: int) -> dict:
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT m.p1, m.p2, m.p3, m.p4
+               FROM matches m JOIN rounds r ON r.id=m.round_id
+               WHERE r.tournament_id=?
+               AND r.round_num=(SELECT MAX(round_num) FROM rounds WHERE tournament_id=?)""",
+            (tid, tid),
+        )
+        rows = await cur.fetchall()
+        partners = {}
+        for r in rows:
+            partners[r["p1"]] = r["p2"]; partners[r["p2"]] = r["p1"]
+            partners[r["p3"]] = r["p4"]; partners[r["p4"]] = r["p3"]
+        return partners
+
+
+async def get_tournament_players(tid: int):
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT tp.*, p.name, p.level, p.side
+               FROM tournament_players tp JOIN players p ON p.id=tp.player_id
+               WHERE tp.tournament_id=? ORDER BY tp.position""",
+            (tid,),
+        )
+        return rows_to_list(await cur.fetchall())
+
+
+async def advance_to_next_round(tid: int):
+    """Validate all matches recorded → move players → create next round with
+    pairing algorithm → return next round info. Mirrors padel-bot/handlers/game.py."""
+    from .pairing import assign_courts, move_players_after_round
+
+    async with conn() as db:
+        # Find current active round
+        cur = await db.execute(
+            "SELECT * FROM rounds WHERE tournament_id=? AND status='active' ORDER BY round_num DESC LIMIT 1",
+            (tid,),
+        )
+        round_obj = row_to_dict(await cur.fetchone())
+        if not round_obj:
+            raise ValueError("No active round to advance from")
+
+        cur = await db.execute(
+            "SELECT * FROM matches WHERE round_id=? ORDER BY court_num", (round_obj["id"],)
+        )
+        matches = rows_to_list(await cur.fetchall())
+        if any(m["winner"] is None for m in matches):
+            raise ValueError("Not all match results recorded yet")
+
+        cur = await db.execute("SELECT * FROM tournaments WHERE id=?", (tid,))
+        t = row_to_dict(await cur.fetchone())
+
+        # Move players up/down by their match outcome
+        match_dicts = []
+        for m in matches:
+            t1 = [{"player_id": m["p1"]}, {"player_id": m["p2"]}]
+            t2 = [{"player_id": m["p3"]}, {"player_id": m["p4"]}]
+            match_dicts.append({"court_num": m["court_num"], "winner": m["winner"], "team1": t1, "team2": t2})
+        new_courts = move_players_after_round(match_dicts, t["num_courts"])
+        for pid, court in new_courts.items():
+            await db.execute(
+                "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
+                (court, tid, pid),
+            )
+
+        # Finish current round
+        await db.execute("UPDATE rounds SET status='done' WHERE id=?", (round_obj["id"],))
+
+        # Increment tournament round counter
+        new_round_num = round_obj["round_num"] + 1
+        await db.execute("UPDATE tournaments SET current_round=? WHERE id=?", (new_round_num, tid))
+        await db.commit()
+
+    # Re-fetch tournament state with new round_num committed
+    tp = await get_tournament_players(tid)
+    pair_hist = await get_pair_history(tid)
+    last_partners = await get_previous_round_partners(tid)
+
+    if t["mode"] == "fixed":
+        # Fixed-pair mode: pair up by adjacent positions, keep them together
+        sorted_players = sorted(
+            tp, key=lambda x: (x["current_court"] or 999, x["position"])
+        )
+        courts_out = []
+        for ci in range(t["num_courts"]):
+            chunk = sorted_players[ci*4:ci*4+4]
+            if len(chunk) < 4:
+                break
+            courts_out.append({
+                "court_num": ci+1,
+                "team1": [chunk[0], chunk[1]],
+                "team2": [chunk[2], chunk[3]],
+            })
+    else:
+        courts_out = assign_courts(tp, t["num_courts"], pair_hist, last_partners)
+
+    # Create the new round + matches
+    async with conn() as db:
+        cur = await db.execute(
+            "INSERT INTO rounds(tournament_id, round_num) VALUES(?,?)",
+            (tid, new_round_num),
+        )
+        new_round_id = cur.lastrowid
+
+        for c in courts_out:
+            t1, t2 = c["team1"], c["team2"]
+            await db.execute(
+                "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
+                (new_round_id, c["court_num"],
+                 t1[0]["player_id"], t1[1]["player_id"], t2[0]["player_id"], t2[1]["player_id"]),
+            )
+            if t["mode"] == "rotating":
+                pa, pb = sorted([t1[0]["player_id"], t1[1]["player_id"]])
+                pc, pd = sorted([t2[0]["player_id"], t2[1]["player_id"]])
+                await db.execute(
+                    """INSERT INTO pair_history(tournament_id, player_a, player_b, last_round, count)
+                       VALUES(?,?,?,?,1)
+                       ON CONFLICT(tournament_id, player_a, player_b)
+                       DO UPDATE SET last_round=excluded.last_round, count=count+1""",
+                    (tid, pa, pb, new_round_num),
+                )
+                await db.execute(
+                    """INSERT INTO pair_history(tournament_id, player_a, player_b, last_round, count)
+                       VALUES(?,?,?,?,1)
+                       ON CONFLICT(tournament_id, player_a, player_b)
+                       DO UPDATE SET last_round=excluded.last_round, count=count+1""",
+                    (tid, pc, pd, new_round_num),
+                )
+
+        await db.commit()
+
+    return {"ok": True, "new_round_num": new_round_num}
+
+
+async def finish_tournament(tid: int):
+    """Mark tournament as finished. Doesn't delete data — history endpoints will see it."""
+    async with conn() as db:
+        await db.execute("UPDATE tournaments SET status='finished' WHERE id=?", (tid,))
+        # Also close the active round if any
+        await db.execute(
+            "UPDATE rounds SET status='done' WHERE tournament_id=? AND status='active'",
+            (tid,),
+        )
+        await db.commit()
+    return {"ok": True}
