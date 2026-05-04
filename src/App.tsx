@@ -10,6 +10,7 @@ import { WizardScreen } from './screens/WizardScreen';
 import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
 import { CelebrationScreen } from './screens/CelebrationScreen';
+import { SchedulePosterScreen } from './screens/SchedulePosterScreen';
 import { T } from './lib/tokens';
 import type { Player } from './lib/types';
 
@@ -26,7 +27,8 @@ type Screen =
   | { name: 'playerEdit'; player: Player | null }
   | { name: 'tournamentDetail'; tid: number }
   | { name: 'roundDetail'; tid: number; roundNum: number }
-  | { name: 'celebration'; tid: number };
+  | { name: 'celebration'; tid: number }
+  | { name: 'schedulePoster' };
 
 declare global {
   interface Window {
@@ -112,7 +114,10 @@ export default function App() {
             />
           )}
           {top.name === 'liveRound' && (
-            <LiveRoundScreen onBack={pop} />
+            <LiveRoundScreen
+              onBack={pop}
+              onShareSchedule={() => push({ name: 'schedulePoster' })}
+            />
           )}
           {top.name === 'wizard' && (
             <WizardScreen onClose={pop} />
@@ -132,6 +137,9 @@ export default function App() {
           )}
           {top.name === 'celebration' && (
             <CelebrationScreen tid={top.tid} onClose={pop} />
+          )}
+          {top.name === 'schedulePoster' && (
+            <SchedulePosterScreen onClose={pop} />
           )}
         </div>
         {showTabBar && (

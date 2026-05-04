@@ -10,9 +10,10 @@ import type { ActiveTournamentResponse, Match } from '../lib/types';
 
 interface Props {
   onBack: () => void;
+  onShareSchedule?: () => void;
 }
 
-export function LiveRoundScreen({ onBack }: Props) {
+export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const { data, isLoading } = useQuery<ActiveTournamentResponse>({
     queryKey: ['active-tournament'],
     queryFn: () => api('/api/tournaments/active'),
@@ -60,33 +61,17 @@ export function LiveRoundScreen({ onBack }: Props) {
           <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{t.name}</div>
         </div>
         <button
-          onClick={async () => {
-            try {
-              const r = await api<{ text: string }>(`/api/tournaments/${t.id}/share`);
-              const tg = window.Telegram?.WebApp;
-              const url = `https://t.me/share/url?url=&text=${encodeURIComponent(r.text)}`;
-              if (tg && (tg as unknown as { openTelegramLink: (u: string) => void }).openTelegramLink) {
-                (tg as unknown as { openTelegramLink: (u: string) => void }).openTelegramLink(url);
-              } else if (navigator.clipboard) {
-                await navigator.clipboard.writeText(r.text);
-                alert('Schedule copied to clipboard');
-              } else {
-                alert(r.text);
-              }
-            } catch (e) {
-              alert((e as Error).message);
-            }
-          }}
+          onClick={() => onShareSchedule?.()}
           style={{
-            background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 999,
-            padding: '6px 10px', color: T.textMuted, display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer',
+            background: T.accent, border: 'none', borderRadius: 999,
+            padding: '6px 12px', color: '#0B0E12', display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer',
           }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-            <path d="M12 4v12M7 9l5-5 5 5M5 16v3a1 1 0 001 1h12a1 1 0 001-1v-3" stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 4v12M7 9l5-5 5 5M5 16v3a1 1 0 001 1h12a1 1 0 001-1v-3" stroke="#0B0E12" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          SHARE
+          POSTER
         </button>
       </div>
 
