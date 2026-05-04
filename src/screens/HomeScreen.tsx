@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useNextRound, useFinishTournament } from '../api/mutations';
 import { T } from '../lib/tokens';
 import { Ring } from '../components/Ring';
 import { LeaderboardRow } from '../components/Leaderboard';
@@ -18,6 +19,8 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament }: Props) {
     queryFn: () => api('/api/tournaments/active'),
     refetchOnWindowFocus: true,
   });
+  const nextRound = useNextRound();
+  const finishTour = useFinishTournament();
 
   if (isLoading) return <HomeSkeleton />;
   if (error) return <HomeError onRetry={() => refetch()} />;
@@ -92,10 +95,28 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament }: Props) {
 
       <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${T.border}` }}>
         <MainCTA
-          label={allDone ? 'NEXT ROUND' : `WAITING · ${recorded}/${total}`}
-          disabled={!allDone}
-          onClick={() => allDone && alert('Next round — coming next round 🚧')}
+          label={
+            nextRound.isPending ? 'GENERATING…'
+            : allDone ? 'NEXT ROUND'
+            : `WAITING · ${recorded}/${total}`
+          }
+          disabled={!allDone || nextRound.isPending}
+          onClick={() => allDone && nextRound.mutate(t.id)}
         />
+        <button
+          onClick={async () => {
+            const ok = window.Telegram?.WebApp ? true : confirm('End tournament now?');
+            if (!ok) return;
+            try { await finishTour.mutateAsync(t.id); } catch (e) { alert((e as Error).message); }
+          }}
+          disabled={finishTour.isPending}
+          style={{
+            background: 'transparent', border: 'none', color: T.loss,
+            fontSize: 11, fontWeight: 600, letterSpacing: '0.16em',
+            width: '100%', padding: 12, textTransform: 'uppercase',
+            cursor: finishTour.isPending ? 'wait' : 'pointer',
+          }}
+        >{finishTour.isPending ? 'Finishing…' : 'END TOURNAMENT'}</button>
       </div>
     </div>
   );
