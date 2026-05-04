@@ -317,17 +317,35 @@ function StepCourtPoints({ courts, value, onChange }: {
                   </div>
                 )}
               </div>
-              <input
-                type="number"
-                value={value[cn] ?? 1}
-                onChange={(e) => onChange({ ...value, [cn]: Number(e.target.value) || 0 })}
-                style={{
-                  width: 76, height: 44, borderRadius: 10,
-                  background: T.surface2, border: `1px solid ${T.border}`,
-                  color: T.accent, fontSize: 22, fontWeight: 700, textAlign: 'center',
-                  outline: 'none', fontVariantNumeric: 'tabular-nums',
-                }}
-              />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10,
+                padding: 3,
+              }}>
+                <button
+                  onClick={() => onChange({ ...value, [cn]: Math.max(0, (value[cn] ?? 1) - 1) })}
+                  style={{
+                    width: 32, height: 36, borderRadius: 8, border: 'none',
+                    background: T.bg, color: T.textPrimary,
+                    fontSize: 18, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >−</button>
+                <div style={{
+                  minWidth: 32, textAlign: 'center',
+                  fontSize: 20, fontWeight: 700, color: T.accent,
+                  fontVariantNumeric: 'tabular-nums',
+                }}>{value[cn] ?? 1}</div>
+                <button
+                  onClick={() => onChange({ ...value, [cn]: Math.min(99, (value[cn] ?? 1) + 1) })}
+                  style={{
+                    width: 32, height: 36, borderRadius: 8, border: 'none',
+                    background: T.bg, color: T.textPrimary,
+                    fontSize: 18, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >+</button>
+              </div>
             </div>
           );
         })}
