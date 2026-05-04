@@ -99,23 +99,6 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer }: PlayersScreenProps 
           </div>
         )}
       </div>
-      {onAddPlayer && (
-        <button
-          onClick={onAddPlayer}
-          style={{
-            position: 'absolute', right: 16, bottom: 84,
-            width: 56, height: 56, borderRadius: '50%',
-            background: T.accent, color: '#0B0E12',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: 'none', cursor: 'pointer',
-            boxShadow: `0 0 24px ${T.accent}66`,
-          }}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="#0B0E12" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      )}
     </div>
   );
 }
