@@ -7,7 +7,7 @@ Run from inside backend/:
 """
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from .config import CORS_ORIGINS
+from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from .auth import get_tg_user
 from . import queries as q
 
@@ -22,6 +22,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

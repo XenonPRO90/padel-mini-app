@@ -17,9 +17,19 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 CORS_ORIGINS = [
     o.strip() for o in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,https://web.telegram.org",
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173,"
+        "https://web.telegram.org,"
+        "https://padel-mini-app.vercel.app",
     ).split(",") if o.strip()
 ]
+# Vercel previews change URL on every PR (e.g. padel-mini-app-git-feat-xyz.vercel.app)
+# so we also allow any subdomain via regex. FastAPI's CORSMiddleware supports it via
+# allow_origin_regex. Used in main.py.
+CORS_ORIGIN_REGEX = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://padel-mini-app(-[a-z0-9-]+)?\.vercel\.app",
+)
 
 # Validate Telegram initData. Disabled in dev so we can hit endpoints from
 # curl/browser without a real Telegram session. In production set to "1".
