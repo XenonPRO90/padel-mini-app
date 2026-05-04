@@ -28,10 +28,29 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer }: PlayersScreenProps 
   const filtered = q ? items.filter(p => p.name.toLowerCase().includes(q.toLowerCase())) : items;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 16px 4px' }}>
-        <div style={Label()}>PLAYERS</div>
-        <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{items.length}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+      <div style={{ padding: '8px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={Label()}>PLAYERS</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{items.length}</div>
+        </div>
+        {onAddPlayer && (
+          <button
+            onClick={onAddPlayer}
+            style={{
+              background: T.accent, color: '#0B0E12',
+              border: 'none', borderRadius: 999,
+              padding: '8px 14px', fontSize: 12, fontWeight: 700,
+              letterSpacing: '0.1em', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12h14" stroke="#0B0E12" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            ADD
+          </button>
+        )}
       </div>
       <div style={{ padding: '12px 16px 8px' }}>
         <div style={{

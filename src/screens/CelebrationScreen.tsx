@@ -52,7 +52,7 @@ export function CelebrationScreen({ tid, onClose }: Props) {
       tournament={data.tournament}
       leaderboard={data.leaderboard}
       onClose={onClose}
-      onShare={onShare}
+      onShareText={onShare}
     />
   );
 }
