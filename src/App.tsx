@@ -9,6 +9,7 @@ import { PlayerEditScreen } from './screens/PlayerEditScreen';
 import { WizardScreen } from './screens/WizardScreen';
 import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
+import { CelebrationScreen } from './screens/CelebrationScreen';
 import { T } from './lib/tokens';
 import type { Player } from './lib/types';
 
@@ -24,7 +25,8 @@ type Screen =
   | { name: 'wizard' }
   | { name: 'playerEdit'; player: Player | null }
   | { name: 'tournamentDetail'; tid: number }
-  | { name: 'roundDetail'; tid: number; roundNum: number };
+  | { name: 'roundDetail'; tid: number; roundNum: number }
+  | { name: 'celebration'; tid: number };
 
 declare global {
   interface Window {
@@ -95,6 +97,7 @@ export default function App() {
             <HomeScreen
               onOpenLiveRound={() => push({ name: 'liveRound' })}
               onCreateTournament={() => push({ name: 'wizard' })}
+              onTournamentFinished={(tid) => setStack([{ name: 'home' }, { name: 'celebration', tid }])}
             />
           )}
           {top.name === 'home' && tab === 'players' && (
@@ -126,6 +129,9 @@ export default function App() {
           )}
           {top.name === 'roundDetail' && (
             <RoundDetailScreen tid={top.tid} roundNum={top.roundNum} onBack={pop} />
+          )}
+          {top.name === 'celebration' && (
+            <CelebrationScreen tid={top.tid} onClose={pop} />
           )}
         </div>
         {showTabBar && (

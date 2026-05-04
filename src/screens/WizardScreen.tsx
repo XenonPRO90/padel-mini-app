@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useCreateTournament } from '../api/players';
+import { useCreateTournament, useCreatePlayer, type SideValue } from '../api/players';
 import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { MainCTA } from '../components/MainCTA';
@@ -338,10 +338,25 @@ function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v:
     queryKey: ['players'],
     queryFn: () => api('/api/players'),
   });
+  const [adding, setAdding] = useState(false);
+
   const items = data?.items ?? [];
   const toggle = (id: number) => {
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   };
+
+  if (adding) {
+    return (
+      <InlinePlayerCreate
+        onCancel={() => setAdding(false)}
+        onCreated={(newId) => {
+          setAdding(false);
+          onChange([...selected, newId]);
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{ marginTop: 22 }}>
       <div style={{ ...Label(), marginBottom: 6 }}>STEP 8</div>
@@ -364,6 +379,17 @@ function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v:
           fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
         }}>÷ 4 = {Math.floor(selected.length / 4)} COURTS</div>
       </div>
+
+      <button
+        onClick={() => setAdding(true)}
+        style={{
+          width: '100%', marginBottom: 12, padding: 14,
+          background: 'transparent', border: `1px dashed ${T.border}`, borderRadius: 12,
+          color: T.accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          cursor: 'pointer',
+        }}
+      >+ ADD NEW PLAYER</button>
 
       {isLoading ? (
         <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
@@ -435,6 +461,103 @@ function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
         fontSize: 13, color: T.accent, lineHeight: 1.5, textAlign: 'center', fontWeight: 500,
       }}>
         Round 1 will be generated automatically once you start.
+      </div>
+    </div>
+  );
+}
+
+function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onCreated: (id: number) => void }) {
+  const [name, setName] = useState('');
+  const [level, setLevel] = useState('C');
+  const [side, setSide] = useState<SideValue>('both');
+  const create = useCreatePlayer();
+  const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C- strong', 'C-', 'D'];
+  const SIDES: { id: SideValue; label: string }[] = [
+    { id: 'right', label: 'RIGHT' },
+    { id: 'left', label: 'LEFT' },
+    { id: 'both', label: 'UNIVERSAL' },
+  ];
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{ ...Label(), marginBottom: 6 }}>NEW PLAYER</div>
+      <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Add to library + select</div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ ...Label(), marginBottom: 8 }}>NAME</div>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Player name"
+          autoFocus
+          style={{
+            width: '100%', background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 12, padding: '14px 16px', fontSize: 17, fontWeight: 500,
+            color: T.textPrimary, outline: 'none',
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ ...Label(), marginBottom: 8 }}>LEVEL</div>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+          {LEVELS.map((l) => {
+            const active = l === level;
+            return (
+              <div key={l} onClick={() => setLevel(l)} style={{
+                flexShrink: 0, padding: '10px 14px', borderRadius: 10,
+                background: active ? T.surface2 : T.surface,
+                border: `1px solid ${active ? T.accent : T.border}`,
+                color: active ? T.accent : T.textMuted,
+                fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>{l}</div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ ...Label(), marginBottom: 8 }}>SIDE</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {SIDES.map((s) => {
+            const active = s.id === side;
+            return (
+              <div key={s.id} onClick={() => setSide(s.id)} style={{
+                background: active ? `${T.accent}10` : T.surface,
+                border: `1px solid ${active ? T.accent : T.border}`,
+                borderRadius: 12, padding: '14px 8px', textAlign: 'center',
+                color: active ? T.accent : T.textMuted, fontWeight: 700,
+                fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
+              }}>{s.label}</div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+        <button onClick={onCancel} disabled={create.isPending} style={{
+          flex: 1, height: 48, borderRadius: 12, border: `1px solid ${T.border}`,
+          background: 'transparent', color: T.textMuted, fontWeight: 600, fontSize: 12,
+          letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+        }}>CANCEL</button>
+        <button
+          disabled={!name.trim() || create.isPending}
+          onClick={async () => {
+            try {
+              const res = await create.mutateAsync({ name, level, side });
+              onCreated(res.id);
+            } catch (e) {
+              alert((e as Error).message);
+            }
+          }}
+          style={{
+            flex: 1, height: 48, borderRadius: 12, border: 'none',
+            background: !name.trim() || create.isPending ? T.surface2 : T.accent,
+            color: !name.trim() || create.isPending ? T.textMuted : '#0B0E12',
+            fontWeight: 700, fontSize: 12, letterSpacing: '0.1em',
+            textTransform: 'uppercase', cursor: 'pointer',
+          }}
+        >{create.isPending ? 'SAVING…' : 'ADD & SELECT'}</button>
       </div>
     </div>
   );

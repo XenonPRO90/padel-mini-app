@@ -11,9 +11,10 @@ import type { ActiveTournamentResponse } from '../lib/types';
 interface Props {
   onOpenLiveRound?: () => void;
   onCreateTournament?: () => void;
+  onTournamentFinished?: (tid: number) => void;
 }
 
-export function HomeScreen({ onOpenLiveRound, onCreateTournament }: Props) {
+export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFinished }: Props) {
   const { data, isLoading, error, refetch } = useQuery<ActiveTournamentResponse>({
     queryKey: ['active-tournament'],
     queryFn: () => api('/api/tournaments/active'),
@@ -107,7 +108,10 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament }: Props) {
           onClick={async () => {
             const ok = window.Telegram?.WebApp ? true : confirm('End tournament now?');
             if (!ok) return;
-            try { await finishTour.mutateAsync(t.id); } catch (e) { alert((e as Error).message); }
+            try {
+              await finishTour.mutateAsync(t.id);
+              onTournamentFinished?.(t.id);
+            } catch (e) { alert((e as Error).message); }
           }}
           disabled={finishTour.isPending}
           style={{
