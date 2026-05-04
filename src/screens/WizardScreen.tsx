@@ -87,8 +87,11 @@ export function WizardScreen({ onClose }: Props) {
         {step === 5 && <StepNum title="Initial points per win" caption="Points per win until court-specific points kick in" value={s.initial_points} onChange={(v) => update('initial_points', v)} min={1} max={10} />}
         {step === 6 && <StepNum title="Start round for court points" caption="Round when different points per court start to apply" value={s.start_round} onChange={(v) => update('start_round', v)} min={1} max={10} />}
         {step === 7 && <StepCourtPoints courts={s.num_courts} value={ensureCourtPoints(s.num_courts)} onChange={(v) => update('court_points', v)} />}
-        {step === 8 && <StepPlayers selected={s.player_ids} onChange={(v) => update('player_ids', v)} />}
+        {step === 8 && <StepPlayers mode={s.mode} selected={s.player_ids} onChange={(v) => update('player_ids', v)} />}
         {step === 9 && <StepConfirm s={s} cp={ensureCourtPoints(s.num_courts)} />}
+        {step === 9 && s.mode === 'fixed' && s.player_ids.length > 0 && (
+          <PairsPreview playerIds={s.player_ids} />
+        )}
       </div>
       <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${T.border}` }}>
         {step === 8 && !playersDivisible && (
@@ -333,7 +336,16 @@ function StepCourtPoints({ courts, value, onChange }: {
   );
 }
 
-function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v: number[]) => void }) {
+// Distinct, accessible-on-dark pair colors (cycle if more than 8 pairs)
+const PAIR_COLORS = ['#08FFC8', '#FFB400', '#FF7AB6', '#7AC8FF', '#B988FF', '#FFA07A', '#90EE90', '#D4D4D4'];
+
+function StepPlayers({
+  mode, selected, onChange,
+}: {
+  mode: 'rotating' | 'fixed';
+  selected: number[];
+  onChange: (v: number[]) => void;
+}) {
   const { data, isLoading } = useQuery<{ items: Player[] }>({
     queryKey: ['players'],
     queryFn: () => api('/api/players'),
@@ -344,6 +356,7 @@ function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v:
   const toggle = (id: number) => {
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   };
+  const pairCount = Math.floor(selected.length / 2);
 
   if (adding) {
     return (
@@ -377,8 +390,22 @@ function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v:
           background: `${T.accent}14`, color: T.accent,
           borderRadius: 999, padding: '6px 12px',
           fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-        }}>÷ 4 = {Math.floor(selected.length / 4)} COURTS</div>
+        }}>
+          {mode === 'fixed'
+            ? `${pairCount} PAIR${pairCount === 1 ? '' : 'S'}`
+            : `÷ 4 = ${Math.floor(selected.length / 4)} COURTS`}
+        </div>
       </div>
+
+      {mode === 'fixed' && (
+        <div style={{
+          fontSize: 12, color: T.textMuted, padding: '0 4px 12px',
+          lineHeight: 1.5,
+        }}>
+          Same color = a fixed pair. Players are paired in the order you tap them
+          (1+2, 3+4, …).
+        </div>
+      )}
 
       <button
         onClick={() => setAdding(true)}
@@ -398,6 +425,9 @@ function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v:
           {items.map((p, i) => {
             const isSelected = selected.includes(p.id);
             const order = isSelected ? selected.indexOf(p.id) + 1 : null;
+            const pairIdx = isSelected ? Math.floor((order! - 1) / 2) : -1;
+            const pairColor = pairIdx >= 0 ? PAIR_COLORS[pairIdx % PAIR_COLORS.length] : '';
+            const isFixedSelected = mode === 'fixed' && isSelected;
             return (
               <div
                 key={p.id}
@@ -410,13 +440,21 @@ function StepPlayers({ selected, onChange }: { selected: number[]; onChange: (v:
               >
                 <div style={{
                   width: 24, height: 24, borderRadius: 6,
-                  background: isSelected ? T.accent : 'transparent',
-                  border: `1.5px solid ${isSelected ? T.accent : T.border}`,
+                  background: isSelected ? (isFixedSelected ? pairColor : T.accent) : 'transparent',
+                  border: `1.5px solid ${isSelected ? (isFixedSelected ? pairColor : T.accent) : T.border}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: '#0B0E12', fontSize: 11, fontWeight: 700, flexShrink: 0,
                 }}>{isSelected ? order : ''}</div>
                 <Avatar name={p.name} size={32} />
                 <span style={{ flex: 1, fontSize: 15, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                {isFixedSelected && (
+                  <span style={{
+                    background: `${pairColor}22`, color: pairColor,
+                    borderRadius: 999, padding: '2px 8px',
+                    fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+                    flexShrink: 0,
+                  }}>P{pairIdx + 1}</span>
+                )}
                 <SideBadge side={p.side} />
                 <LevelBadge level={p.level} size="sm" />
               </div>
@@ -461,6 +499,57 @@ function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
         fontSize: 13, color: T.accent, lineHeight: 1.5, textAlign: 'center', fontWeight: 500,
       }}>
         Round 1 will be generated automatically once you start.
+      </div>
+    </div>
+  );
+}
+
+function PairsPreview({ playerIds }: { playerIds: number[] }) {
+  const { data } = useQuery<{ items: Player[] }>({
+    queryKey: ['players'],
+    queryFn: () => api('/api/players'),
+  });
+  const map = new Map((data?.items ?? []).map((p) => [p.id, p]));
+  const pairs: { idx: number; a?: Player; b?: Player }[] = [];
+  for (let i = 0; i < playerIds.length; i += 2) {
+    pairs.push({
+      idx: i / 2,
+      a: map.get(playerIds[i]),
+      b: map.get(playerIds[i + 1]),
+    });
+  }
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ ...Label(), marginBottom: 8, padding: '0 4px' }}>FIXED PAIRS</div>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '4px 14px' }}>
+        {pairs.map((pair) => {
+          const color = PAIR_COLORS[pair.idx % PAIR_COLORS.length];
+          return (
+            <div key={pair.idx} style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+              borderBottom: pair.idx < pairs.length - 1 ? `1px solid ${T.border}` : 'none',
+            }}>
+              <span style={{
+                background: `${color}22`, color,
+                borderRadius: 999, padding: '4px 9px',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+                flexShrink: 0, minWidth: 30, textAlign: 'center',
+              }}>P{pair.idx + 1}</span>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {pair.a?.name ?? '?'}
+                </span>
+                <span style={{ color: T.textDim, fontSize: 12 }}>+</span>
+                <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {pair.b?.name ?? '?'}
+                </span>
+              </div>
+              <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>
+                {pair.a?.level}/{pair.b?.level}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
