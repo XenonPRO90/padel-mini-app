@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PADEL CLAUB · Design</title>
+<style>
+  html, body { margin: 0; background: #f0eee9; font-family: -apple-system, system-ui, sans-serif; }
+  /* Hide scrollbars inside phone frames for cleaner look */
+  .padel-app *::-webkit-scrollbar { display: none; }
+  .padel-app * { scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="src/tokens.jsx"></script>
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="src/components.jsx"></script>
+<script type="text/babel" src="src/screens-1.jsx"></script>
+<script type="text/babel" src="src/screens-2.jsx"></script>
+<script type="text/babel" src="src/screens-wizard.jsx"></script>
+<script type="text/babel" src="src/screens-history.jsx"></script>
+<script type="text/babel" src="src/prototype.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+function Frame({ w = 390, h = 800, children }) {
+  return <Phone height={h}>{children}</Phone>;
+}
+
+function App() {
+  const W = 390, H = 800;
+  return (
+    <DesignCanvas>
+      <DCSection id="flow" title="Interactive Prototype" subtitle="Tap LIVE ROUND card → tap a court → tap winning team. The whole flow is wired.">
+        <DCArtboard id="proto" label="🎮 Tap to play" width={W} height={H}>
+          <Frame><InteractivePrototype/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="home" title="8.1 · Home / Tournament Dashboard" subtitle="Hero ring, mini metrics, live round preview, leaderboard.">
+        <DCArtboard id="home-active" label="Active tournament" width={W} height={H}>
+          <Frame><HomeActive/></Frame>
+        </DCArtboard>
+        <DCArtboard id="home-empty" label="No active tournament" width={W} height={H}>
+          <Frame><HomeEmpty/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="live" title="8.2 · Live Round" subtitle="One screen = whole round. Court cards are full tap-targets.">
+        <DCArtboard id="live-default" label="In progress · 2/4 results" width={W} height={H}>
+          <Frame><LiveRound/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="court" title="8.3 · Court Detail · Result Entry" subtitle="Bottom sheet, two huge tap zones, haptic on pick.">
+        <DCArtboard id="court-pending" label="Pending · pick winner" width={W} height={H}>
+          <Frame><CourtDetailSheet court={1} points={3} team1={COURTS[0].team1} team2={COURTS[0].team2}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="court-recorded" label="Recorded · Team 1 won" width={W} height={H}>
+          <Frame><CourtDetailSheet court={1} points={3} team1={COURTS[0].team1} team2={COURTS[0].team2} recorded winner={1}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="finished" title="8.4 · Tournament Finished" subtitle="Full-screen poster — designed to be screenshotted into the chat.">
+        <DCArtboard id="finished-poster" label="Final poster" width={W} height={H}>
+          <Frame><FinishedPoster/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="players" title="8.5 — 8.6 · Players" subtitle="Library + edit / new player.">
+        <DCArtboard id="players-library" label="Library" width={W} height={H}>
+          <Frame><PlayersLibrary/></Frame>
+        </DCArtboard>
+        <DCArtboard id="players-edit" label="Edit player" width={W} height={H}>
+          <Frame><PlayerEdit/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="wizard" title="8.7 · New Tournament Wizard" subtitle="9 steps · progress bar + step counter at top. Last step shows summary before start.">
+        <DCArtboard id="w1" label="Step 1 · Name"      width={W} height={H}><Frame><WizardStep1/></Frame></DCArtboard>
+        <DCArtboard id="w2" label="Step 2 · Courts"    width={W} height={H}><Frame><WizardStep2/></Frame></DCArtboard>
+        <DCArtboard id="w3" label="Step 3 · Mode"      width={W} height={H}><Frame><WizardStep3/></Frame></DCArtboard>
+        <DCArtboard id="w4" label="Step 4 · Order"     width={W} height={H}><Frame><WizardStep4/></Frame></DCArtboard>
+        <DCArtboard id="w5" label="Step 5 · Init pts"  width={W} height={H}><Frame><WizardStep5/></Frame></DCArtboard>
+        <DCArtboard id="w6" label="Step 6 · Start rd"  width={W} height={H}><Frame><WizardStep6/></Frame></DCArtboard>
+        <DCArtboard id="w7" label="Step 7 · Court pts" width={W} height={H}><Frame><WizardStep7/></Frame></DCArtboard>
+        <DCArtboard id="w8" label="Step 8 · Players"   width={W} height={H}><Frame><WizardStep8/></Frame></DCArtboard>
+        <DCArtboard id="w9" label="Step 9 · Confirm"   width={W} height={H}><Frame><WizardStep9/></Frame></DCArtboard>
+      </DCSection>
+
+      <DCSection id="history" title="8.8 — 8.10 · History" subtitle="List, tournament detail, round detail (read-only).">
+        <DCArtboard id="hist-list" label="History list" width={W} height={H}><Frame><TournamentHistory/></Frame></DCArtboard>
+        <DCArtboard id="hist-detail" label="Tournament detail" width={W} height={H}><Frame><TournamentDetail/></Frame></DCArtboard>
+        <DCArtboard id="hist-round" label="Round detail (read-only)" width={W} height={H}><Frame><RoundDetailHistory/></Frame></DCArtboard>
+      </DCSection>
+
+      <DCSection id="states" title="States · Skeleton / Empty / Error / Edge cases" subtitle="Loading, empty, error, and edge cases from the brief.">
+        <DCArtboard id="s-skel" label="Home · skeleton" width={W} height={H}><Frame><HomeSkeleton/></Frame></DCArtboard>
+        <DCArtboard id="s-err" label="Home · error" width={W} height={H}><Frame><HomeError/></Frame></DCArtboard>
+        <DCArtboard id="s-pe" label="Players · empty" width={W} height={H}><Frame><PlayersEmpty/></Frame></DCArtboard>
+        <DCArtboard id="s-w8-edge" label="Wizard · not divisible by 4" width={W} height={H}><Frame><WizardStep8 notDivisible/></Frame></DCArtboard>
+      </DCSection>
+
+      <DCSection id="foundations" title="Foundations" subtitle="Tokens, level badges, ring sizes — Whoop-DNA in spec form.">
+        <DCArtboard id="found-1" label="Tokens & components" width={760} height={H}>
+          <Foundations/>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+function Foundations() {
+  return (
+    <div className="padel-app" style={{
+      width: '100%', height: '100%', background: T.bg, color: T.textPrimary,
+      padding: 28, overflowY: 'auto', fontFamily: T.font,
+    }}>
+      <div className="label" style={{ marginBottom: 6 }}>FOUNDATIONS</div>
+      <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>Whoop DNA · Padel</div>
+
+      <div className="label" style={{ marginBottom: 12 }}>PALETTE</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
+        {[
+          { n: 'bg',          v: T.bg },
+          { n: 'surface',     v: T.surface },
+          { n: 'surface-2',   v: T.surface2 },
+          { n: 'border',      v: T.border },
+          { n: 'text-primary',v: T.textPrimary },
+          { n: 'text-muted',  v: T.textMuted },
+          { n: 'accent',      v: T.accent },
+          { n: 'loss',        v: T.loss },
+        ].map(s => (
+          <div key={s.n} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 10 }}>
+            <div style={{ height: 44, background: s.v, borderRadius: 6, marginBottom: 8 }}/>
+            <div className="label-sm">{s.n.toUpperCase()}</div>
+            <div className="num" style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="label" style={{ marginBottom: 12 }}>LEVEL BADGES</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 28 }}>
+        {Object.keys(T.levels).map(l => <LevelBadge key={l} level={l} size="lg"/>)}
+      </div>
+
+      <div className="label" style={{ marginBottom: 12 }}>SIDE BADGES</div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
+        <SideBadge side="R"/><SideBadge side="L"/><SideBadge side="U"/>
+      </div>
+
+      <div className="label" style={{ marginBottom: 12 }}>RINGS · 240 / 120 / 48</div>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginBottom: 28 }}>
+        <Ring size={120} stroke={6} value={3} max={7}>
+          <div className="num" style={{ fontSize: 24, fontWeight: 700 }}>3/7</div>
+          <div className="label-sm">ROUND</div>
+        </Ring>
+        <Ring size={48} stroke={3} value={5} max={8}/>
+      </div>
+
+      <div className="label" style={{ marginBottom: 12 }}>TYPE SCALE</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="num" style={{ fontSize: 56, fontWeight: 700, lineHeight: 1 }}>3 / 7</div>
+        <div className="label">UPPERCASE LABEL · 0.14EM</div>
+        <div style={{ fontSize: 17, fontWeight: 500 }}>Player name · 17pt 500</div>
+        <div style={{ fontSize: 14 }}>Body 14pt 400 — short, sport-tone copy.</div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
