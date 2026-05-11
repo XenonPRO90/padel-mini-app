@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { T } from '../lib/tokens';
-import { Label } from '../components/CourtCard';
+import { ELabel, EMedal, EBtn } from '../lib/elegant';
 import type { HistoryItem } from '../lib/types';
 
 interface HistoryScreenProps {
@@ -14,50 +14,73 @@ export function HistoryScreen({ onOpenTournament }: HistoryScreenProps = {}) {
     queryFn: () => api('/api/tournaments/history'),
   });
 
-  if (error) {
-    return <CenterError onRetry={() => refetch()} />;
-  }
+  if (error) return <CenterError onRetry={() => refetch()} />;
 
   const items = data?.items ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 16px 4px' }}>
-        <div style={Label()}>HISTORY</div>
-        <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{items.length}</div>
+      <div style={{
+        padding: '10px 18px 8px', background: T.cream,
+        borderBottom: `1px solid ${T.paperEdge}`,
+      }}>
+        <ELabel>· History · finished tournaments</ELabel>
+        <div style={{
+          fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 600,
+          color: T.ink, marginTop: 2, fontVariantNumeric: 'tabular-nums',
+        }}>{items.length} <span style={{
+          fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 14, color: T.muted,
+        }}>played</span></div>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '14px 18px 24px',
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
         {isLoading ? (
           <Skeletons />
         ) : items.length === 0 ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
-            No finished tournaments yet
-          </div>
+          <div style={{
+            padding: '60px 0', textAlign: 'center',
+            fontFamily: T.fontSerif, fontStyle: 'italic',
+            color: T.muted, fontSize: 14,
+          }}>No finished tournaments yet</div>
         ) : (
           items.map((it) => (
             <div
               key={it.id}
               onClick={() => onOpenTournament?.(it.id)}
               style={{
-                background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px',
+                background: T.paper, border: `1px solid ${T.paperEdge}`,
+                borderRadius: 14, padding: '14px 16px',
                 cursor: onOpenTournament ? 'pointer' : 'default',
               }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>{it.name}</div>
-                  <div style={{ ...Label(), fontSize: 10, marginTop: 6 }}>
-                    {fmtDate(it.created_at)} · {it.mode.toUpperCase()} · {it.players_count} PLAYERS
-                  </div>
-                </div>
-                <span style={{ color: T.textMuted, fontSize: 18 }}>›</span>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'baseline', marginBottom: 4,
+              }}>
+                <span style={{
+                  fontFamily: T.fontDisplay, fontSize: 11,
+                  letterSpacing: 2.5, color: T.gold,
+                  textTransform: 'uppercase',
+                }}>{fmtDate(it.created_at)}</span>
+                <span style={{
+                  fontFamily: T.fontSerif, fontStyle: 'italic',
+                  fontSize: 12, color: T.muted,
+                }}>{it.players_count} guests · {it.mode}</span>
               </div>
+              <div style={{
+                fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600,
+                color: T.ink, marginBottom: 6,
+              }}>{it.name}</div>
               {it.winner && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8, marginTop: 12,
-                  padding: '10px 12px', background: T.surface2, borderRadius: 10,
-                }}>
-                  <span style={{ fontSize: 13 }}>🥇</span>
-                  <span style={{ color: T.accent, fontWeight: 600, fontSize: 13 }}>{it.winner}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <EMedal place={1} size={18} />
+                  <span style={{
+                    fontFamily: T.fontSerif, fontStyle: 'italic',
+                    fontSize: 13, color: T.muted,
+                  }}>won by <span style={{
+                    color: T.ink, fontStyle: 'normal', fontWeight: 500,
+                  }}>{it.winner}</span></span>
                 </div>
               )}
             </div>
@@ -79,7 +102,7 @@ function Skeletons() {
   return (
     <>
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="skeleton" style={{ height: 110, borderRadius: 16 }} />
+        <div key={i} className="skeleton" style={{ height: 110, borderRadius: 14 }} />
       ))}
     </>
   );
@@ -87,13 +110,15 @@ function Skeletons() {
 
 function CenterError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <div style={{ ...Label(), color: T.loss }}>COULDN'T LOAD</div>
-      <button onClick={onRetry} style={{
-        padding: '10px 22px', borderRadius: 10,
-        background: T.surface2, border: `1px solid ${T.border}`,
-        color: T.accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em',
-      }}>RETRY</button>
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24,
+    }}>
+      <div style={{
+        fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600,
+        color: T.burgundy, letterSpacing: 2,
+      }}>Could not load</div>
+      <EBtn kind="primary" onClick={onRetry}>Retry</EBtn>
     </div>
   );
 }

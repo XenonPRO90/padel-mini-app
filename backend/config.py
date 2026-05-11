@@ -23,12 +23,15 @@ CORS_ORIGINS = [
         "https://padel-mini-app.vercel.app",
     ).split(",") if o.strip()
 ]
-# Vercel previews change URL on every PR (e.g. padel-mini-app-git-feat-xyz.vercel.app)
-# so we also allow any subdomain via regex. FastAPI's CORSMiddleware supports it via
-# allow_origin_regex. Used in main.py.
+# Vercel previews change URL on every PR. Two URL shapes exist:
+#   1. <project>-<branch>.vercel.app — e.g. padel-mini-app-mu.vercel.app
+#   2. <project>-<hash>-<team>-projects.vercel.app — team-scoped previews,
+#      e.g. padel-mini-2bi2qaeb4-xenonpro90s-projects.vercel.app
+# Both project-name forms (`padel-mini-app` and the truncated `padel-mini`)
+# are accepted via this regex. Anchored to .vercel.app so nothing else slips in.
 CORS_ORIGIN_REGEX = os.getenv(
     "CORS_ORIGIN_REGEX",
-    r"https://padel-mini-app(-[a-z0-9-]+)?\.vercel\.app",
+    r"https://padel-mini[a-z0-9-]*\.vercel\.app",
 )
 
 # Validate Telegram initData. Disabled in dev so we can hit endpoints from

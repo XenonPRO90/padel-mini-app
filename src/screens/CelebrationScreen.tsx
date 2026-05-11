@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { FinishedCelebration } from './FinishedCelebration';
 import { ShareTextModal } from '../components/ShareTextModal';
 import { T } from '../lib/tokens';
-import type { Round, ScoredPlayer, Tournament } from '../lib/types';
+import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 
 interface Props {
   tid: number;
@@ -15,6 +15,7 @@ interface Resp {
   tournament: Tournament;
   rounds: Round[];
   leaderboard: ScoredPlayer[];
+  pair_leaderboard?: ScoredPair[];
 }
 
 export function CelebrationScreen({ tid, onClose }: Props) {
@@ -26,7 +27,10 @@ export function CelebrationScreen({ tid, onClose }: Props) {
 
   if (isLoading || !data) {
     return (
-      <div style={{ padding: 24, color: T.textMuted, textAlign: 'center', marginTop: 80 }}>
+      <div style={{
+        padding: 24, color: T.muted, textAlign: 'center', marginTop: 80,
+        fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 15,
+      }}>
         Loading…
       </div>
     );
@@ -35,16 +39,12 @@ export function CelebrationScreen({ tid, onClose }: Props) {
   const onShareText = async () => {
     try {
       const r = await api<{ text: string }>(`/api/tournaments/${tid}/share`);
-      // Prefer Telegram's native share dialog if available; otherwise open
-      // our own modal with a textarea — works even when clipboard write is
-      // blocked by the WebView (iOS Telegram).
-      const tg = window.Telegram?.WebApp as unknown as { openTelegramLink?: (u: string) => void } | undefined;
-      if (tg?.openTelegramLink) {
-        try {
-          tg.openTelegramLink(`https://t.me/share/url?url=&text=${encodeURIComponent(r.text)}`);
-          return;
-        } catch { /* fall through to modal */ }
-      }
+      // Just open the in-app textarea modal so Roma can copy the
+      // standings table and paste it wherever. Earlier we tried
+      // tg.openTelegramLink('t.me/share/url?text=...') for one-tap
+      // sharing but iOS Telegram WebView redirected to web.telegram.org
+      // in a new tab instead of opening the native chat picker, which
+      // was a worse experience than the simple copy flow.
       setShareText(r.text);
     } catch (e) {
       alert((e as Error).message);
@@ -56,6 +56,7 @@ export function CelebrationScreen({ tid, onClose }: Props) {
       <FinishedCelebration
         tournament={data.tournament}
         leaderboard={data.leaderboard}
+        pairLeaderboard={data.pair_leaderboard}
         onClose={onClose}
         onShareText={onShareText}
       />

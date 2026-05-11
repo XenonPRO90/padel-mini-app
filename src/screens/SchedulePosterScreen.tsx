@@ -37,14 +37,22 @@ export function SchedulePosterScreen({ onClose }: Props) {
   const [busy, setBusy] = useState(false);
 
   if (isLoading || !data) {
-    return <div style={{ padding: 24, color: T.textMuted, textAlign: 'center', marginTop: 80 }}>Loading…</div>;
+    return (
+      <div style={{
+        padding: 24, color: T.muted, textAlign: 'center', marginTop: 80,
+        fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 15,
+      }}>Loading…</div>
+    );
   }
   if (!data.tournament || !data.round) {
     return (
-      <div style={{ padding: 40, color: T.textMuted, textAlign: 'center' }}>
+      <div style={{
+        padding: 40, color: T.muted, textAlign: 'center',
+        fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 15,
+      }}>
         No active round to share.
         <div style={{ height: 16 }} />
-        <SecondaryCTA label="BACK" onClick={onClose} />
+        <SecondaryCTA label="Back" onClick={onClose} />
       </div>
     );
   }
@@ -100,7 +108,7 @@ export function SchedulePosterScreen({ onClose }: Props) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: T.bg }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: T.cream }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 16px' }}>
         <div ref={posterRef} style={{
           width: '100%',
@@ -184,15 +192,15 @@ export function SchedulePosterScreen({ onClose }: Props) {
       <div style={{
         flexShrink: 0,
         padding: '8px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
-        background: T.bg, borderTop: `1px solid ${T.border}`,
+        background: T.cream, borderTop: `1px solid ${T.paperEdge}`,
       }}>
         <MainCTA
-          label={busy ? 'GENERATING POSTER…' : '📸 SHARE POSTER'}
+          label={busy ? 'Generating poster…' : 'Share poster'}
           disabled={busy}
           onClick={onShare}
         />
         <div style={{ height: 8 }} />
-        <SecondaryCTA label="BACK" onClick={onClose} />
+        <SecondaryCTA label="Back" onClick={onClose} />
       </div>
     </div>
   );

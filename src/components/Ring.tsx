@@ -10,7 +10,10 @@ interface Props {
   children?: ReactNode;
 }
 
-export function Ring({ size = 220, stroke = 10, value = 0, max = 1, color = T.accent, children }: Props) {
+// Elegant ring: thin gold rule for the empty arc, emerald 2px for the filled.
+// Hero ring sits centered in EHomeActive — keeps the radial progress affordance
+// but in a quiet, antique-frame mood (no Whoop glow).
+export function Ring({ size = 220, stroke = 2, value = 0, max = 1, color = T.emerald, children }: Props) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(1, value / max));
@@ -18,7 +21,7 @@ export function Ring({ size = 220, stroke = 10, value = 0, max = 1, color = T.ac
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.border} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.rule} strokeWidth={1} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke={color} strokeWidth={stroke} strokeLinecap="round"

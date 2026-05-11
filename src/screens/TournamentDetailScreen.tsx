@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { T } from '../lib/tokens';
-import { Label } from '../components/CourtCard';
+import { ELabel, EMedal, EPlace, EGoldFrame, EOrnRule } from '../lib/elegant';
 import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 
 interface Props {
@@ -35,8 +35,6 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
 
   const { tournament: t, rounds, leaderboard, pair_leaderboard } = data;
 
-  // For fixed-pair tournaments show pair standings (one row per pair).
-  // For rotating mode show individual standings.
   type Row = { name: string; points: number; wins: number; losses: number };
   const rows: Row[] = t.mode === 'fixed' && pair_leaderboard
     ? pair_leaderboard.map((p) => ({
@@ -47,8 +45,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
         name: p.name, points: p.points, wins: p.wins, losses: p.losses,
       }));
 
-  // Dense ranking with (points, wins) tiebreaker — ties share a place,
-  // next distinct (points, wins) bumps the place by 1.
+  // Dense ranking with (points, wins) tiebreaker.
   const ranked: { place: number; row: Row }[] = [];
   let lastPts = -1;
   let lastWins = -1;
@@ -61,92 +58,118 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
     }
     ranked.push({ place: placeNum, row: r });
   }
-  const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: T.textMuted, padding: 4, cursor: 'pointer' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M15 6l-6 6 6 6" stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <div style={{ ...Label(), flex: 1, textAlign: 'center' }}>TOURNAMENT</div>
-        <div style={{ width: 30 }} />
+      <div style={{
+        padding: '10px 16px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        borderBottom: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
+        <button onClick={onBack} style={{
+          background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+          color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
+        }}>← History</button>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
+            color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
+          }}>Tournament</div>
+        </div>
+        <div style={{ width: 60 }} />
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{t.name}</div>
-          <div style={{ ...Label(), fontSize: 10, marginTop: 6 }}>
-            {t.created_at?.slice(0, 10)} · {t.mode.toUpperCase()} · {rounds.length} ROUNDS
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 18px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <ELabel>{t.created_at?.slice(0, 10)} · {t.mode} · {rounds.length} rounds</ELabel>
+          <div style={{
+            marginTop: 4, fontFamily: T.fontDisplay,
+            fontSize: 22, fontWeight: 600, letterSpacing: 2, color: T.ink,
+          }}>{t.name}</div>
+          <div style={{ marginTop: 6, display: 'flex', justifyContent: 'center' }}>
+            <EOrnRule width={220} />
           </div>
         </div>
 
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 16 }}>
-          <div style={{ ...Label(), marginBottom: 12 }}>FINAL STANDINGS</div>
-          {ranked.map(({ place, row }, i) => {
-            const isPodium = place <= 3;
-            const isGold = place === 1;
-            return (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: isPodium ? '10px 0' : '8px 0',
-                borderBottom: i < ranked.length - 1 ? `1px solid ${T.border}` : 'none',
-              }}>
-                {isPodium ? (
-                  <span style={{ fontSize: 20, width: 24, textAlign: 'center' }}>{medals[place]}</span>
-                ) : (
-                  <span style={{ width: 24, fontSize: 11, color: T.textDim, fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>
-                    #{place}
-                  </span>
-                )}
-                <span style={{
-                  flex: 1, fontSize: isPodium ? 15 : 13,
-                  fontWeight: isPodium ? 600 : 500,
-                  color: isGold ? T.accent : T.textPrimary,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>{row.name}</span>
-                <div style={{ textAlign: 'right' }}>
+        <ELabel style={{ marginBottom: 8, textAlign: 'center' }}>Final Standings</ELabel>
+        <EGoldFrame>
+          <div style={{ padding: '4px 0' }}>
+            {ranked.map(({ place, row }, i) => {
+              const isPodium = place <= 3;
+              return (
+                <div key={i} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '36px minmax(0, 1fr) auto',
+                  alignItems: 'center', columnGap: 10, rowGap: 4,
+                  padding: '10px 12px',
+                  borderBottom: i < ranked.length - 1 ? `1px solid ${T.paperEdge}` : 'none',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'start', paddingTop: 2 }}>
+                    {isPodium ? <EMedal place={place as 1 | 2 | 3} size={26} /> : <EPlace n={place} />}
+                  </div>
+                  {/* Name — wraps to 2 lines for long fixed-pair labels. No ellipsis. */}
+                  <span style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: isPodium ? 16 : 14,
+                    fontWeight: isPodium ? 600 : 500,
+                    color: T.ink,
+                    lineHeight: 1.25,
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                  }}>{row.name}</span>
                   <div style={{
-                    fontSize: isPodium ? 18 : 14, fontWeight: 700,
-                    color: isGold ? T.accent : T.textPrimary,
-                    lineHeight: 1, fontVariantNumeric: 'tabular-nums',
-                  }}>{row.points}</div>
-                  <div style={{
-                    fontSize: 10, color: T.textDim, marginTop: 3,
-                    fontVariantNumeric: 'tabular-nums',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    justifySelf: 'end',
                   }}>
-                    <span style={{ color: T.accent }}>✓{row.wins}</span>
-                    <span style={{ marginLeft: 5, color: T.loss }}>✗{row.losses}</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                      <span style={{
+                        fontFamily: T.fontDisplay, fontWeight: 600,
+                        fontSize: isPodium ? 18 : 15, color: T.goldDeep,
+                      }}>{row.points}</span>
+                      <span style={{
+                        fontFamily: T.fontSerif, fontSize: 11,
+                        fontStyle: 'italic', color: T.muted,
+                      }}>pts</span>
+                    </div>
+                    <div style={{ width: 1, height: 14, background: T.paperEdge }} />
+                    <div style={{ fontFamily: T.fontDisplay, fontSize: 12, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: T.win }}>W {row.wins}</span>
+                      <span style={{ margin: '0 4px', color: T.paperEdge }}>·</span>
+                      <span style={{ color: T.burgundy }}>L {row.losses}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ ...Label(), marginBottom: 8, padding: '0 4px' }}>ROUNDS</div>
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '0 16px' }}>
-          {rounds.map((r, i) => (
+              );
+            })}
+          </div>
+        </EGoldFrame>
+
+        <ELabel style={{ margin: '20px 0 8px', textAlign: 'center' }}>Rounds Played</ELabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {rounds.map((r) => (
             <div
               key={r.id}
               onClick={() => onOpenRound(r.round_num)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0',
-                borderBottom: i < rounds.length - 1 ? `1px solid ${T.border}` : 'none',
-                cursor: 'pointer',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '12px 16px',
+                background: T.paper, border: `1px solid ${T.paperEdge}`,
+                borderRadius: 14, cursor: 'pointer',
               }}
             >
-              <div style={{
-                width: 36, height: 36, borderRadius: 8, background: T.surface2,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, fontWeight: 700, color: T.accent, fontVariantNumeric: 'tabular-nums',
-              }}>{r.round_num}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ ...Label(), fontSize: 11, color: T.textPrimary, letterSpacing: '0.1em' }}>ROUND {r.round_num}</div>
-                <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{r.status === 'done' ? 'finished' : 'in progress'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{
+                  fontFamily: T.fontDisplay, fontSize: 11, letterSpacing: 2, color: T.gold,
+                }}>ROUND</span>
+                <span style={{
+                  fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+                  color: T.ink, fontVariantNumeric: 'tabular-nums',
+                }}>{r.round_num}</span>
               </div>
-              <span style={{ color: T.textMuted, fontSize: 16 }}>›</span>
+              <span style={{
+                fontFamily: T.fontSerif, fontStyle: 'italic',
+                fontSize: 13, color: T.muted,
+              }}>{r.status === 'done' ? 'finished' : 'in progress'}</span>
             </div>
           ))}
         </div>
