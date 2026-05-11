@@ -45,16 +45,18 @@ export const T = {
 } as const;
 
 // Level palette — elegant gradient from emerald (top) to cream (bottom).
-// Note key is `C-strong` (no space) to match brief / API.
-export const LEVEL_COLORS: Record<string, { bg: string; fg: string }> = {
-  'A+':        { bg: '#1d3327', fg: '#f5efe4' },
-  'A':         { bg: '#1d3327', fg: '#f5efe4' },
-  'B+':        { bg: '#2f4a3a', fg: '#f5efe4' },
-  'B':         { bg: '#2f4a3a', fg: '#f5efe4' },
-  'C+':        { bg: '#a6864d', fg: '#1f2a24' },
-  'C-strong':  { bg: '#a6864d', fg: '#1f2a24' },
-  'C- strong': { bg: '#a6864d', fg: '#1f2a24' }, // legacy alias from old API
-  'C':         { bg: '#d9c08a', fg: '#1f2a24' },
-  'C-':        { bg: '#ede4d2', fg: '#1f2a24' },
-  'D':         { bg: '#ede4d2', fg: '#7a7062' },
+// Each entry carries a compact label so the pill stays narrow even when
+// the API returns longer strings like "C-strong" / "C- strong" which
+// otherwise wrap and break the court-card layout.
+export const LEVEL_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
+  'A+':        { bg: '#1d3327', fg: '#f5efe4', label: 'A+' },
+  'A':         { bg: '#1d3327', fg: '#f5efe4', label: 'A'  },
+  'B+':        { bg: '#2f4a3a', fg: '#f5efe4', label: 'B+' },
+  'B':         { bg: '#2f4a3a', fg: '#f5efe4', label: 'B'  },
+  'C+':        { bg: '#a6864d', fg: '#1f2a24', label: 'C+' },
+  'C-strong':  { bg: '#a6864d', fg: '#1f2a24', label: 'Cs' },
+  'C- strong': { bg: '#a6864d', fg: '#1f2a24', label: 'Cs' }, // legacy alias
+  'C':         { bg: '#d9c08a', fg: '#1f2a24', label: 'C'  },
+  'C-':        { bg: '#ede4d2', fg: '#1f2a24', label: 'C-' },
+  'D':         { bg: '#ede4d2', fg: '#7a7062', label: 'D'  },
 };

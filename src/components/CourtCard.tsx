@@ -14,12 +14,15 @@ interface Props {
 // score-card on the right with two team rows separated by a gold "vs".
 export function CourtCard({ match, onClick, readonly, medal }: Props) {
   const winner = match.winner;
+  const recorded = winner !== null;
   return (
     <div onClick={onClick} style={{
       display: 'flex', borderRadius: 18, overflow: 'hidden',
-      border: `1px solid ${T.paperEdge}`,
+      border: `1px solid ${recorded ? T.emerald : T.paperEdge}`,
       background: T.paper,
+      boxShadow: recorded ? '0 0 0 1px rgba(47,74,58,0.08), 0 2px 8px -4px rgba(47,74,58,0.18)' : 'none',
       cursor: onClick ? 'pointer' : 'default',
+      transition: 'border-color 200ms, box-shadow 200ms',
     }}>
       {/* Court column */}
       <div style={{
@@ -28,6 +31,7 @@ export function CourtCard({ match, onClick, readonly, medal }: Props) {
         width: 86, flexShrink: 0,
         display: 'flex', flexDirection: 'column',
         justifyContent: 'center', alignItems: 'center', gap: 6,
+        position: 'relative',
       }}>
         <div style={{
           fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 3,
@@ -41,21 +45,34 @@ export function CourtCard({ match, onClick, readonly, medal }: Props) {
           fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 2,
           color: T.goldSoft, opacity: 0.9,
         }}>{match.points} {match.points === 1 ? 'PT' : 'PTS'}</div>
+        {recorded && (
+          <div style={{
+            position: 'absolute', top: 6, right: 6,
+            width: 18, height: 18, borderRadius: 999,
+            background: T.cream, color: T.emerald,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700,
+            boxShadow: '0 0 0 2px rgba(245,239,228,0.4)',
+          }}>✓</div>
+        )}
       </div>
 
       {/* Teams */}
-      <div style={{ flex: 1, padding: '12px 14px', minWidth: 0 }}>
-        <TeamRow team={match.team1} highlight={winner === 1} dim={winner !== null && winner !== 1} />
+      <div style={{
+        flex: 1, padding: '12px 14px', minWidth: 0,
+        background: recorded ? 'linear-gradient(180deg, #f1ede0 0%, #f5f1e4 100%)' : 'transparent',
+      }}>
+        <TeamRow team={match.team1} highlight={winner === 1} dim={recorded && winner !== 1} />
         <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0', gap: 8 }}>
-          <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
+          <div style={{ flex: 1, height: 1, background: recorded ? T.goldSoft : T.paperEdge }} />
           <span style={{
             fontFamily: T.fontSerif, fontSize: 11, fontStyle: 'italic', color: T.muted,
           }}>vs</span>
-          <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
+          <div style={{ flex: 1, height: 1, background: recorded ? T.goldSoft : T.paperEdge }} />
         </div>
-        <TeamRow team={match.team2} highlight={winner === 2} dim={winner !== null && winner !== 2} />
+        <TeamRow team={match.team2} highlight={winner === 2} dim={recorded && winner !== 2} />
 
-        {winner === null ? (
+        {!recorded ? (
           <div style={{
             marginTop: 10,
             fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2,
@@ -64,9 +81,16 @@ export function CourtCard({ match, onClick, readonly, medal }: Props) {
         ) : (
           <div style={{
             marginTop: 10,
-            fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2,
-            color: T.win, textAlign: 'right',
-          }}>RECORDED · TEAM {winner} +{match.points}</div>
+            display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: T.emerald, color: T.cream,
+              borderRadius: 999, padding: '3px 10px',
+              fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600,
+              letterSpacing: 1.5, textTransform: 'uppercase',
+            }}>✓ Team {winner} <span style={{ opacity: 0.75 }}>+{match.points}</span></span>
+          </div>
         )}
       </div>
     </div>

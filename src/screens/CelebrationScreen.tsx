@@ -38,16 +38,21 @@ export function CelebrationScreen({ tid, onClose }: Props) {
   const onShareText = async () => {
     try {
       const r = await api<{ text: string }>(`/api/tournaments/${tid}/share`);
-      // Prefer Telegram's native share dialog if available; otherwise open
-      // our own modal with a textarea — works even when clipboard write is
-      // blocked by the WebView (iOS Telegram).
-      const tg = window.Telegram?.WebApp as unknown as { openTelegramLink?: (u: string) => void } | undefined;
+      // Open Telegram's chat picker directly — the user picks a chat and
+      // the standings text is pre-filled. Falls back to in-app textarea
+      // modal only if openTelegramLink isn't available or rejects the URL.
+      const shareUrl = `https://t.me/share/url?text=${encodeURIComponent(r.text)}`;
+      const tg = window.Telegram?.WebApp as unknown as {
+        openTelegramLink?: (u: string) => void;
+        openLink?: (u: string) => void;
+      } | undefined;
       if (tg?.openTelegramLink) {
-        try {
-          tg.openTelegramLink(`https://t.me/share/url?url=&text=${encodeURIComponent(r.text)}`);
-          return;
-        } catch { /* fall through to modal */ }
+        try { tg.openTelegramLink(shareUrl); return; } catch { /* try openLink */ }
       }
+      if (tg?.openLink) {
+        try { tg.openLink(shareUrl); return; } catch { /* try location */ }
+      }
+      try { window.location.href = shareUrl; return; } catch { /* fall through */ }
       setShareText(r.text);
     } catch (e) {
       alert((e as Error).message);

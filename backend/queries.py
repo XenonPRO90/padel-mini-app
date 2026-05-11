@@ -656,14 +656,27 @@ async def create_tournament(
 # ─── Share text ────────────────────────────────────────────
 
 async def get_share_text(tid: int) -> str:
-    """Build a forwardable text describing the current round."""
+    """Build a forwardable text for sharing into a Telegram chat.
+
+    For active tournaments — schedule of the current round (who plays whom).
+    For finished tournaments — final standings table with medals. This is
+    what the Mini App's "Share as text" button on the Finished screen wants;
+    previously this endpoint always returned schedule which was wrong.
+    """
     t = await get_tournament(tid)
     if not t:
         return "No tournament"
+    if t.get("status") == "finished":
+        return await _share_text_standings(t)
+    return await _share_text_schedule(t)
+
+
+async def _share_text_schedule(t: dict) -> str:
+    """Schedule of the current (or last) round."""
+    tid = t["id"]
     round_obj = await get_current_round(tid)
     target_round = round_obj
     if not target_round:
-        # use last finished round
         rounds = await get_tournament_rounds(tid)
         target_round = rounds[-1] if rounds else None
     if not target_round:
@@ -687,4 +700,57 @@ async def get_share_text(tid: int) -> str:
             w = "TEAM 1" if m["winner"] == 1 else "TEAM 2"
             lines.append(f"  ✓ {w} won")
         lines.append("")
+    return "\n".join(lines)
+
+
+async def _share_text_standings(t: dict) -> str:
+    """Final standings with medals — used when sharing a finished tournament.
+
+    Uses pair leaderboard for fixed-mode, otherwise per-player. Dense
+    ranking by (points, wins) so ties share a place — mirrors the
+    Tournament Detail screen.
+    """
+    tid = t["id"]
+    mode = t.get("mode")
+    if mode == "fixed":
+        rows = await get_pair_leaderboard(tid)
+        formatted = [
+            {
+                "name": f"{r['name_a']} & {r['name_b']}",
+                "points": r["points"],
+                "wins": r["wins"],
+                "losses": r["losses"],
+            }
+            for r in rows
+        ]
+    else:
+        rows = await get_leaderboard(tid)
+        formatted = [
+            {
+                "name": r["name"],
+                "points": r["points"],
+                "wins": r["wins"],
+                "losses": r["losses"],
+            }
+            for r in rows
+        ]
+
+    # Dense ranking with (points, wins) tiebreaker.
+    last_pts: int | None = None
+    last_wins: int | None = None
+    place = 0
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    lines = [
+        f"🏆 *{t['name']}* — итоги",
+        "",
+    ]
+    for r in formatted:
+        if r["points"] != last_pts or r["wins"] != last_wins:
+            place += 1
+            last_pts = r["points"]
+            last_wins = r["wins"]
+        prefix = medals.get(place, f"{place}.")
+        lines.append(
+            f"{prefix} {r['name']} — {r['points']} pts  (W{r['wins']} L{r['losses']})"
+        )
     return "\n".join(lines)

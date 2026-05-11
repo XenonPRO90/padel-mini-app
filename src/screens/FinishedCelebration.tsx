@@ -246,22 +246,33 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
         </div>
       </div>
 
-      {/* Sticky bottom action bar */}
+      {/* Sticky bottom action bar — primary = Telegram chat (one-tap),
+          secondary = poster image, tertiary = home. Reordered after Roma
+          flagged that the iOS share sheet for the poster image hid
+          Telegram behind a "More" sub-menu, while the previous flow used
+          to open the Telegram chat picker directly. */}
       <div style={{
         flexShrink: 0,
         padding: '8px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
         background: T.cream, borderTop: `1px solid ${T.paperEdge}`,
       }}>
-        <MainCTA
-          label={busy ? 'Generating poster…' : 'Share poster'}
-          disabled={busy}
-          onClick={onSharePoster}
-        />
+        {onShareText ? (
+          <MainCTA label="Send to chat" onClick={onShareText} />
+        ) : (
+          <MainCTA
+            label={busy ? 'Generating poster…' : 'Share poster'}
+            disabled={busy}
+            onClick={onSharePoster}
+          />
+        )}
         <div style={{ height: 8 }} />
         <div style={{ display: 'flex', gap: 8 }}>
           {onShareText && (
             <div style={{ flex: 1 }}>
-              <SecondaryCTA label="As text" onClick={onShareText} />
+              <SecondaryCTA
+                label={busy ? 'Saving…' : 'Save poster'}
+                onClick={onSharePoster}
+              />
             </div>
           )}
           <div style={{ flex: 1 }}>

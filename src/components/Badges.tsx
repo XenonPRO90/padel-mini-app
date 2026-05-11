@@ -5,16 +5,17 @@ interface LevelProps { level: string; size?: 'sm' | 'md' | 'lg' }
 export function LevelBadge({ level, size = 'md' }: LevelProps) {
   const cfg = LEVEL_COLORS[level] || LEVEL_COLORS['C'];
   const dim = size === 'lg' ? { w: 42, h: 22, f: 12 }
-            : size === 'sm' ? { w: 26, h: 16, f: 10 }
-            :                  { w: 32, h: 18, f: 11 };
+            : size === 'sm' ? { w: 28, h: 16, f: 10 }
+            :                  { w: 34, h: 18, f: 11 };
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: dim.w, height: dim.h, borderRadius: 999,
+      minWidth: dim.w, height: dim.h, padding: '0 6px',
+      borderRadius: 999, flexShrink: 0,
       background: cfg.bg, color: cfg.fg,
       fontFamily: T.fontDisplay, fontSize: dim.f, fontWeight: 600,
       letterSpacing: 0.4, whiteSpace: 'nowrap',
-    }}>{level}</span>
+    }}>{cfg.label}</span>
   );
 }
 
