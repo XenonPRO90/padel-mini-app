@@ -22,9 +22,13 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://padel-mini-app-mu.vercel.app/")
 
-# Cream/gold logo lives in frontend/assets/ and is tracked in the repo.
-# Resolve relative to this file so it survives WorkingDirectory changes.
-LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "padel-club-logo.png"
+# Landscape welcome banner ("WELCOME TO PADEL CLUB" with crown+rackets,
+# corner ornaments, gold rule, italic tagline). Lives in frontend/assets/
+# and is tracked in the repo. Resolved relative to this file so the
+# image follows the bot regardless of WorkingDirectory.
+WELCOME_IMAGE_PATH = (
+    Path(__file__).resolve().parent.parent / "assets" / "padel-club-welcome.png"
+)
 
 # MarkdownV2 — these chars must be escaped where they appear as literals:
 # _ * [ ] ( ) ~ ` > # + - = | { } . !
@@ -61,10 +65,10 @@ async def send_welcome(message: Message) -> None:
     """Send the welcome card — photo with caption if the logo is on disk,
     plain message otherwise. Telegram caps caption at 1024 chars, the
     WELCOME text fits comfortably."""
-    if LOGO_PATH.exists():
+    if WELCOME_IMAGE_PATH.exists():
         try:
             await message.answer_photo(
-                photo=FSInputFile(LOGO_PATH),
+                photo=FSInputFile(WELCOME_IMAGE_PATH),
                 caption=WELCOME,
             )
             return
