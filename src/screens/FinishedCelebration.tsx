@@ -278,33 +278,34 @@ export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboar
         </div>
       </div>
 
-      {/* Sticky bottom action bar — primary = Telegram chat (one-tap),
-          secondary = poster image, tertiary = home. Reordered after Roma
-          flagged that the iOS share sheet for the poster image hid
-          Telegram behind a "More" sub-menu, while the previous flow used
-          to open the Telegram chat picker directly. */}
+      {/* Sticky bottom action bar.
+          Primary = Save Poster (PNG via navigator.share / download).
+          Secondary left = As Text (standings table in a copy modal).
+          Secondary right = Home.
+          The previous "Send to Chat" experiment used openTelegramLink
+          but on iOS Telegram WebView the link opened web.telegram.org
+          in a separate tab instead of the native chat picker — so we
+          revert to the poster-image flow as the primary action. */}
       <div style={{
         flexShrink: 0,
         padding: '8px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
         background: T.cream, borderTop: `1px solid ${T.paperEdge}`,
       }}>
-        {onShareText ? (
-          <MainCTA label="Send to chat" onClick={onShareText} />
-        ) : (
-          <MainCTA
-            label={busy ? 'Generating poster…' : 'Share poster'}
-            disabled={busy}
-            onClick={onSharePoster}
-          />
-        )}
+        <MainCTA
+          label={
+            <>
+              {busy ? null : <CameraIcon size={18} />}
+              <span>{busy ? 'Generating poster…' : 'Save poster'}</span>
+            </>
+          }
+          disabled={busy}
+          onClick={onSharePoster}
+        />
         <div style={{ height: 8 }} />
         <div style={{ display: 'flex', gap: 8 }}>
           {onShareText && (
             <div style={{ flex: 1 }}>
-              <SecondaryCTA
-                label={busy ? 'Saving…' : 'Save poster'}
-                onClick={onSharePoster}
-              />
+              <SecondaryCTA label="As text" onClick={onShareText} />
             </div>
           )}
           <div style={{ flex: 1 }}>
@@ -313,6 +314,18 @@ export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboar
         </div>
       </div>
     </div>
+  );
+}
+
+function CameraIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 8 H8 L10 6 H14 L16 8 H19 V18 H5 Z"
+        stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none"
+      />
+      <circle cx="12" cy="13" r="3.4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
   );
 }
 

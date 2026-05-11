@@ -39,21 +39,12 @@ export function CelebrationScreen({ tid, onClose }: Props) {
   const onShareText = async () => {
     try {
       const r = await api<{ text: string }>(`/api/tournaments/${tid}/share`);
-      // Open Telegram's chat picker directly — the user picks a chat and
-      // the standings text is pre-filled. Falls back to in-app textarea
-      // modal only if openTelegramLink isn't available or rejects the URL.
-      const shareUrl = `https://t.me/share/url?text=${encodeURIComponent(r.text)}`;
-      const tg = window.Telegram?.WebApp as unknown as {
-        openTelegramLink?: (u: string) => void;
-        openLink?: (u: string) => void;
-      } | undefined;
-      if (tg?.openTelegramLink) {
-        try { tg.openTelegramLink(shareUrl); return; } catch { /* try openLink */ }
-      }
-      if (tg?.openLink) {
-        try { tg.openLink(shareUrl); return; } catch { /* try location */ }
-      }
-      try { window.location.href = shareUrl; return; } catch { /* fall through */ }
+      // Just open the in-app textarea modal so Roma can copy the
+      // standings table and paste it wherever. Earlier we tried
+      // tg.openTelegramLink('t.me/share/url?text=...') for one-tap
+      // sharing but iOS Telegram WebView redirected to web.telegram.org
+      // in a new tab instead of opening the native chat picker, which
+      // was a worse experience than the simple copy flow.
       setShareText(r.text);
     } catch (e) {
       alert((e as Error).message);

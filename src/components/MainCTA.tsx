@@ -1,12 +1,14 @@
+import type { ReactNode } from 'react';
 import { T } from '../lib/tokens';
 
 interface Props {
-  label: string;
+  label: ReactNode;
   disabled?: boolean;
   onClick?: () => void;
 }
 
-// Primary CTA → emerald pill in Elegant.
+// Primary CTA → emerald pill in Elegant. Accepts ReactNode so callers
+// can put an icon next to the label (camera, share, …).
 export function MainCTA({ label, disabled, onClick }: Props) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
