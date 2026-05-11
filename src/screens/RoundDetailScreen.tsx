@@ -47,7 +47,7 @@ export function RoundDetailScreen({ tid, roundNum, onBack }: Props) {
       </div>
 
       <div style={{
-        flex: 1, overflowY: 'auto', padding: '4px 16px 16px',
+        flex: 1, overflowY: 'auto', padding: '4px 16px 36px',
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
         {isLoading ? (

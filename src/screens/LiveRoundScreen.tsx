@@ -78,7 +78,11 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
       </div>
 
       <div style={{
-        flex: 1, overflowY: 'auto', padding: '14px 16px 16px',
+        flex: 1, overflowY: 'auto',
+        // Generous bottom breathing room so the last court's "RECORDED" pill
+        // is never tucked under the sticky footer on iOS Telegram WebView,
+        // which mis-measures viewport height when safe-area insets vary.
+        padding: '14px 16px 36px',
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
         {round.matches.map((m) => {

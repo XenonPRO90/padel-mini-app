@@ -2,13 +2,24 @@ import { useRef, useState } from 'react';
 import { T } from '../lib/tokens';
 import { MainCTA, SecondaryCTA } from '../components/MainCTA';
 import { ETrophy } from '../lib/elegant';
-import type { ScoredPlayer, Tournament } from '../lib/types';
+import type { ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 
 interface Props {
   tournament: Tournament;
   leaderboard: ScoredPlayer[];
+  pairLeaderboard?: ScoredPair[];
   onClose: () => void;
   onShareText?: () => void;
+}
+
+// Unified row shape so the dense-ranking loop works the same for
+// per-player and per-pair leaderboards.
+interface PosterRow {
+  key: string;
+  name: string;
+  points: number;
+  wins: number;
+  losses: number;
 }
 
 // ── Poster palette (separate from Mini App's dark theme — premium tournament look)
@@ -28,24 +39,41 @@ const P = {
   serif: '"New York", "Cormorant Garamond", Georgia, "Times New Roman", serif',
 };
 
-export function FinishedCelebration({ tournament: t, leaderboard, onClose, onShareText }: Props) {
+export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboard, onClose, onShareText }: Props) {
   const posterRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
 
-  // Dense ranking with tiebreaker on wins:
-  // ties share a place only if BOTH points and wins match; the next
-  // distinct (points, wins) bumps place by 1. Prod-bot fix synced over.
-  const ranked: { place: number; p: ScoredPlayer }[] = [];
+  // For fixed-pair tournaments collapse partners into one row — otherwise
+  // both members of the winning pair get their own gold medal which is
+  // semantically wrong (it's one pair sharing 1st place).
+  const rows: PosterRow[] = t.mode === 'fixed' && pairLeaderboard?.length
+    ? pairLeaderboard.map((pair, i) => ({
+        key: `pair-${i}`,
+        name: `${pair.name_a} & ${pair.name_b}`,
+        points: pair.points,
+        wins: pair.wins,
+        losses: pair.losses,
+      }))
+    : leaderboard.map((p) => ({
+        key: `p-${p.player_id}`,
+        name: p.name,
+        points: p.points,
+        wins: p.wins,
+        losses: p.losses,
+      }));
+
+  // Dense ranking with tiebreaker on wins.
+  const ranked: { place: number; row: PosterRow }[] = [];
   let lastPts = -1;
   let lastWins = -1;
   let placeNum = 0;
-  for (const p of leaderboard) {
-    if (p.points !== lastPts || p.wins !== lastWins) {
+  for (const r of rows) {
+    if (r.points !== lastPts || r.wins !== lastWins) {
       placeNum += 1;
-      lastPts = p.points;
-      lastWins = p.wins;
+      lastPts = r.points;
+      lastWins = r.wins;
     }
-    ranked.push({ place: placeNum, p });
+    ranked.push({ place: placeNum, row: r });
   }
 
   // Parse name into "PADEL MASTERS" (main) + "WITH JOSE IN PAUS" (subtitle) + date
@@ -182,16 +210,17 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
             padding: '6px 14px',
             boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
           }}>
-            {ranked.map((row, i) => {
-              const { place, p } = row;
+            {ranked.map(({ place, row }, i) => {
               const isPodium = place <= 3;
               return (
-                <div key={p.player_id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
+                <div key={row.key} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '36px minmax(0, 1fr) auto',
+                  alignItems: 'center', columnGap: 12, rowGap: 2,
                   padding: isPodium ? '12px 0' : '9px 0',
                   borderBottom: i < ranked.length - 1 ? `1px solid ${P.cardBorder}` : 'none',
                 }}>
-                  <div style={{ width: 36, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'start', paddingTop: 4 }}>
                     {place === 1 && <Medal kind="gold" />}
                     {place === 2 && <Medal kind="silver" />}
                     {place === 3 && <Medal kind="bronze" />}
@@ -202,37 +231,40 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
                       }}>{place}.</span>
                     )}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontFamily: P.serif,
-                      fontSize: isPodium ? 22 : 17,
-                      fontWeight: isPodium ? 600 : 500,
-                      color: P.textPrimary, lineHeight: 1.2,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>{p.name}</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexShrink: 0 }}>
-                    <span style={{
-                      fontFamily: P.serif,
-                      fontSize: isPodium ? 24 : 18,
-                      fontWeight: 600,
-                      color: P.accentGold, lineHeight: 1,
-                      fontVariantNumeric: 'tabular-nums',
-                    }}>{p.points}</span>
-                    <span style={{
-                      fontFamily: P.serif, fontSize: 12, fontStyle: 'italic',
-                      color: P.textMuted,
-                    }}>pts</span>
-                  </div>
+                  {/* Name — wraps to 2 lines for fixed-pair "A & B" labels. */}
                   <div style={{
-                    width: 1, height: 22, background: P.divider, opacity: 0.6, flexShrink: 0,
-                  }} />
+                    fontFamily: P.serif,
+                    fontSize: isPodium ? 20 : 16,
+                    fontWeight: isPodium ? 600 : 500,
+                    color: P.textPrimary, lineHeight: 1.25,
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                  }}>{row.name}</div>
                   <div style={{
-                    fontFamily: P.serif, fontSize: 13, color: P.textMuted,
-                    minWidth: 36, fontVariantNumeric: 'tabular-nums', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    justifySelf: 'end', whiteSpace: 'nowrap',
                   }}>
-                    <span style={{ color: P.win, fontWeight: 600 }}>W{p.wins}</span>
-                    <span style={{ marginLeft: 6, color: P.loss, fontWeight: 600 }}>L{p.losses}</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{
+                        fontFamily: P.serif,
+                        fontSize: isPodium ? 24 : 18,
+                        fontWeight: 600,
+                        color: P.accentGold, lineHeight: 1,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>{row.points}</span>
+                      <span style={{
+                        fontFamily: P.serif, fontSize: 12, fontStyle: 'italic',
+                        color: P.textMuted,
+                      }}>pts</span>
+                    </div>
+                    <div style={{ width: 1, height: 22, background: P.divider, opacity: 0.6 }} />
+                    <div style={{
+                      fontFamily: P.serif, fontSize: 13, color: P.textMuted,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      <span style={{ color: P.win, fontWeight: 600 }}>W{row.wins}</span>
+                      <span style={{ marginLeft: 6, color: P.loss, fontWeight: 600 }}>L{row.losses}</span>
+                    </div>
                   </div>
                 </div>
               );

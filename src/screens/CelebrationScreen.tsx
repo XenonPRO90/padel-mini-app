@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { FinishedCelebration } from './FinishedCelebration';
 import { ShareTextModal } from '../components/ShareTextModal';
 import { T } from '../lib/tokens';
-import type { Round, ScoredPlayer, Tournament } from '../lib/types';
+import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 
 interface Props {
   tid: number;
@@ -15,6 +15,7 @@ interface Resp {
   tournament: Tournament;
   rounds: Round[];
   leaderboard: ScoredPlayer[];
+  pair_leaderboard?: ScoredPair[];
 }
 
 export function CelebrationScreen({ tid, onClose }: Props) {
@@ -64,6 +65,7 @@ export function CelebrationScreen({ tid, onClose }: Props) {
       <FinishedCelebration
         tournament={data.tournament}
         leaderboard={data.leaderboard}
+        pairLeaderboard={data.pair_leaderboard}
         onClose={onClose}
         onShareText={onShareText}
       />
