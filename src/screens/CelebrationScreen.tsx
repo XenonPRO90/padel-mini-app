@@ -26,7 +26,10 @@ export function CelebrationScreen({ tid, onClose }: Props) {
 
   if (isLoading || !data) {
     return (
-      <div style={{ padding: 24, color: T.textMuted, textAlign: 'center', marginTop: 80 }}>
+      <div style={{
+        padding: 24, color: T.muted, textAlign: 'center', marginTop: 80,
+        fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 15,
+      }}>
         Loading…
       </div>
     );

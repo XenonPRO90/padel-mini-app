@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { T } from '../lib/tokens';
 import { MainCTA, SecondaryCTA } from '../components/MainCTA';
+import { ETrophy } from '../lib/elegant';
 import type { ScoredPlayer, Tournament } from '../lib/types';
 
 interface Props {
@@ -100,7 +101,7 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: T.bg }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: T.cream }}>
       {/* Scrollable poster region */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 16px' }}>
         <div ref={posterRef} style={{
@@ -128,12 +129,12 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
             textAlign: 'center', marginTop: 14, marginBottom: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
           }}>
-            <span style={{ fontSize: 22 }}>🏆</span>
+            <ETrophy size={22} color={P.accentGold} />
             <span style={{
               fontFamily: P.serif, fontSize: 18, fontWeight: 600,
               letterSpacing: '0.04em', color: P.textPrimary,
-            }}>ТУРНИР ЗАВЕРШЁН!</span>
-            <span style={{ fontSize: 22 }}>🏆</span>
+            }}>ТУРНИР ЗАВЕРШЁН</span>
+            <ETrophy size={22} color={P.accentGold} />
           </div>
 
           {/* Decorative dot divider */}
@@ -249,10 +250,10 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
       <div style={{
         flexShrink: 0,
         padding: '8px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
-        background: T.bg, borderTop: `1px solid ${T.border}`,
+        background: T.cream, borderTop: `1px solid ${T.paperEdge}`,
       }}>
         <MainCTA
-          label={busy ? 'GENERATING POSTER…' : '📸 SHARE POSTER'}
+          label={busy ? 'Generating poster…' : 'Share poster'}
           disabled={busy}
           onClick={onSharePoster}
         />
@@ -260,11 +261,11 @@ export function FinishedCelebration({ tournament: t, leaderboard, onClose, onSha
         <div style={{ display: 'flex', gap: 8 }}>
           {onShareText && (
             <div style={{ flex: 1 }}>
-              <SecondaryCTA label="AS TEXT" onClick={onShareText} />
+              <SecondaryCTA label="As text" onClick={onShareText} />
             </div>
           )}
           <div style={{ flex: 1 }}>
-            <SecondaryCTA label="HOME" onClick={onClose} />
+            <SecondaryCTA label="Home" onClick={onClose} />
           </div>
         </div>
       </div>

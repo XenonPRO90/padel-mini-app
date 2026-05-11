@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useNextRound } from '../api/mutations';
 import { T } from '../lib/tokens';
-import { CourtCard, Label } from '../components/CourtCard';
+import { CourtCard } from '../components/CourtCard';
 import { MainCTA } from '../components/MainCTA';
 import { CourtSheet } from './CourtSheet';
+import { ELabel, EShareIcon } from '../lib/elegant';
 import type { ActiveTournamentResponse, Match } from '../lib/types';
 
 interface Props {
@@ -33,7 +34,10 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
 
   if (!data?.tournament || !data?.round) {
     return (
-      <div style={{ padding: 24, color: T.textMuted }}>No active round.</div>
+      <div style={{
+        padding: 24, color: T.muted, fontFamily: T.fontSerif,
+        fontStyle: 'italic', textAlign: 'center',
+      }}>No active round.</div>
     );
   }
 
@@ -41,41 +45,42 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const total = round.matches_total;
   const recorded = round.matches_recorded;
   const allDone = total > 0 && recorded === total;
-  const max = data.tournament.num_courts;
+  const totalRounds = Math.max(round.round_num, 7);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 16px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        padding: '10px 16px 12px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        borderBottom: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
         <button onClick={onBack} style={{
-          background: 'transparent', border: 'none', padding: 4, color: T.textMuted, cursor: 'pointer',
-        }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M15 6l-6 6 6 6" stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-            ROUND <span style={{ color: T.accent }}>{round.round_num}</span>
-            <span style={{ color: T.textDim, fontWeight: 500 }}> / {Math.max(round.round_num, 7)}</span>
-          </div>
-          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{t.name}</div>
+          background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+          color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
+        }}>← Back</button>
+        <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600,
+            color: T.ink, letterSpacing: 3,
+          }}>ROUND {round.round_num} <span style={{ color: T.muted, fontWeight: 500 }}>/ {totalRounds}</span></div>
+          <div style={{
+            fontFamily: T.fontSerif, fontStyle: 'italic',
+            fontSize: 12, color: T.muted, marginTop: 2,
+          }}>{t.name}</div>
         </div>
-        <button
-          onClick={() => onShareSchedule?.()}
-          style={{
-            background: T.accent, border: 'none', borderRadius: 999,
-            padding: '6px 12px', color: '#0B0E12', display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer',
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-            <path d="M12 4v12M7 9l5-5 5 5M5 16v3a1 1 0 001 1h12a1 1 0 001-1v-3" stroke="#0B0E12" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          POSTER
+        <button onClick={() => onShareSchedule?.()} style={{
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          padding: 4, color: T.gold,
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <EShareIcon size={18} />
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '14px 16px 16px',
+        display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
         {round.matches.map((m) => {
           const medal = m.court_num <= 3 ? (m.court_num as 1 | 2 | 3) : undefined;
           return (
@@ -89,23 +94,29 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
         })}
       </div>
 
-      <div style={{ padding: '10px 16px 12px', borderTop: `1px solid ${T.border}`, background: T.bg }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ ...Label(), fontSize: 10 }}>{recorded} / {total} RESULTS</span>
+      <div style={{
+        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
+        borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', marginBottom: 10,
+        }}>
+          <ELabel color={allDone ? T.emerald : T.gold}>Results · {recorded} / {total}</ELabel>
           <div style={{ display: 'flex', gap: 4 }}>
             {round.matches.map((m, i) => (
               <div key={i} style={{
-                width: 100 / max + '%', maxWidth: 26, height: 4, borderRadius: 2,
-                background: m.winner !== null ? T.accent : T.border,
+                width: 22, height: 4, borderRadius: 2,
+                background: m.winner !== null ? T.emerald : T.paperEdge,
               }} />
             ))}
           </div>
         </div>
         <MainCTA
           label={
-            nextRound.isPending ? 'GENERATING…'
-            : allDone ? 'NEXT ROUND'
-            : `WAITING · ${recorded}/${total}`
+            nextRound.isPending ? 'Generating…'
+            : allDone ? 'Next round'
+            : `Waiting · ${recorded}/${total}`
           }
           disabled={!allDone || nextRound.isPending}
           onClick={() => allDone && nextRound.mutate(t.id)}
@@ -113,10 +124,7 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
       </div>
 
       {openMatch && (
-        <CourtSheet
-          match={openMatch}
-          onClose={() => setOpenMatch(null)}
-        />
+        <CourtSheet match={openMatch} onClose={() => setOpenMatch(null)} />
       )}
     </div>
   );

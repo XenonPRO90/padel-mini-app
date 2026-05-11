@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PADEL CLAUB · Elegant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #efe7d5; font-family: "Cormorant Garamond", Georgia, serif; }
+  .padel-app *::-webkit-scrollbar { display: none; }
+  .padel-app * { scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="src/elegant-tokens.jsx"></script>
+<script type="text/babel" src="src/elegant-components.jsx"></script>
+<script type="text/babel" src="src/elegant-screens-1.jsx"></script>
+<script type="text/babel" src="src/elegant-screens-2.jsx"></script>
+<script type="text/babel" src="src/elegant-screens-3.jsx"></script>
+<script type="text/babel" src="src/elegant-screens-wizard.jsx"></script>
+<script type="text/babel" src="src/elegant-screens-history.jsx"></script>
+
+<script type="text/babel">
+function Frame({ children }) {
+  return <div style={{ width: '100%', height: '100%' }}>{children}</div>;
+}
+
+function App() {
+  const W = 390, H = 800;
+  return (
+    <DesignCanvas>
+      <DCSection id="home" title="8.1 · Home · Tournament Dashboard" subtitle="Cream paper, racket-and-crown lockup, ornamental rule. Active + empty states.">
+        <DCArtboard id="home-active" label="Active tournament" width={W} height={H}>
+          <Frame><EHomeActive/></Frame>
+        </DCArtboard>
+        <DCArtboard id="home-empty" label="No active tournament" width={W} height={H}>
+          <Frame><EHomeEmpty/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="live" title="8.2 · Live Round" subtitle="Each court as a strip: emerald label-block + score-card. Tap a strip to record.">
+        <DCArtboard id="live-default" label="In progress · 2/4 recorded" width={W} height={H}>
+          <Frame><ELiveRound/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="court" title="8.3 · Court Detail · Result Entry" subtitle="Sheet over dimmed page. Two team cards as tap targets, ornate “or” between.">
+        <DCArtboard id="court-pending" label="Pending · pick winner" width={W} height={H}>
+          <Frame><ECourtDetail/></Frame>
+        </DCArtboard>
+        <DCArtboard id="court-recorded" label="Recorded · Team 1 won" width={W} height={H}>
+          <Frame><ECourtDetail recorded winner={1}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="finished" title="8.4 · Tournament Finished" subtitle="Full-bleed poster — corner ornaments, medal ribbons, gold standings frame. Screenshot for the chat.">
+        <DCArtboard id="finished-poster" label="Final poster" width={W} height={H}>
+          <Frame><EFinishedPoster/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="players" title="8.5 — 8.6 · Players" subtitle="Library (alphabetical) and player edit. Level chips and side dots stay throughout.">
+        <DCArtboard id="players-library" label="Library" width={W} height={H}>
+          <Frame><EPlayersLibrary/></Frame>
+        </DCArtboard>
+        <DCArtboard id="players-edit" label="Edit player" width={W} height={H}>
+          <Frame><EPlayerEdit/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="wizard" title="8.7 · New Tournament · 9-step Wizard" subtitle="Gold-dot progress at top, ornament divider under each title.">
+        <DCArtboard id="w1" label="Step 1 · Name"           width={W} height={H}><Frame><EWizardStep1/></Frame></DCArtboard>
+        <DCArtboard id="w2" label="Step 2 · Courts"         width={W} height={H}><Frame><EWizardStep2/></Frame></DCArtboard>
+        <DCArtboard id="w3" label="Step 3 · Format"         width={W} height={H}><Frame><EWizardStep3/></Frame></DCArtboard>
+        <DCArtboard id="w4" label="Step 4 · Pairing"        width={W} height={H}><Frame><EWizardStep4/></Frame></DCArtboard>
+        <DCArtboard id="w5" label="Step 5 · Initial pts"    width={W} height={H}><Frame><EWizardStep5/></Frame></DCArtboard>
+        <DCArtboard id="w6" label="Step 6 · Starting round" width={W} height={H}><Frame><EWizardStep6/></Frame></DCArtboard>
+        <DCArtboard id="w7" label="Step 7 · Court points"   width={W} height={H}><Frame><EWizardStep7/></Frame></DCArtboard>
+        <DCArtboard id="w8" label="Step 8 · Players"        width={W} height={H}><Frame><EWizardStep8/></Frame></DCArtboard>
+        <DCArtboard id="w9" label="Step 9 · Confirm"        width={W} height={H}><Frame><EWizardStep9/></Frame></DCArtboard>
+      </DCSection>
+
+      <DCSection id="history" title="8.8 — 8.10 · History" subtitle="List → tournament detail → past round (read-only).">
+        <DCArtboard id="hist-list"   label="History list"            width={W} height={H}><Frame><ETournamentHistory/></Frame></DCArtboard>
+        <DCArtboard id="hist-detail" label="Tournament detail"       width={W} height={H}><Frame><ETournamentDetail/></Frame></DCArtboard>
+        <DCArtboard id="hist-round"  label="Round detail (readonly)" width={W} height={H}><Frame><ERoundDetailHistory/></Frame></DCArtboard>
+      </DCSection>
+
+      <DCSection id="states" title="States · Skeleton / Error / Empty / Edge" subtitle="Loading, broken, empty library, wizard-edge (not divisible by 4).">
+        <DCArtboard id="s-skel"    label="Home · skeleton"                width={W} height={H}><Frame><EHomeSkeleton/></Frame></DCArtboard>
+        <DCArtboard id="s-err"     label="Home · error"                   width={W} height={H}><Frame><EHomeError/></Frame></DCArtboard>
+        <DCArtboard id="s-pe"      label="Players · empty"                width={W} height={H}><Frame><EPlayersEmpty/></Frame></DCArtboard>
+        <DCArtboard id="s-w8-edge" label="Wizard · not divisible by 4"    width={W} height={H}><Frame><EWizardStep8 notDivisible/></Frame></DCArtboard>
+      </DCSection>
+
+      <DCSection id="foundations" title="Foundations" subtitle="Palette, type, medals, ornaments, buttons — the elegant system in one page.">
+        <DCArtboard id="found-1" label="Design tokens" width={760} height={H}>
+          <EFoundations/>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

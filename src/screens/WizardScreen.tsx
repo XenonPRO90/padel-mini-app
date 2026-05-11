@@ -5,8 +5,8 @@ import { useCreateTournament, useCreatePlayer, type SideValue } from '../api/pla
 import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { MainCTA } from '../components/MainCTA';
-import { Label } from '../components/CourtCard';
 import { Avatar } from './PlayersScreen';
+import { ELabel, EGoldFrame, EDivider } from '../lib/elegant';
 import type { Player } from '../lib/types';
 
 interface Props {
@@ -63,10 +63,7 @@ export function WizardScreen({ onClose }: Props) {
   const onSubmit = async () => {
     try {
       const cp = ensureCourtPoints(s.num_courts);
-      await create.mutateAsync({
-        ...s,
-        court_points: cp,
-      });
+      await create.mutateAsync({ ...s, court_points: cp });
       onClose();
     } catch (e) {
       alert((e as Error).message);
@@ -79,21 +76,44 @@ export function WizardScreen({ onClose }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Header step={step} onBack={back} />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 16px' }}>
         {step === 1 && <StepName value={s.name} onChange={(v) => update('name', v)} />}
         {step === 2 && <StepCourts value={s.num_courts} onChange={(v) => update('num_courts', v)} />}
         {step === 3 && <StepMode value={s.mode} onChange={(v) => update('mode', v)} />}
         {step === 4 && <StepOrder value={s.initial_order} onChange={(v) => update('initial_order', v)} />}
-        {step === 5 && <StepNum title="Initial points per win" caption="Points per win until court-specific points kick in" value={s.initial_points} onChange={(v) => update('initial_points', v)} min={1} max={10} />}
-        {step === 6 && <StepNum title="Start round for court points" caption="Round when different points per court start to apply" value={s.start_round} onChange={(v) => update('start_round', v)} min={1} max={10} />}
-        {step === 7 && <StepCourtPoints courts={s.num_courts} value={ensureCourtPoints(s.num_courts)} onChange={(v) => update('court_points', v)} />}
-        {step === 8 && <StepPlayers mode={s.mode} selected={s.player_ids} onChange={(v) => update('player_ids', v)} />}
+        {step === 5 && <StepNum
+          title="Initial points per win"
+          caption="Points per win until court-specific points kick in"
+          value={s.initial_points}
+          onChange={(v) => update('initial_points', v)}
+          min={1} max={10}
+        />}
+        {step === 6 && <StepNum
+          title="Start round for court points"
+          caption="Round when different points per court start to apply"
+          value={s.start_round}
+          onChange={(v) => update('start_round', v)}
+          min={1} max={10}
+        />}
+        {step === 7 && <StepCourtPoints
+          courts={s.num_courts}
+          value={ensureCourtPoints(s.num_courts)}
+          onChange={(v) => update('court_points', v)}
+        />}
+        {step === 8 && <StepPlayers
+          mode={s.mode}
+          selected={s.player_ids}
+          onChange={(v) => update('player_ids', v)}
+        />}
         {step === 9 && <StepConfirm s={s} cp={ensureCourtPoints(s.num_courts)} />}
         {step === 9 && s.mode === 'fixed' && s.player_ids.length > 0 && (
           <PairsPreview playerIds={s.player_ids} />
         )}
       </div>
-      <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${T.border}` }}>
+      <div style={{
+        padding: '8px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
+        borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
         {step === 8 && !playersDivisible && (
           <ValidationBanner text="Need a multiple of 4 players" />
         )}
@@ -102,7 +122,7 @@ export function WizardScreen({ onClose }: Props) {
         )}
         {step < TOTAL_STEPS ? (
           <MainCTA
-            label="NEXT"
+            label="Continue"
             disabled={
               (step === 1 && !s.name.trim()) ||
               (step === 8 && (!playersDivisible || !enoughForCourts))
@@ -111,7 +131,7 @@ export function WizardScreen({ onClose }: Props) {
           />
         ) : (
           <MainCTA
-            label={create.isPending ? 'STARTING…' : 'START TOURNAMENT'}
+            label={create.isPending ? 'Starting…' : 'Start tournament'}
             disabled={create.isPending}
             onClick={onSubmit}
           />
@@ -123,229 +143,43 @@ export function WizardScreen({ onClose }: Props) {
 
 function Header({ step, onBack }: { step: number; onBack: () => void }) {
   return (
-    <div style={{ padding: '8px 16px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: T.textMuted, padding: 4, cursor: 'pointer' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M15 6l-6 6 6 6" stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <div style={{ ...Label(), flex: 1, textAlign: 'center', fontSize: 11 }}>NEW TOURNAMENT</div>
-        <div style={{ width: 50, textAlign: 'right', fontSize: 12, color: T.textMuted, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-          {step} / {TOTAL_STEPS}
+    <div style={{
+      padding: '10px 16px 14px',
+      borderBottom: `1px solid ${T.paperEdge}`, background: T.cream,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <button onClick={onBack} style={{
+          background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+          color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
+        }}>← Back</button>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600,
+            color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
+          }}>Step {step} of {TOTAL_STEPS}</div>
         </div>
+        <div style={{ width: 60 }} />
       </div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-          <div key={i} style={{
-            flex: 1, height: 3, borderRadius: 2,
-            background: i + 1 <= step ? T.accent : T.border,
-            transition: 'background 200ms',
-          }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StepName({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 1</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 22 }}>Tournament name</div>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: '100%', background: T.surface, border: `1px solid ${T.accent}`,
-          borderRadius: 12, padding: '16px 16px', fontSize: 18, fontWeight: 600,
-          color: T.textPrimary, outline: 'none',
-        }}
-      />
-    </div>
-  );
-}
-
-function StepCourts({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 2</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 26 }}>How many courts?</div>
-      <div style={{ textAlign: 'center', marginBottom: 30 }}>
-        <div style={{ fontSize: 96, fontWeight: 700, color: T.accent, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-        <div style={Label()}>COURTS</div>
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        {[2, 3, 4, 5, 6].map((n) => {
-          const active = n === value;
+      {/* Gold-dot progress */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+          const n = i + 1;
+          const filled = n <= step;
           return (
-            <div
-              key={n}
-              onClick={() => onChange(n)}
-              style={{
-                width: 50, height: 50, borderRadius: 12,
-                background: active ? T.accent : T.surface,
-                color: active ? '#0B0E12' : T.textMuted,
-                border: `1px solid ${active ? T.accent : T.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, fontWeight: 700, cursor: 'pointer',
-              }}
-            >{n}</div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function StepMode({ value, onChange }: { value: 'rotating' | 'fixed'; onChange: (v: 'rotating' | 'fixed') => void }) {
-  return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 3</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 22 }}>Pairing mode</div>
-      {[
-        { id: 'rotating', title: 'ROTATING PARTNERS', desc: 'Pairs change every round based on level balance' },
-        { id: 'fixed', title: 'FIXED PAIRS', desc: 'Same partner all tournament' },
-      ].map((m) => {
-        const active = m.id === value;
-        return (
-          <div
-            key={m.id}
-            onClick={() => onChange(m.id as 'rotating' | 'fixed')}
-            style={{
-              background: active ? `${T.accent}10` : T.surface,
-              border: `1.5px solid ${active ? T.accent : T.border}`,
-              borderRadius: 14, padding: '18px 16px', marginBottom: 12,
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ ...Label(), color: active ? T.accent : T.textMuted, marginBottom: 8 }}>{m.title}</div>
-            <div style={{ fontSize: 13, color: T.textPrimary, lineHeight: 1.4 }}>{m.desc}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StepOrder({ value, onChange }: { value: 'keep' | 'random'; onChange: (v: 'keep' | 'random') => void }) {
-  return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 4</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 22 }}>Initial court order</div>
-      {[
-        { id: 'keep', title: 'BY ENTRY', desc: 'Place strongest players on Court 1' },
-        { id: 'random', title: 'RANDOM', desc: 'Shuffle players across courts' },
-      ].map((m) => {
-        const active = m.id === value;
-        return (
-          <div
-            key={m.id}
-            onClick={() => onChange(m.id as 'keep' | 'random')}
-            style={{
-              background: active ? `${T.accent}10` : T.surface,
-              border: `1.5px solid ${active ? T.accent : T.border}`,
-              borderRadius: 14, padding: '18px 16px', marginBottom: 12,
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ ...Label(), color: active ? T.accent : T.textMuted, marginBottom: 8 }}>{m.title}</div>
-            <div style={{ fontSize: 13, color: T.textPrimary, lineHeight: 1.4 }}>{m.desc}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StepNum({ title, caption, value, onChange, min, max }: {
-  title: string; caption: string; value: number; onChange: (v: number) => void; min: number; max: number;
-}) {
-  return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 22 }}>{title}</div>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 16,
-        background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 8,
-      }}>
-        <button
-          onClick={() => onChange(Math.max(min, value - 1))}
-          style={{
-            width: 44, height: 44, borderRadius: 10,
-            border: `1px solid ${T.border}`, background: T.surface2, color: T.textPrimary,
-            fontSize: 22, fontWeight: 600, cursor: 'pointer',
-          }}
-        >−</button>
-        <div style={{ flex: 1, textAlign: 'center', fontSize: 36, fontWeight: 700, color: T.accent, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-        <button
-          onClick={() => onChange(Math.min(max, value + 1))}
-          style={{
-            width: 44, height: 44, borderRadius: 10,
-            border: `1px solid ${T.border}`, background: T.surface2, color: T.textPrimary,
-            fontSize: 22, fontWeight: 600, cursor: 'pointer',
-          }}
-        >+</button>
-      </div>
-      <div style={{ fontSize: 13, color: T.textMuted, marginTop: 14, lineHeight: 1.5, padding: '0 4px' }}>{caption}</div>
-    </div>
-  );
-}
-
-function StepCourtPoints({ courts, value, onChange }: {
-  courts: number; value: Record<number, number>; onChange: (v: Record<number, number>) => void;
-}) {
-  return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 7</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 22 }}>Points per court</div>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '4px 16px' }}>
-        {Array.from({ length: courts }).map((_, i) => {
-          const cn = i + 1;
-          const isFirst = cn === 1;
-          const isLast = cn === courts;
-          return (
-            <div key={cn} style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0',
-              borderBottom: i < courts - 1 ? `1px solid ${T.border}` : 'none',
-            }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ ...Label(), fontSize: 12, color: T.textPrimary }}>COURT {cn}</div>
-                {(isFirst || isLast) && (
-                  <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>
-                    {isFirst ? '(strongest)' : '(weakest)'}
-                  </div>
-                )}
-              </div>
+            <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10,
-                padding: 3,
-              }}>
-                <button
-                  onClick={() => onChange({ ...value, [cn]: Math.max(0, (value[cn] ?? 1) - 1) })}
-                  style={{
-                    width: 32, height: 36, borderRadius: 8, border: 'none',
-                    background: T.bg, color: T.textPrimary,
-                    fontSize: 18, fontWeight: 600, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >−</button>
+                width: 8, height: 8, borderRadius: 999,
+                background: filled ? T.gold : 'transparent',
+                border: `1px solid ${filled ? T.gold : T.rule}`,
+                flexShrink: 0,
+              }} />
+              {i < TOTAL_STEPS - 1 && (
                 <div style={{
-                  minWidth: 32, textAlign: 'center',
-                  fontSize: 20, fontWeight: 700, color: T.accent,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>{value[cn] ?? 1}</div>
-                <button
-                  onClick={() => onChange({ ...value, [cn]: Math.min(99, (value[cn] ?? 1) + 1) })}
-                  style={{
-                    width: 32, height: 36, borderRadius: 8, border: 'none',
-                    background: T.bg, color: T.textPrimary,
-                    fontSize: 18, fontWeight: 600, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >+</button>
-              </div>
+                  flex: 1, height: 1,
+                  background: n < step ? T.gold : T.rule,
+                  opacity: n < step ? 1 : 0.4,
+                }} />
+              )}
             </div>
           );
         })}
@@ -354,8 +188,246 @@ function StepCourtPoints({ courts, value, onChange }: {
   );
 }
 
-// Distinct, accessible-on-dark pair colors (cycle if more than 8 pairs)
-const PAIR_COLORS = ['#08FFC8', '#FFB400', '#FF7AB6', '#7AC8FF', '#B988FF', '#FFA07A', '#90EE90', '#D4D4D4'];
+// Reusable step title block
+function StepTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div style={{ textAlign: 'center', marginTop: 22, marginBottom: 16 }}>
+      <div style={{
+        fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+        letterSpacing: 2, color: T.ink,
+      }}>{title}</div>
+      {subtitle && (
+        <div style={{
+          marginTop: 4, fontFamily: T.fontSerif, fontStyle: 'italic',
+          fontSize: 14, color: T.muted,
+        }}>{subtitle}</div>
+      )}
+      <div style={{ marginTop: 10 }}><EDivider /></div>
+    </div>
+  );
+}
+
+function StepName({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <>
+      <StepTitle title="Name the Tournament" subtitle="A name to be remembered by" />
+      <ELabel style={{ marginBottom: 6 }}>Tournament name</ELabel>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: '100%', background: T.paper,
+          border: `1px solid ${T.paperEdge}`, borderRadius: 14,
+          padding: '14px 16px',
+          fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 500,
+          color: T.ink, outline: 'none',
+        }}
+      />
+    </>
+  );
+}
+
+function StepCourts({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <>
+      <StepTitle title="How many courts?" subtitle="Tonight's stage" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        {[2, 3, 4, 5, 6].map((n) => {
+          const active = n === value;
+          return (
+            <div key={n} onClick={() => onChange(n)} style={{
+              aspectRatio: '1', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', flexDirection: 'column',
+              background: active ? T.emerald : T.paper,
+              color: active ? T.cream : T.ink,
+              border: `1px solid ${active ? T.emerald : T.paperEdge}`,
+              borderRadius: 14, cursor: 'pointer',
+            }}>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 600 }}>{n}</div>
+              <div style={{
+                fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11,
+                opacity: 0.85,
+              }}>{n === 1 ? 'court' : 'courts'}</div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function CardChoice({
+  active, title, desc, onClick,
+}: { active: boolean; title: string; desc: string; onClick: () => void }) {
+  return (
+    <div onClick={onClick} style={{
+      padding: '14px 16px',
+      background: active ? '#f9f1de' : T.paper,
+      border: `1px solid ${active ? T.gold : T.paperEdge}`,
+      borderRadius: 14, cursor: 'pointer', marginBottom: 10,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 600, color: T.ink }}>{title}</div>
+        {active && <span style={{ color: T.gold, fontSize: 16 }}>✓</span>}
+      </div>
+      <div style={{
+        marginTop: 4, fontFamily: T.fontSerif, fontStyle: 'italic',
+        fontSize: 13, color: T.muted, lineHeight: 1.45,
+      }}>{desc}</div>
+    </div>
+  );
+}
+
+function StepMode({ value, onChange }: { value: 'rotating' | 'fixed'; onChange: (v: 'rotating' | 'fixed') => void }) {
+  return (
+    <>
+      <StepTitle title="Pairing Mode" subtitle="How the matches unfold" />
+      <CardChoice
+        active={value === 'rotating'}
+        title="Rotating Partners"
+        desc="Pairs change every round based on level balance."
+        onClick={() => onChange('rotating')}
+      />
+      <CardChoice
+        active={value === 'fixed'}
+        title="Fixed Pairs"
+        desc="Same partner all tournament."
+        onClick={() => onChange('fixed')}
+      />
+    </>
+  );
+}
+
+function StepOrder({ value, onChange }: { value: 'keep' | 'random'; onChange: (v: 'keep' | 'random') => void }) {
+  return (
+    <>
+      <StepTitle title="Initial Court Order" subtitle="Where everyone starts" />
+      <CardChoice
+        active={value === 'keep'}
+        title="By Entry"
+        desc="Place strongest players on Court 1."
+        onClick={() => onChange('keep')}
+      />
+      <CardChoice
+        active={value === 'random'}
+        title="Random"
+        desc="Shuffle players across courts."
+        onClick={() => onChange('random')}
+      />
+    </>
+  );
+}
+
+function StepNum({ title, caption, value, onChange, min, max }: {
+  title: string; caption: string; value: number; onChange: (v: number) => void; min: number; max: number;
+}) {
+  return (
+    <>
+      <StepTitle title={title} subtitle={caption} />
+      <div style={{ textAlign: 'center', marginTop: 20 }}>
+        <div style={{
+          fontFamily: T.fontDisplay, fontSize: 88, fontWeight: 600,
+          color: T.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+        }}>{value}</div>
+        <div style={{
+          fontFamily: T.fontSerif, fontSize: 14, fontStyle: 'italic',
+          color: T.muted, marginTop: 4,
+        }}>points per win</div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 30 }}>
+          <button
+            onClick={() => onChange(Math.max(min, value - 1))}
+            style={{
+              width: 60, height: 60, borderRadius: 999,
+              border: `1px solid ${T.rule}`, background: T.paper, color: T.ink,
+              fontFamily: T.fontDisplay, fontSize: 24, fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >−</button>
+          <button
+            onClick={() => onChange(Math.min(max, value + 1))}
+            style={{
+              width: 60, height: 60, borderRadius: 999,
+              border: `1px solid ${T.rule}`, background: T.paper, color: T.ink,
+              fontFamily: T.fontDisplay, fontSize: 24, fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >+</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function StepCourtPoints({ courts, value, onChange }: {
+  courts: number; value: Record<number, number>; onChange: (v: Record<number, number>) => void;
+}) {
+  const courtLabel = (n: number): string => {
+    if (n === 1) return 'Centre Court';
+    if (n === courts) return 'Final court';
+    const ords = ['', 'First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth'];
+    return ords[n] ?? `Court ${n}`;
+  };
+  return (
+    <>
+      <StepTitle title="Points per Court" subtitle="What each victory is worth" />
+      {Array.from({ length: courts }).map((_, i) => {
+        const cn = i + 1;
+        return (
+          <div key={cn} style={{
+            display: 'grid', gridTemplateColumns: '54px 1fr auto',
+            alignItems: 'center', gap: 12,
+            padding: '14px 16px', marginBottom: 8,
+            background: T.paper, border: `1px solid ${T.paperEdge}`,
+            borderRadius: 14,
+          }}>
+            <div style={{
+              background: T.emerald, color: T.cream,
+              borderRadius: 10, padding: '8px 0', textAlign: 'center',
+            }}>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 2 }}>КОРТ</div>
+              <div style={{
+                fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 600, lineHeight: 1,
+              }}>{cn}</div>
+            </div>
+            <div style={{
+              fontFamily: T.fontSerif, fontStyle: 'italic',
+              fontSize: 14, color: T.muted,
+            }}>{courtLabel(cn)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => onChange({ ...value, [cn]: Math.max(0, (value[cn] ?? 1) - 1) })}
+                style={{
+                  width: 30, height: 30, borderRadius: 999, border: `1px solid ${T.rule}`,
+                  background: T.cream, color: T.ink,
+                  fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >−</button>
+              <div style={{
+                minWidth: 30, textAlign: 'center',
+                fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+                color: T.goldDeep, fontVariantNumeric: 'tabular-nums',
+              }}>{value[cn] ?? 1}</div>
+              <button
+                onClick={() => onChange({ ...value, [cn]: Math.min(99, (value[cn] ?? 1) + 1) })}
+                style={{
+                  width: 30, height: 30, borderRadius: 999, border: `1px solid ${T.rule}`,
+                  background: T.cream, color: T.ink,
+                  fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >+</button>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// Elegant pair colors — desaturated, paper-friendly
+const PAIR_COLORS = ['#2f4a3a', '#a6864d', '#8a6a35', '#1d3327', '#7a4a20', '#5a7a4a', '#8a2a2a', '#4b5260'];
 
 function StepPlayers({
   mode, selected, onChange,
@@ -389,38 +461,40 @@ function StepPlayers({
   }
 
   return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 8</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 16 }}>Select players</div>
+    <>
+      <StepTitle title="Select Players" subtitle={`${selected.length} of ${items.length} chosen`} />
 
       <div style={{
-        background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: '12px 14px', marginBottom: 14,
+        background: T.paper, border: `1px solid ${T.paperEdge}`,
+        borderRadius: 14, padding: '12px 14px', marginBottom: 14,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ ...Label(), fontSize: 11 }}>SELECTED</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-            {selected.length}
-          </div>
+          <ELabel>Selected</ELabel>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+            color: T.ink, marginTop: 2, fontVariantNumeric: 'tabular-nums',
+          }}>{selected.length}</div>
         </div>
         <div style={{
-          background: `${T.accent}14`, color: T.accent,
-          borderRadius: 999, padding: '6px 12px',
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+          background: T.cream2, color: T.goldDeep,
+          borderRadius: 999, padding: '6px 14px',
+          fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 1.5,
+          textTransform: 'uppercase',
         }}>
           {mode === 'fixed'
-            ? `${pairCount} PAIR${pairCount === 1 ? '' : 'S'}`
-            : `÷ 4 = ${Math.floor(selected.length / 4)} COURTS`}
+            ? `${pairCount} pair${pairCount === 1 ? '' : 's'}`
+            : `÷ 4 · ${Math.floor(selected.length / 4)} courts`}
         </div>
       </div>
 
       {mode === 'fixed' && (
         <div style={{
-          fontSize: 12, color: T.textMuted, padding: '0 4px 12px',
+          fontFamily: T.fontSerif, fontStyle: 'italic',
+          fontSize: 13, color: T.muted, padding: '0 4px 12px',
           lineHeight: 1.5,
         }}>
-          Same color = a fixed pair. Players are paired in the order you tap them
+          Same color marks a fixed pair. Players are paired in the order you tap them
           (1+2, 3+4, …).
         </div>
       )}
@@ -429,96 +503,113 @@ function StepPlayers({
         onClick={() => setAdding(true)}
         style={{
           width: '100%', marginBottom: 12, padding: 14,
-          background: 'transparent', border: `1px dashed ${T.border}`, borderRadius: 12,
-          color: T.accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em',
+          background: 'transparent',
+          border: `1px solid ${T.rule}`, borderRadius: 999,
+          color: T.gold, fontFamily: T.fontDisplay,
+          fontSize: 13, fontWeight: 600, letterSpacing: 1.5,
+          textTransform: 'uppercase',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           cursor: 'pointer',
         }}
-      >+ ADD NEW PLAYER</button>
+      >+ Add new player</button>
 
       {isLoading ? (
         <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
       ) : (
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '0 12px' }}>
-          {items.map((p, i) => {
-            const isSelected = selected.includes(p.id);
-            const order = isSelected ? selected.indexOf(p.id) + 1 : null;
-            const pairIdx = isSelected ? Math.floor((order! - 1) / 2) : -1;
-            const pairColor = pairIdx >= 0 ? PAIR_COLORS[pairIdx % PAIR_COLORS.length] : '';
-            const isFixedSelected = mode === 'fixed' && isSelected;
-            return (
-              <div
-                key={p.id}
-                onClick={() => toggle(p.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px',
-                  borderBottom: i < items.length - 1 ? `1px solid ${T.border}` : 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{
-                  width: 24, height: 24, borderRadius: 6,
-                  background: isSelected ? (isFixedSelected ? pairColor : T.accent) : 'transparent',
-                  border: `1.5px solid ${isSelected ? (isFixedSelected ? pairColor : T.accent) : T.border}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#0B0E12', fontSize: 11, fontWeight: 700, flexShrink: 0,
-                }}>{isSelected ? order : ''}</div>
-                <Avatar name={p.name} size={32} />
-                <span style={{ flex: 1, fontSize: 15, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                {isFixedSelected && (
+        <EGoldFrame>
+          <div style={{ padding: '4px 0' }}>
+            {items.map((p, i) => {
+              const isSelected = selected.includes(p.id);
+              const order = isSelected ? selected.indexOf(p.id) + 1 : null;
+              const pairIdx = isSelected ? Math.floor((order! - 1) / 2) : -1;
+              const pairColor = pairIdx >= 0 ? PAIR_COLORS[pairIdx % PAIR_COLORS.length] : '';
+              const isFixedSelected = mode === 'fixed' && isSelected;
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => toggle(p.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 14px',
+                    borderBottom: i < items.length - 1 ? `1px solid ${T.paperEdge}` : 'none',
+                    cursor: 'pointer',
+                    background: isSelected ? '#f9f1de' : 'transparent',
+                  }}
+                >
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 6,
+                    background: isSelected ? (isFixedSelected ? pairColor : T.gold) : 'transparent',
+                    border: `1px solid ${isSelected ? (isFixedSelected ? pairColor : T.gold) : T.rule}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: T.cream, fontFamily: T.fontDisplay,
+                    fontSize: 11, fontWeight: 600, flexShrink: 0,
+                  }}>{isSelected ? order : ''}</div>
+                  <Avatar name={p.name} size={32} />
                   <span style={{
-                    background: `${pairColor}22`, color: pairColor,
-                    borderRadius: 999, padding: '2px 8px',
-                    fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
-                    flexShrink: 0,
-                  }}>P{pairIdx + 1}</span>
-                )}
-                <SideBadge side={p.side} />
-                <LevelBadge level={p.level} size="sm" />
-              </div>
-            );
-          })}
-        </div>
+                    flex: 1, fontFamily: T.fontDisplay, fontSize: 15, fontWeight: 500,
+                    color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{p.name}</span>
+                  {isFixedSelected && (
+                    <span style={{
+                      border: `1px solid ${pairColor}`, color: pairColor,
+                      background: 'transparent',
+                      borderRadius: 999, padding: '2px 8px',
+                      fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.6,
+                      flexShrink: 0,
+                    }}>P{pairIdx + 1}</span>
+                  )}
+                  <SideBadge side={p.side} />
+                  <LevelBadge level={p.level} size="sm" />
+                </div>
+              );
+            })}
+          </div>
+        </EGoldFrame>
       )}
-    </div>
+    </>
   );
 }
 
 function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
   const summary: { label: string; value: string }[] = [
-    { label: 'NAME', value: s.name },
-    { label: 'COURTS', value: String(s.num_courts) },
-    { label: 'MODE', value: s.mode === 'rotating' ? 'Rotating partners' : 'Fixed pairs' },
-    { label: 'ORDER', value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
-    { label: 'INITIAL POINTS', value: `${s.initial_points} pt` },
-    { label: 'START ROUND', value: `Round ${s.start_round}` },
-    { label: 'COURT POINTS', value: Array.from({ length: s.num_courts }, (_, i) => cp[i + 1]).join(' / ') },
-    { label: 'PLAYERS', value: String(s.player_ids.length) },
+    { label: 'Name',            value: s.name },
+    { label: 'Courts',          value: String(s.num_courts) },
+    { label: 'Mode',            value: s.mode === 'rotating' ? 'Rotating partners' : 'Fixed pairs' },
+    { label: 'Order',           value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
+    { label: 'Initial points',  value: `${s.initial_points} pt` },
+    { label: 'Start round',     value: `Round ${s.start_round}` },
+    { label: 'Court points',    value: Array.from({ length: s.num_courts }, (_, i) => cp[i + 1]).join(' / ') },
+    { label: 'Players',         value: String(s.player_ids.length) },
   ];
   return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>STEP 9</div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 22 }}>Confirm tournament</div>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '4px 16px' }}>
-        {summary.map((row, i) => (
-          <div key={row.label} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '14px 0',
-            borderBottom: i < summary.length - 1 ? `1px solid ${T.border}` : 'none',
-          }}>
-            <span style={{ ...Label(), fontSize: 11 }}>{row.label}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, textAlign: 'right' }}>{row.value}</span>
-          </div>
-        ))}
-      </div>
+    <>
+      <StepTitle title="Ready to Begin" subtitle="Review and start the tournament" />
+      <EGoldFrame>
+        <div style={{ padding: '14px 18px' }}>
+          {summary.map((row, i) => (
+            <div key={row.label} style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'baseline', padding: '10px 0',
+              borderBottom: i === summary.length - 1 ? 'none' : `1px dotted ${T.rule}`,
+            }}>
+              <span style={{
+                fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2.5,
+                color: T.gold, textTransform: 'uppercase',
+              }}>{row.label}</span>
+              <span style={{
+                fontFamily: T.fontDisplay, fontSize: 15, fontWeight: 500, color: T.ink,
+                textAlign: 'right',
+              }}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+      </EGoldFrame>
       <div style={{
-        marginTop: 16, padding: 14,
-        background: `${T.accent}10`, border: `1px solid ${T.accent}40`, borderRadius: 12,
-        fontSize: 13, color: T.accent, lineHeight: 1.5, textAlign: 'center', fontWeight: 500,
-      }}>
-        Round 1 will be generated automatically once you start.
-      </div>
-    </div>
+        marginTop: 18, textAlign: 'center',
+        fontFamily: T.fontSerif, fontStyle: 'italic',
+        fontSize: 13, color: T.muted,
+      }}>The court awaits. Best of luck.</div>
+    </>
   );
 }
 
@@ -537,38 +628,45 @@ function PairsPreview({ playerIds }: { playerIds: number[] }) {
     });
   }
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ ...Label(), marginBottom: 8, padding: '0 4px' }}>FIXED PAIRS</div>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '4px 14px' }}>
-        {pairs.map((pair) => {
-          const color = PAIR_COLORS[pair.idx % PAIR_COLORS.length];
-          return (
-            <div key={pair.idx} style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
-              borderBottom: pair.idx < pairs.length - 1 ? `1px solid ${T.border}` : 'none',
-            }}>
-              <span style={{
-                background: `${color}22`, color,
-                borderRadius: 999, padding: '4px 9px',
-                fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
-                flexShrink: 0, minWidth: 30, textAlign: 'center',
-              }}>P{pair.idx + 1}</span>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {pair.a?.name ?? '?'}
-                </span>
-                <span style={{ color: T.textDim, fontSize: 12 }}>+</span>
-                <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {pair.b?.name ?? '?'}
-                </span>
+    <div style={{ marginTop: 18 }}>
+      <ELabel style={{ marginBottom: 8, textAlign: 'center' }}>Fixed Pairs</ELabel>
+      <EGoldFrame>
+        <div style={{ padding: '4px 14px' }}>
+          {pairs.map((pair) => {
+            const color = PAIR_COLORS[pair.idx % PAIR_COLORS.length];
+            return (
+              <div key={pair.idx} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+                borderBottom: pair.idx < pairs.length - 1 ? `1px solid ${T.paperEdge}` : 'none',
+              }}>
+                <span style={{
+                  border: `1px solid ${color}`, color,
+                  borderRadius: 999, padding: '3px 9px',
+                  fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.6,
+                  flexShrink: 0, minWidth: 30, textAlign: 'center',
+                }}>P{pair.idx + 1}</span>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, color: T.ink,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{pair.a?.name ?? '?'}</span>
+                  <span style={{
+                    color: T.gold, fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
+                  }}>и</span>
+                  <span style={{
+                    fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, color: T.ink,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{pair.b?.name ?? '?'}</span>
+                </div>
+                <span style={{
+                  fontFamily: T.fontSerif, fontSize: 12, fontStyle: 'italic',
+                  color: T.muted, flexShrink: 0,
+                }}>{pair.a?.level}/{pair.b?.level}</span>
               </div>
-              <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>
-                {pair.a?.level}/{pair.b?.level}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </EGoldFrame>
     </div>
   );
 }
@@ -580,62 +678,72 @@ function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onC
   const create = useCreatePlayer();
   const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C- strong', 'C-', 'D'];
   const SIDES: { id: SideValue; label: string }[] = [
-    { id: 'right', label: 'RIGHT' },
-    { id: 'left', label: 'LEFT' },
-    { id: 'both', label: 'UNIVERSAL' },
+    { id: 'right', label: 'Right' },
+    { id: 'left',  label: 'Left' },
+    { id: 'both',  label: 'Universal' },
   ];
 
   return (
-    <div style={{ marginTop: 22 }}>
-      <div style={{ ...Label(), marginBottom: 6 }}>NEW PLAYER</div>
-      <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Add to library + select</div>
+    <>
+      <StepTitle title="Add a Player" subtitle="To library and selection" />
 
       <div style={{ marginBottom: 14 }}>
-        <div style={{ ...Label(), marginBottom: 8 }}>NAME</div>
+        <ELabel style={{ marginBottom: 6 }}>Name</ELabel>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Player name"
           autoFocus
           style={{
-            width: '100%', background: T.surface, border: `1px solid ${T.border}`,
-            borderRadius: 12, padding: '14px 16px', fontSize: 17, fontWeight: 500,
-            color: T.textPrimary, outline: 'none',
+            width: '100%', background: T.paper,
+            border: `1px solid ${T.paperEdge}`, borderRadius: 14,
+            padding: '14px 16px',
+            fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 500,
+            color: T.ink, outline: 'none',
           }}
         />
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <div style={{ ...Label(), marginBottom: 8 }}>LEVEL</div>
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+        <ELabel style={{ marginBottom: 8 }}>Level</ELabel>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {LEVELS.map((l) => {
             const active = l === level;
             return (
               <div key={l} onClick={() => setLevel(l)} style={{
-                flexShrink: 0, padding: '10px 14px', borderRadius: 10,
-                background: active ? T.surface2 : T.surface,
-                border: `1px solid ${active ? T.accent : T.border}`,
-                color: active ? T.accent : T.textMuted,
-                fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              }}>{l}</div>
+                textAlign: 'center', padding: '10px 4px',
+                background: active ? T.emerald : T.paper,
+                color: active ? T.cream : T.ink,
+                border: `1px solid ${active ? T.emerald : T.paperEdge}`,
+                borderRadius: 14, cursor: 'pointer',
+                fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 1,
+              }}>{l.replace(' strong', '')}</div>
             );
           })}
         </div>
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <div style={{ ...Label(), marginBottom: 8 }}>SIDE</div>
+        <ELabel style={{ marginBottom: 8 }}>Preferred side</ELabel>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {SIDES.map((s) => {
             const active = s.id === side;
+            const letter = s.id === 'right' ? 'R' : s.id === 'left' ? 'L' : 'U';
             return (
               <div key={s.id} onClick={() => setSide(s.id)} style={{
-                background: active ? `${T.accent}10` : T.surface,
-                border: `1px solid ${active ? T.accent : T.border}`,
-                borderRadius: 12, padding: '14px 8px', textAlign: 'center',
-                color: active ? T.accent : T.textMuted, fontWeight: 700,
-                fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
-              }}>{s.label}</div>
+                textAlign: 'center', padding: '12px 6px',
+                background: active ? T.emerald : T.paper,
+                color: active ? T.cream : T.ink,
+                border: `1px solid ${active ? T.emerald : T.paperEdge}`,
+                borderRadius: 14, cursor: 'pointer',
+                fontFamily: T.fontDisplay,
+              }}>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{letter}</div>
+                <div style={{
+                  fontFamily: T.fontSerif, fontStyle: 'italic',
+                  fontSize: 11, opacity: 0.85, marginTop: 2,
+                }}>{s.label}</div>
+              </div>
             );
           })}
         </div>
@@ -643,10 +751,12 @@ function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onC
 
       <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
         <button onClick={onCancel} disabled={create.isPending} style={{
-          flex: 1, height: 48, borderRadius: 12, border: `1px solid ${T.border}`,
-          background: 'transparent', color: T.textMuted, fontWeight: 600, fontSize: 12,
-          letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-        }}>CANCEL</button>
+          flex: 1, height: 48, borderRadius: 999,
+          border: `1px solid ${T.rule}`, background: 'transparent',
+          color: T.muted, fontFamily: T.fontDisplay,
+          fontWeight: 600, fontSize: 13, letterSpacing: 1.2, textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}>Cancel</button>
         <button
           disabled={!name.trim() || create.isPending}
           onClick={async () => {
@@ -658,25 +768,27 @@ function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onC
             }
           }}
           style={{
-            flex: 1, height: 48, borderRadius: 12, border: 'none',
-            background: !name.trim() || create.isPending ? T.surface2 : T.accent,
-            color: !name.trim() || create.isPending ? T.textMuted : '#0B0E12',
-            fontWeight: 700, fontSize: 12, letterSpacing: '0.1em',
-            textTransform: 'uppercase', cursor: 'pointer',
+            flex: 1, height: 48, borderRadius: 999, border: 'none',
+            background: !name.trim() || create.isPending ? T.cream2 : T.emerald,
+            color: !name.trim() || create.isPending ? T.muted : T.cream,
+            fontFamily: T.fontDisplay,
+            fontWeight: 600, fontSize: 13, letterSpacing: 1.5, textTransform: 'uppercase',
+            cursor: 'pointer',
           }}
-        >{create.isPending ? 'SAVING…' : 'ADD & SELECT'}</button>
+        >{create.isPending ? 'Saving…' : 'Add & select'}</button>
       </div>
-    </div>
+    </>
   );
 }
 
 function ValidationBanner({ text }: { text: string }) {
   return (
     <div style={{
-      background: `${T.warn}14`, border: `1px solid ${T.warn}40`, borderRadius: 10,
-      padding: '8px 12px', marginBottom: 10,
-      fontSize: 11, color: T.warn, fontWeight: 600, letterSpacing: '0.06em',
-      display: 'flex', alignItems: 'center', gap: 8,
-    }}>⚠ {text}</div>
+      background: '#fbecec', border: `1px solid ${T.burgundy}`,
+      borderRadius: 12, padding: '10px 14px', marginBottom: 10,
+      fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
+      color: T.burgundy, letterSpacing: 1,
+      textAlign: 'center', textTransform: 'uppercase',
+    }}>{text}</div>
   );
 }

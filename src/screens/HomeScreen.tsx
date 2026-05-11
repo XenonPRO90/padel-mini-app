@@ -5,7 +5,7 @@ import { T } from '../lib/tokens';
 import { Ring } from '../components/Ring';
 import { LeaderboardRow } from '../components/Leaderboard';
 import { MainCTA } from '../components/MainCTA';
-import { Label } from '../components/CourtCard';
+import { ELabel, EHero, EDivider, EBtn, EGoldFrame, ELogo, EBallIcon } from '../lib/elegant';
 import type { ActiveTournamentResponse } from '../lib/types';
 
 interface Props {
@@ -33,73 +33,91 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
   const recorded = round?.matches_recorded ?? 0;
   const allDone = total > 0 && recorded === total;
   const max = leaderboard?.[0]?.points || 1;
+  const totalRounds = Math.max(t.current_round, 7);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, padding: '12px 16px 16px', overflowY: 'auto' }}>
-        <div style={{ textAlign: 'center', padding: '8px 0 20px' }}>
-          <div style={Label()}>TOURNAMENT</div>
-          <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>{t.name}</div>
-        </div>
+      <div style={{ flex: 1, padding: '4px 16px 16px', overflowY: 'auto' }}>
+        <EHero title={t.name.toUpperCase()} compact />
+        <EDivider />
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-          <Ring size={220} stroke={10} value={t.current_round} max={Math.max(t.current_round, 7)}>
-            <div style={Label()}>TOURNAMENT PROGRESS</div>
-            <div style={{ fontSize: 64, fontWeight: 700, lineHeight: 1, color: T.textPrimary, fontVariantNumeric: 'tabular-nums' }}>
-              {t.current_round}<span style={{ color: T.textDim, fontWeight: 500 }}>/{Math.max(t.current_round, 7)}</span>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 22, marginBottom: 8 }}>
+          <Ring size={220} stroke={2} value={t.current_round} max={totalRounds}>
+            <ELabel style={{ marginBottom: 4 }}>TOURNAMENT PROGRESS</ELabel>
+            <div style={{
+              fontFamily: T.fontDisplay, fontSize: 64, fontWeight: 600,
+              lineHeight: 1, color: T.ink, fontVariantNumeric: 'tabular-nums',
+            }}>
+              {t.current_round}<span style={{ color: T.muted, fontWeight: 500, fontSize: 38 }}>/{totalRounds}</span>
             </div>
-            <div style={{ ...Label(), marginTop: 6 }}>ROUND</div>
+            <ELabel style={{ marginTop: 6 }}>Round</ELabel>
           </Ring>
         </div>
 
         {round && (
-          <div onClick={onOpenLiveRound} style={{
-            background: T.surface, border: `1px solid ${T.accent}40`, borderRadius: 14,
-            padding: '14px 16px', marginTop: 20, marginBottom: 12, cursor: 'pointer',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ ...Label(), color: T.accent }}>● LIVE ROUND · TAP TO OPEN</span>
-              <span style={{ color: T.accent }}>›</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${t.num_courts}, 1fr)`, gap: 8 }}>
-              {Array.from({ length: t.num_courts }).map((_, i) => {
-                const m = round.matches[i];
-                const done = m && m.winner !== null;
-                return (
-                  <div key={i} style={{
-                    background: T.surface2, borderRadius: 10, padding: '10px 0',
-                    textAlign: 'center', border: done ? `1px solid ${T.accent}` : `1px solid ${T.border}`,
-                  }}>
-                    <div style={{ ...Label(), fontSize: 10, color: done ? T.accent : T.textDim }}>C{i + 1}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: done ? T.accent : T.textMuted, marginTop: 4 }}>
-                      {done ? '✓' : '—'}
+          <EGoldFrame style={{ marginTop: 18, marginBottom: 12 }}>
+            <div onClick={onOpenLiveRound} style={{ padding: '14px 16px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <ELabel>· Live Round · tap to open</ELabel>
+                <span style={{ color: T.gold }}>›</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${t.num_courts}, 1fr)`, gap: 8 }}>
+                {Array.from({ length: t.num_courts }).map((_, i) => {
+                  const m = round.matches[i];
+                  const done = m && m.winner !== null;
+                  return (
+                    <div key={i} style={{
+                      background: done ? T.emerald : T.cream,
+                      borderRadius: 10, padding: '10px 0', textAlign: 'center',
+                      border: `1px solid ${done ? T.emerald : T.paperEdge}`,
+                    }}>
+                      <div style={{
+                        fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 2,
+                        color: done ? T.cream : T.muted,
+                      }}>C{i + 1}</div>
+                      <div style={{
+                        fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 700,
+                        color: done ? T.cream : T.muted, marginTop: 4,
+                      }}>{done ? '✓' : '—'}</div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div style={{
+                fontFamily: T.fontSerif, fontSize: 13, fontStyle: 'italic',
+                color: T.muted, textAlign: 'center', marginTop: 12,
+              }}>{recorded} of {total} results recorded</div>
             </div>
-            <div style={{ fontSize: 11, color: T.textMuted, textAlign: 'center', marginTop: 12, letterSpacing: '0.1em' }}>
-              {recorded} / {total} RESULTS
-            </div>
-          </div>
+          </EGoldFrame>
         )}
 
         {leaderboard && leaderboard.length > 0 && (
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px' }}>
-            <div style={{ ...Label(), marginBottom: 4 }}>LEADERBOARD</div>
-            {leaderboard.slice(0, 3).map((p, i) => (
-              <LeaderboardRow key={p.player_id} rank={i + 1} player={p} max={max} />
-            ))}
+          <div>
+            <ELabel style={{ textAlign: 'center', marginBottom: 8 }}>Leaderboard · Top 3</ELabel>
+            <EGoldFrame>
+              <div style={{ padding: '4px 0' }}>
+                {leaderboard.slice(0, 3).map((p, i) => (
+                  <LeaderboardRow key={p.player_id} rank={i + 1} player={p} max={max} />
+                ))}
+              </div>
+            </EGoldFrame>
           </div>
         )}
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 22, opacity: 0.6 }}>
+          <EBallIcon size={20} />
+        </div>
       </div>
 
-      <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${T.border}` }}>
+      <div style={{
+        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
+        borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
         <MainCTA
           label={
-            nextRound.isPending ? 'GENERATING…'
-            : allDone ? 'NEXT ROUND'
-            : `WAITING · ${recorded}/${total}`
+            nextRound.isPending ? 'Generating…'
+            : allDone ? 'Next round'
+            : `Waiting · ${recorded}/${total}`
           }
           disabled={!allDone || nextRound.isPending}
           onClick={() => allDone && nextRound.mutate(t.id)}
@@ -115,12 +133,12 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
           }}
           disabled={finishTour.isPending}
           style={{
-            background: 'transparent', border: 'none', color: T.loss,
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.16em',
+            background: 'transparent', border: 'none', color: T.burgundy,
+            fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 2,
             width: '100%', padding: 12, textTransform: 'uppercase',
             cursor: finishTour.isPending ? 'wait' : 'pointer',
           }}
-        >{finishTour.isPending ? 'Finishing…' : 'END TOURNAMENT'}</button>
+        >{finishTour.isPending ? 'Finishing…' : 'End tournament'}</button>
       </div>
     </div>
   );
@@ -129,25 +147,36 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
 function HomeEmpty({ onCreate }: { onCreate?: () => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, padding: '24px 16px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18 }}>
-          <div style={{
-            width: 120, height: 120, borderRadius: '50%',
-            border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: T.surface,
-          }}>
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none">
-              <path d="M7 4h10v4a5 5 0 11-10 0V4zM4 5h3v3a2 2 0 01-2 2H4V5zm16 0h-3v3a2 2 0 002 2h1V5zM10 14h4v3l1 3H9l1-3v-3z" stroke={T.textDim} strokeWidth="1.5" strokeLinejoin="round" />
-            </svg>
-          </div>
+      <EHero title="PADEL CLAUB" kicker="elegance in motion" compact />
+      <div style={{ flex: 1, padding: '12px 22px 18px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 14,
+          background: T.paper, border: `1px solid ${T.paperEdge}`,
+          borderRadius: 18, padding: '28px 24px',
+          boxShadow: '0 1px 0 rgba(166,134,77,0.08), 0 8px 24px -16px rgba(31,42,36,0.18)',
+        }}>
+          <ELogo size={80} />
           <div style={{ textAlign: 'center' }}>
-            <div style={{ ...Label(), fontSize: 12 }}>NO ACTIVE TOURNAMENT</div>
-            <div style={{ fontSize: 14, color: T.textDim, marginTop: 8 }}>Start a new one to begin the round</div>
+            <div style={{
+              fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+              color: T.ink, letterSpacing: 2,
+            }}>No Active Tournament</div>
+            <div style={{ marginTop: 8 }}><EDivider /></div>
+            <div style={{
+              fontFamily: T.fontSerif, fontSize: 15, fontStyle: 'italic',
+              color: T.muted, lineHeight: 1.45, marginTop: 12, maxWidth: 280,
+            }}>
+              A fine evening awaits. Begin a tournament and let the play unfold.
+            </div>
           </div>
         </div>
       </div>
-      <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${T.border}` }}>
-        <MainCTA label="START NEW TOURNAMENT" onClick={onCreate} />
+      <div style={{
+        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
+        borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
+        <MainCTA label="Start new tournament" onClick={onCreate} />
       </div>
     </div>
   );
@@ -169,22 +198,23 @@ function HomeSkeleton() {
 
 function HomeError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14,
+    }}>
+      <ELogo size={60} color={T.burgundy} />
       <div style={{
-        width: 72, height: 72, borderRadius: '50%',
-        background: `${T.loss}14`, border: `1px solid ${T.loss}40`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: T.loss, fontSize: 28, fontWeight: 700,
-      }}>!</div>
-      <div style={{ ...Label(), color: T.loss }}>COULDN'T LOAD</div>
-      <div style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', maxWidth: 240, lineHeight: 1.5 }}>
-        Network's flickering. Try again.
+        fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+        color: T.ink, letterSpacing: 2, textAlign: 'center',
+      }}>Something went amiss</div>
+      <EDivider />
+      <div style={{
+        fontFamily: T.fontSerif, fontSize: 15, fontStyle: 'italic',
+        color: T.muted, textAlign: 'center', maxWidth: 260, lineHeight: 1.45,
+      }}>We could not load the tournament. Please try again.</div>
+      <div style={{ marginTop: 6 }}>
+        <EBtn kind="primary" onClick={onRetry}>Retry</EBtn>
       </div>
-      <button onClick={onRetry} style={{
-        marginTop: 8, padding: '12px 24px', borderRadius: 10,
-        background: T.surface2, border: `1px solid ${T.border}`,
-        color: T.accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em',
-      }}>RETRY</button>
     </div>
   );
 }

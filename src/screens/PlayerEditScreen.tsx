@@ -2,15 +2,15 @@ import { useState } from 'react';
 import { T } from '../lib/tokens';
 import { LevelBadge } from '../components/Badges';
 import { MainCTA, SecondaryCTA } from '../components/MainCTA';
-import { Label } from '../components/CourtCard';
 import { Avatar } from './PlayersScreen';
+import { ELabel, EOrnRule } from '../lib/elegant';
 import { useCreatePlayer, useUpdatePlayer, useDeletePlayer, type SideValue } from '../api/players';
 
 const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C- strong', 'C-', 'D'];
 const SIDES: { id: SideValue; label: string }[] = [
-  { id: 'right', label: 'RIGHT' },
-  { id: 'left', label: 'LEFT' },
-  { id: 'both', label: 'UNIVERSAL' },
+  { id: 'right', label: 'Right' },
+  { id: 'left',  label: 'Left' },
+  { id: 'both',  label: 'Universal' },
 ];
 
 interface Props {
@@ -35,11 +35,8 @@ export function PlayerEditScreen({ player, onClose }: Props) {
 
   const onSave = async () => {
     try {
-      if (isNew) {
-        await create.mutateAsync({ name, level, side });
-      } else {
-        await update.mutateAsync({ name, level, side });
-      }
+      if (isNew) await create.mutateAsync({ name, level, side });
+      else       await update.mutateAsync({ name, level, side });
       onClose();
     } catch (e) {
       alert((e as Error).message);
@@ -60,40 +57,49 @@ export function PlayerEditScreen({ player, onClose }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        padding: '10px 16px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        borderBottom: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
         <button onClick={onClose} style={{
-          background: 'transparent', border: 'none', color: T.textMuted, padding: 4, cursor: 'pointer',
-        }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M15 6l-6 6 6 6" stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <div style={{ ...Label(), flex: 1, textAlign: 'center' }}>{isNew ? 'NEW PLAYER' : 'EDIT PLAYER'}</div>
-        <div style={{ width: 30 }} />
+          background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+          color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
+        }}>← Back</button>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
+            color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
+          }}>{isNew ? 'New Player' : 'Edit Player'}</div>
+        </div>
+        <div style={{ width: 50 }} />
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px 16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0 14px' }}>
           <Avatar name={name || '?'} size={88} />
+          <div style={{ marginTop: 10 }}><EOrnRule width={200} /></div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ ...Label(), marginBottom: 8 }}>NAME</div>
+        <div style={{ marginBottom: 18 }}>
+          <ELabel style={{ marginBottom: 6 }}>Name</ELabel>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Player name"
             style={{
-              width: '100%', background: T.surface, border: `1px solid ${T.border}`,
-              borderRadius: 12, padding: '14px 16px', fontSize: 17, fontWeight: 500,
-              color: T.textPrimary, outline: 'none',
+              width: '100%', background: T.paper,
+              border: `1px solid ${T.paperEdge}`,
+              borderRadius: 14, padding: '14px 16px',
+              fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 500,
+              color: T.ink, outline: 'none',
             }}
           />
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ ...Label(), marginBottom: 8 }}>LEVEL</div>
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+        <div style={{ marginBottom: 18 }}>
+          <ELabel style={{ marginBottom: 8 }}>Level</ELabel>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {LEVELS.map((l) => {
               const active = l === level;
               return (
@@ -101,60 +107,73 @@ export function PlayerEditScreen({ player, onClose }: Props) {
                   key={l}
                   onClick={() => setLevel(l)}
                   style={{
-                    flexShrink: 0, padding: '10px 14px', borderRadius: 10,
-                    background: active ? T.surface2 : T.surface,
-                    border: `1px solid ${active ? T.accent : T.border}`,
-                    color: active ? T.accent : T.textMuted,
-                    fontSize: 13, fontWeight: 700, letterSpacing: '0.05em',
-                    cursor: 'pointer',
+                    textAlign: 'center', padding: '10px 4px',
+                    background: active ? T.emerald : T.paper,
+                    color: active ? T.cream : T.ink,
+                    border: `1px solid ${active ? T.emerald : T.paperEdge}`,
+                    borderRadius: 14, cursor: 'pointer',
+                    fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600,
+                    letterSpacing: 1,
                   }}
-                >{l}</div>
+                >{l.replace(' strong', '')}</div>
               );
             })}
           </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ ...Label(), marginBottom: 8 }}>SIDE</div>
+        <div style={{ marginBottom: 18 }}>
+          <ELabel style={{ marginBottom: 8 }}>Preferred Side</ELabel>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {SIDES.map((s) => {
               const active = s.id === side;
+              const letter = s.id === 'right' ? 'R' : s.id === 'left' ? 'L' : 'U';
               return (
                 <div
                   key={s.id}
                   onClick={() => setSide(s.id)}
                   style={{
-                    background: active ? `${T.accent}10` : T.surface,
-                    border: `1px solid ${active ? T.accent : T.border}`,
-                    borderRadius: 12, padding: '14px 8px', textAlign: 'center',
-                    color: active ? T.accent : T.textMuted, fontWeight: 700,
-                    fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
+                    textAlign: 'center', padding: '14px 6px',
+                    background: active ? T.emerald : T.paper,
+                    color: active ? T.cream : T.ink,
+                    border: `1px solid ${active ? T.emerald : T.paperEdge}`,
+                    borderRadius: 14, cursor: 'pointer',
+                    fontFamily: T.fontDisplay,
                   }}
-                >{s.label}</div>
+                >
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{letter}</div>
+                  <div style={{
+                    fontFamily: T.fontSerif, fontStyle: 'italic',
+                    fontSize: 12, opacity: 0.85, marginTop: 2,
+                  }}>{s.label}</div>
+                </div>
               );
             })}
           </div>
         </div>
 
         {!isNew && (
-          <div style={{ marginTop: 24 }}>
+          <div style={{ marginTop: 22 }}>
             <button
               onClick={onDelete}
               disabled={busy}
               style={{
-                background: 'transparent', border: 'none',
-                width: '100%', padding: 14, color: T.loss,
-                fontSize: 11, fontWeight: 700, letterSpacing: '0.16em',
-                textTransform: 'uppercase', cursor: busy ? 'wait' : 'pointer',
+                background: 'transparent', border: 'none', width: '100%',
+                padding: 14, color: T.burgundy,
+                fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
+                letterSpacing: 2, textTransform: 'uppercase',
+                cursor: busy ? 'wait' : 'pointer',
               }}
-            >🗑 DELETE PLAYER</button>
+            >Delete Player</button>
           </div>
         )}
       </div>
 
-      <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${T.border}` }}>
+      <div style={{
+        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
+        borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
+      }}>
         <MainCTA
-          label={busy ? 'SAVING…' : 'SAVE'}
+          label={busy ? 'Saving…' : 'Save'}
           disabled={!canSave}
           onClick={onSave}
         />
