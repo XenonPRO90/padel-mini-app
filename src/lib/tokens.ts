@@ -54,8 +54,8 @@ export const LEVEL_COLORS: Record<string, { bg: string; fg: string; label: strin
   'B+':        { bg: '#2f4a3a', fg: '#f5efe4', label: 'B+' },
   'B':         { bg: '#2f4a3a', fg: '#f5efe4', label: 'B'  },
   'C+':        { bg: '#a6864d', fg: '#1f2a24', label: 'C+' },
-  'C-strong':  { bg: '#a6864d', fg: '#1f2a24', label: 'Cs' },
-  'C- strong': { bg: '#a6864d', fg: '#1f2a24', label: 'Cs' }, // legacy alias
+  'C-strong':  { bg: '#a6864d', fg: '#1f2a24', label: 'C-s' },
+  'C- strong': { bg: '#a6864d', fg: '#1f2a24', label: 'C-s' }, // legacy alias
   'C':         { bg: '#d9c08a', fg: '#1f2a24', label: 'C'  },
   'C-':        { bg: '#ede4d2', fg: '#1f2a24', label: 'C-' },
   'D':         { bg: '#ede4d2', fg: '#7a7062', label: 'D'  },
