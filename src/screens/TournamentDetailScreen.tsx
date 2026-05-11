@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { T } from '../lib/tokens';
-import { LevelBadge } from '../components/Badges';
 import { Label } from '../components/CourtCard';
 import type { Round, ScoredPlayer, Tournament } from '../lib/types';
 
@@ -34,9 +33,22 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
   }
 
   const { tournament: t, rounds, leaderboard } = data;
-  const top3 = leaderboard.slice(0, 3);
-  const rest = leaderboard.slice(3);
-  const medals = ['🥇', '🥈', '🥉'];
+
+  // Dense ranking with (points, wins) tiebreaker — ties share a place,
+  // next distinct (points, wins) bumps the place by 1.
+  const ranked: { place: number; p: typeof leaderboard[number] }[] = [];
+  let lastPts = -1;
+  let lastWins = -1;
+  let placeNum = 0;
+  for (const p of leaderboard) {
+    if (p.points !== lastPts || p.wins !== lastWins) {
+      placeNum += 1;
+      lastPts = p.points;
+      lastWins = p.wins;
+    }
+    ranked.push({ place: placeNum, p });
+  }
+  const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -60,35 +72,46 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
 
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 16 }}>
           <div style={{ ...Label(), marginBottom: 12 }}>FINAL STANDINGS</div>
-          {top3.map((p, i) => (
-            <div key={p.player_id} style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
-              borderBottom: i < 2 ? `1px solid ${T.border}` : 'none',
-            }}>
-              <span style={{ fontSize: 20 }}>{medals[i]}</span>
-              <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: i === 0 ? T.accent : T.textPrimary }}>{p.name}</span>
-              <LevelBadge level={p.level} size="sm" />
-              <span style={{ fontSize: 18, fontWeight: 700, minWidth: 32, textAlign: 'right', color: i === 0 ? T.accent : T.textPrimary, fontVariantNumeric: 'tabular-nums' }}>
-                {p.points}
-              </span>
-            </div>
-          ))}
-          {rest.length > 0 && (
-            <div style={{ marginTop: 8, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
-              {rest.map((p, i) => (
-                <div key={p.player_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
-                  <span style={{ width: 22, fontSize: 11, color: T.textDim, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>#{i + 4}</span>
-                  <span style={{ flex: 1, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                  <LevelBadge level={p.level} size="sm" />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {p.points}
+          {ranked.map(({ place, p }, i) => {
+            const isPodium = place <= 3;
+            const isGold = place === 1;
+            return (
+              <div key={p.player_id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: isPodium ? '10px 0' : '8px 0',
+                borderBottom: i < ranked.length - 1 ? `1px solid ${T.border}` : 'none',
+              }}>
+                {isPodium ? (
+                  <span style={{ fontSize: 20, width: 24, textAlign: 'center' }}>{medals[place]}</span>
+                ) : (
+                  <span style={{ width: 24, fontSize: 11, color: T.textDim, fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'center' }}>
+                    #{place}
                   </span>
+                )}
+                <span style={{
+                  flex: 1, fontSize: isPodium ? 15 : 13,
+                  fontWeight: isPodium ? 600 : 500,
+                  color: isGold ? T.accent : T.textPrimary,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{p.name}</span>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{
+                    fontSize: isPodium ? 18 : 14, fontWeight: 700,
+                    color: isGold ? T.accent : T.textPrimary,
+                    lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                  }}>{p.points}</div>
+                  <div style={{
+                    fontSize: 10, color: T.textDim, marginTop: 3,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    <span style={{ color: T.accent }}>✓{p.wins}</span>
+                    <span style={{ marginLeft: 5, color: T.loss }}>✗{p.losses}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })}
         </div>
-
         <div style={{ ...Label(), marginBottom: 8, padding: '0 4px' }}>ROUNDS</div>
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '0 16px' }}>
           {rounds.map((r, i) => (
