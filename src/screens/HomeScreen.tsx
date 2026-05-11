@@ -147,7 +147,7 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
 function HomeEmpty({ onCreate }: { onCreate?: () => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <EHero title="PADEL CLAUB" kicker="elegance in motion" compact />
+      <EHero title="PADEL CLUB" kicker="elegance in motion" compact />
       <div style={{ flex: 1, padding: '12px 22px 18px', display: 'flex', flexDirection: 'column' }}>
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column',
