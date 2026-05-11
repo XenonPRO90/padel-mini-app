@@ -98,36 +98,45 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
               const isPodium = place <= 3;
               return (
                 <div key={i} style={{
-                  display: 'grid', gridTemplateColumns: '40px 1fr auto 1px auto',
-                  alignItems: 'center', gap: 10,
-                  padding: '10px 14px',
+                  display: 'grid',
+                  gridTemplateColumns: '36px minmax(0, 1fr) auto',
+                  alignItems: 'center', columnGap: 10, rowGap: 4,
+                  padding: '10px 12px',
                   borderBottom: i < ranked.length - 1 ? `1px solid ${T.paperEdge}` : 'none',
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'start', paddingTop: 2 }}>
                     {isPodium ? <EMedal place={place as 1 | 2 | 3} size={26} /> : <EPlace n={place} />}
                   </div>
+                  {/* Name — wraps to 2 lines for long fixed-pair labels. No ellipsis. */}
                   <span style={{
                     fontFamily: T.fontDisplay,
                     fontSize: isPodium ? 16 : 14,
                     fontWeight: isPodium ? 600 : 500,
                     color: T.ink,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    lineHeight: 1.25,
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
                   }}>{row.name}</span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                    <span style={{
-                      fontFamily: T.fontDisplay, fontWeight: 600,
-                      fontSize: isPodium ? 18 : 15, color: T.goldDeep,
-                    }}>{row.points}</span>
-                    <span style={{
-                      fontFamily: T.fontSerif, fontSize: 11,
-                      fontStyle: 'italic', color: T.muted,
-                    }}>pts</span>
-                  </div>
-                  <div style={{ width: 1, height: 14, background: T.paperEdge }} />
-                  <div style={{ fontFamily: T.fontDisplay, fontSize: 12, letterSpacing: 0.5 }}>
-                    <span style={{ color: T.win }}>W {row.wins}</span>
-                    <span style={{ margin: '0 4px', color: T.paperEdge }}>·</span>
-                    <span style={{ color: T.burgundy }}>L {row.losses}</span>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    justifySelf: 'end',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                      <span style={{
+                        fontFamily: T.fontDisplay, fontWeight: 600,
+                        fontSize: isPodium ? 18 : 15, color: T.goldDeep,
+                      }}>{row.points}</span>
+                      <span style={{
+                        fontFamily: T.fontSerif, fontSize: 11,
+                        fontStyle: 'italic', color: T.muted,
+                      }}>pts</span>
+                    </div>
+                    <div style={{ width: 1, height: 14, background: T.paperEdge }} />
+                    <div style={{ fontFamily: T.fontDisplay, fontSize: 12, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: T.win }}>W {row.wins}</span>
+                      <span style={{ margin: '0 4px', color: T.paperEdge }}>·</span>
+                      <span style={{ color: T.burgundy }}>L {row.losses}</span>
+                    </div>
                   </div>
                 </div>
               );
