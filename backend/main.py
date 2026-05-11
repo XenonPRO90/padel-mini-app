@@ -85,7 +85,13 @@ async def tournament_detail(tid: int, _user=Depends(get_tg_user)):
         raise HTTPException(404, "Tournament not found")
     rounds = await q.get_tournament_rounds(tid)
     leaderboard = await q.get_leaderboard(tid)
-    return {"tournament": t, "rounds": rounds, "leaderboard": leaderboard}
+    payload = {"tournament": t, "rounds": rounds, "leaderboard": leaderboard}
+    # For fixed-pair tournaments also return a pair-level leaderboard
+    # (one row per pair instead of one per player) so the UI can show
+    # places by pair rather than duplicating medals across partners.
+    if t["mode"] == "fixed":
+        payload["pair_leaderboard"] = await q.get_pair_leaderboard(tid)
+    return payload
 
 
 @app.get("/api/tournaments/{tid}/rounds/{round_num}")

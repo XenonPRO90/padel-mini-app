@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { T } from '../lib/tokens';
 import { Label } from '../components/CourtCard';
-import type { Round, ScoredPlayer, Tournament } from '../lib/types';
+import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 
 interface Props {
   tid: number;
@@ -14,6 +14,7 @@ interface Resp {
   tournament: Tournament;
   rounds: Round[];
   leaderboard: ScoredPlayer[];
+  pair_leaderboard?: ScoredPair[];
 }
 
 export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
@@ -32,21 +33,33 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
     );
   }
 
-  const { tournament: t, rounds, leaderboard } = data;
+  const { tournament: t, rounds, leaderboard, pair_leaderboard } = data;
+
+  // For fixed-pair tournaments show pair standings (one row per pair).
+  // For rotating mode show individual standings.
+  type Row = { name: string; points: number; wins: number; losses: number };
+  const rows: Row[] = t.mode === 'fixed' && pair_leaderboard
+    ? pair_leaderboard.map((p) => ({
+        name: `${p.name_a} & ${p.name_b}`,
+        points: p.points, wins: p.wins, losses: p.losses,
+      }))
+    : leaderboard.map((p) => ({
+        name: p.name, points: p.points, wins: p.wins, losses: p.losses,
+      }));
 
   // Dense ranking with (points, wins) tiebreaker — ties share a place,
   // next distinct (points, wins) bumps the place by 1.
-  const ranked: { place: number; p: typeof leaderboard[number] }[] = [];
+  const ranked: { place: number; row: Row }[] = [];
   let lastPts = -1;
   let lastWins = -1;
   let placeNum = 0;
-  for (const p of leaderboard) {
-    if (p.points !== lastPts || p.wins !== lastWins) {
+  for (const r of rows) {
+    if (r.points !== lastPts || r.wins !== lastWins) {
       placeNum += 1;
-      lastPts = p.points;
-      lastWins = p.wins;
+      lastPts = r.points;
+      lastWins = r.wins;
     }
-    ranked.push({ place: placeNum, p });
+    ranked.push({ place: placeNum, row: r });
   }
   const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
@@ -72,11 +85,11 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
 
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 16 }}>
           <div style={{ ...Label(), marginBottom: 12 }}>FINAL STANDINGS</div>
-          {ranked.map(({ place, p }, i) => {
+          {ranked.map(({ place, row }, i) => {
             const isPodium = place <= 3;
             const isGold = place === 1;
             return (
-              <div key={p.player_id} style={{
+              <div key={i} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: isPodium ? '10px 0' : '8px 0',
                 borderBottom: i < ranked.length - 1 ? `1px solid ${T.border}` : 'none',
@@ -93,19 +106,19 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
                   fontWeight: isPodium ? 600 : 500,
                   color: isGold ? T.accent : T.textPrimary,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>{p.name}</span>
+                }}>{row.name}</span>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{
                     fontSize: isPodium ? 18 : 14, fontWeight: 700,
                     color: isGold ? T.accent : T.textPrimary,
                     lineHeight: 1, fontVariantNumeric: 'tabular-nums',
-                  }}>{p.points}</div>
+                  }}>{row.points}</div>
                   <div style={{
                     fontSize: 10, color: T.textDim, marginTop: 3,
                     fontVariantNumeric: 'tabular-nums',
                   }}>
-                    <span style={{ color: T.accent }}>✓{p.wins}</span>
-                    <span style={{ marginLeft: 5, color: T.loss }}>✗{p.losses}</span>
+                    <span style={{ color: T.accent }}>✓{row.wins}</span>
+                    <span style={{ marginLeft: 5, color: T.loss }}>✗{row.losses}</span>
                   </div>
                 </div>
               </div>

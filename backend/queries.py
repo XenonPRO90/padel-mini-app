@@ -138,6 +138,37 @@ async def get_tournament_rounds(tid: int):
 
 # ─── Leaderboard ──────────────────────────────────────────
 
+async def get_pair_leaderboard(tid: int):
+    """Pair leaderboard for fixed-mode tournaments.
+    Pairs are formed by adjacent positions (1+2, 3+4, ...). Since partners
+    always play together in fixed mode, points/wins/losses are identical
+    for both — we take them from the first player of each pair.
+    Sorted by points DESC, wins DESC."""
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT
+               p1.name AS name_a,
+               p2.name AS name_b,
+               COALESCE(s.points, 0) AS points,
+               COALESCE(s.wins, 0)   AS wins,
+               COALESCE(s.losses, 0) AS losses
+               FROM tournament_players tp1
+               JOIN tournament_players tp2
+                 ON tp2.tournament_id = tp1.tournament_id
+                 AND tp2.position = tp1.position + 1
+               JOIN players p1 ON p1.id = tp1.player_id
+               JOIN players p2 ON p2.id = tp2.player_id
+               LEFT JOIN scores s
+                 ON s.tournament_id = tp1.tournament_id
+                 AND s.player_id = tp1.player_id
+               WHERE tp1.tournament_id = ?
+                 AND tp1.position % 2 = 1
+               ORDER BY points DESC, wins DESC""",
+            (tid,),
+        )
+        return rows_to_list(await cur.fetchall())
+
+
 async def get_leaderboard(tid: int):
     async with conn() as db:
         cur = await db.execute(

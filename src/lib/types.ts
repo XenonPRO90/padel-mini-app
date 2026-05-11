@@ -56,6 +56,14 @@ export interface Tournament {
   created_at: string;
 }
 
+export interface ScoredPair {
+  name_a: string;
+  name_b: string;
+  points: number;
+  wins: number;
+  losses: number;
+}
+
 export interface ActiveTournamentResponse {
   tournament: Tournament | null;
   round?: Round & { matches: Match[]; matches_total: number; matches_recorded: number };
