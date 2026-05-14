@@ -81,3 +81,18 @@ export interface PlayerStats {
   total_points: number;
   total_losses: number;
 }
+
+export interface MonthlyLeaderboardRow extends Player {
+  player_id: number;
+  points: number;
+  wins: number;
+  losses: number;
+  tournaments: number;
+}
+
+export interface MonthlyLeaderboardResponse {
+  year: number;
+  month: number;
+  tournaments_count: number;
+  items: MonthlyLeaderboardRow[];
+}

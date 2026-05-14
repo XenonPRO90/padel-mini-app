@@ -220,6 +220,25 @@ async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_tg_us
 
 # ─── Share text ───────────────────────────────────────────
 
+@app.get("/api/leaderboard/monthly")
+async def leaderboard_monthly(
+    year: int, month: int, _user=Depends(get_tg_user),
+):
+    """Aggregated per-player standings across every finished tournament
+    in the given calendar month (e.g. year=2026, month=5)."""
+    if not (1 <= month <= 12):
+        raise HTTPException(400, "month must be in 1..12")
+    if not (2024 <= year <= 2100):
+        raise HTTPException(400, "year out of range")
+    rows, tournaments_count = await q.get_monthly_leaderboard(year, month)
+    return {
+        "year": year,
+        "month": month,
+        "tournaments_count": tournaments_count,
+        "items": rows,
+    }
+
+
 @app.get("/api/tournaments/{tid}/share")
 async def share_text(tid: int, _user=Depends(get_tg_user)):
     return {"text": await q.get_share_text(tid)}

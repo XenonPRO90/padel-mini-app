@@ -183,6 +183,49 @@ async def get_leaderboard(tid: int):
         return rows_to_list(await cur.fetchall())
 
 
+async def get_monthly_leaderboard(year: int, month: int) -> tuple[list, int]:
+    """Per-player totals aggregated across all FINISHED tournaments whose
+    created_at falls in the given calendar month. Returns (rows, tournaments_count).
+
+    Sorted by points DESC, wins DESC. Same dense-ranking is applied UI-side
+    so ties share a place — matches Tournament Detail behaviour.
+    """
+    period = f"{year:04d}-{month:02d}"
+    async with conn() as db:
+        # Aggregate scores by player. Each tournament contributes its scores
+        # for participants; player meta (name/level/side) taken from players.
+        cur = await db.execute(
+            """SELECT p.id AS player_id,
+                      p.name, p.level, p.side,
+                      COALESCE(SUM(s.points), 0) AS points,
+                      COALESCE(SUM(s.wins),   0) AS wins,
+                      COALESCE(SUM(s.losses), 0) AS losses,
+                      COUNT(DISTINCT t.id)       AS tournaments
+               FROM tournaments t
+               JOIN scores s   ON s.tournament_id = t.id
+               JOIN players p  ON p.id = s.player_id
+               WHERE t.status = 'finished'
+                 AND strftime('%Y-%m', t.created_at) = ?
+               GROUP BY p.id
+               ORDER BY points DESC, wins DESC""",
+            (period,),
+        )
+        rows = rows_to_list(await cur.fetchall())
+
+        # Total finished tournaments in the period (for the header summary)
+        cur2 = await db.execute(
+            """SELECT COUNT(*) AS c
+               FROM tournaments
+               WHERE status = 'finished'
+                 AND strftime('%Y-%m', created_at) = ?""",
+            (period,),
+        )
+        row = await cur2.fetchone()
+        tournaments_count = int(row["c"]) if row else 0
+
+    return rows, tournaments_count
+
+
 # ─── Players ──────────────────────────────────────────────
 
 async def get_all_players():
