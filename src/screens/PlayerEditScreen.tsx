@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { T } from '../lib/tokens';
+import { LEVEL_COLORS, T } from '../lib/tokens';
 import { LevelBadge } from '../components/Badges';
 import { MainCTA, SecondaryCTA } from '../components/MainCTA';
 import { Avatar } from './PlayersScreen';
@@ -102,6 +102,9 @@ export function PlayerEditScreen({ player, onClose }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {LEVELS.map((l) => {
               const active = l === level;
+              // Use the canonical compact label from tokens so C-strong shows
+              // as "C-s" (matching the badge), not duplicated "C-".
+              const display = LEVEL_COLORS[l]?.label ?? l;
               return (
                 <div
                   key={l}
@@ -115,7 +118,7 @@ export function PlayerEditScreen({ player, onClose }: Props) {
                     fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600,
                     letterSpacing: 1,
                   }}
-                >{l.replace(' strong', '')}</div>
+                >{display}</div>
               );
             })}
           </div>

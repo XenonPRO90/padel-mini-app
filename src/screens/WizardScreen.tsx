@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useCreateTournament, useCreatePlayer, type SideValue } from '../api/players';
-import { T } from '../lib/tokens';
+import { LEVEL_COLORS, T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { MainCTA } from '../components/MainCTA';
 import { Avatar } from './PlayersScreen';
@@ -709,6 +709,7 @@ function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onC
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {LEVELS.map((l) => {
             const active = l === level;
+            const display = LEVEL_COLORS[l]?.label ?? l;
             return (
               <div key={l} onClick={() => setLevel(l)} style={{
                 textAlign: 'center', padding: '10px 4px',
@@ -717,7 +718,7 @@ function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onC
                 border: `1px solid ${active ? T.emerald : T.paperEdge}`,
                 borderRadius: 14, cursor: 'pointer',
                 fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 1,
-              }}>{l.replace(' strong', '')}</div>
+              }}>{display}</div>
             );
           })}
         </div>
