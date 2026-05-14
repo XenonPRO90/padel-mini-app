@@ -6,7 +6,8 @@ import { T } from '../lib/tokens';
 import { CourtCard } from '../components/CourtCard';
 import { MainCTA } from '../components/MainCTA';
 import { CourtSheet } from './CourtSheet';
-import { ELabel, EShareIcon } from '../lib/elegant';
+import { RosterSheet } from './RosterSheet';
+import { ELabel, EShareIcon, EPeopleIcon } from '../lib/elegant';
 import type { ActiveTournamentResponse, Match } from '../lib/types';
 
 interface Props {
@@ -20,6 +21,7 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
     queryFn: () => api('/api/tournaments/active'),
   });
   const [openMatch, setOpenMatch] = useState<Match | null>(null);
+  const [rosterOpen, setRosterOpen] = useState(false);
   const nextRound = useNextRound();
 
   if (isLoading) {
@@ -68,13 +70,20 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
             fontSize: 12, color: T.muted, marginTop: 2,
           }}>{t.name}</div>
         </div>
-        <button onClick={() => onShareSchedule?.()} style={{
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          padding: 4, color: T.gold,
-          display: 'flex', alignItems: 'center', gap: 4,
-        }}>
-          <EShareIcon size={18} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={() => setRosterOpen(true)} aria-label="Roster" style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: 4, color: T.gold,
+          }}>
+            <EPeopleIcon size={20} />
+          </button>
+          <button onClick={() => onShareSchedule?.()} aria-label="Share schedule" style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: 4, color: T.gold,
+          }}>
+            <EShareIcon size={18} />
+          </button>
+        </div>
       </div>
 
       <div style={{
@@ -129,6 +138,13 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
 
       {openMatch && (
         <CourtSheet match={openMatch} onClose={() => setOpenMatch(null)} />
+      )}
+      {rosterOpen && (
+        <RosterSheet
+          tid={t.id}
+          roundMatches={round.matches}
+          onClose={() => setRosterOpen(false)}
+        />
       )}
     </div>
   );

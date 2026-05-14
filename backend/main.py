@@ -220,6 +220,28 @@ async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_tg_us
 
 # ─── Share text ───────────────────────────────────────────
 
+class ReplacePlayerBody(BaseModel):
+    old_player_id: int
+    new_player_id: int
+
+
+@app.post("/api/tournaments/{tid}/replace-player")
+async def replace_player(
+    tid: int, body: ReplacePlayerBody, _user=Depends(get_tg_user),
+):
+    """Swap one tournament participant for another from the library.
+    The new player inherits the old slot, scores, pair-history and past
+    match participation."""
+    t = await q.get_tournament(tid)
+    if not t:
+        raise HTTPException(404, "Tournament not found")
+    try:
+        await q.replace_tournament_player(tid, body.old_player_id, body.new_player_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
 @app.get("/api/leaderboard/monthly")
 async def leaderboard_monthly(
     year: int, month: int, _user=Depends(get_tg_user),

@@ -183,6 +183,94 @@ async def get_leaderboard(tid: int):
         return rows_to_list(await cur.fetchall())
 
 
+async def get_tournament_player_ids(tid: int) -> list[int]:
+    """Players currently sitting in the tournament roster."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT player_id FROM tournament_players WHERE tournament_id=? ORDER BY position",
+            (tid,),
+        )
+        rows = await cur.fetchall()
+        return [int(r["player_id"]) for r in rows]
+
+
+async def replace_tournament_player(
+    tid: int, old_player_id: int, new_player_id: int,
+) -> None:
+    """Swap a player slot. The new player inherits the old player's slot,
+    scores, pair-history and match participation for this tournament —
+    so the rotation algorithm and statistics stay coherent.
+
+    Raises ValueError on any precondition failure (same id, old not in
+    roster, new already in roster, new not in library).
+    """
+    if old_player_id == new_player_id:
+        raise ValueError("Same player_id for old and new")
+
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT 1 FROM players WHERE id=?", (new_player_id,)
+        )
+        if not await cur.fetchone():
+            raise ValueError("New player not found in library")
+
+        cur = await db.execute(
+            "SELECT 1 FROM tournament_players WHERE tournament_id=? AND player_id=?",
+            (tid, old_player_id),
+        )
+        if not await cur.fetchone():
+            raise ValueError("Old player not in this tournament")
+
+        cur = await db.execute(
+            "SELECT 1 FROM tournament_players WHERE tournament_id=? AND player_id=?",
+            (tid, new_player_id),
+        )
+        if await cur.fetchone():
+            raise ValueError("New player already in this tournament")
+
+        # Single transaction so a partial swap can never leave the roster
+        # in an inconsistent state (e.g. tournament_players updated but
+        # pair_history still naming the old player).
+        await db.execute("BEGIN")
+        try:
+            # Roster slot
+            await db.execute(
+                "UPDATE tournament_players SET player_id=? "
+                "WHERE tournament_id=? AND player_id=?",
+                (new_player_id, tid, old_player_id),
+            )
+            # Score row (rare: there may be no row yet if no result was
+            # recorded — UPDATE just touches 0 rows in that case)
+            await db.execute(
+                "UPDATE scores SET player_id=? "
+                "WHERE tournament_id=? AND player_id=?",
+                (new_player_id, tid, old_player_id),
+            )
+            # Pair history — old player as A or B
+            await db.execute(
+                "UPDATE pair_history SET player_a=? "
+                "WHERE tournament_id=? AND player_a=?",
+                (new_player_id, tid, old_player_id),
+            )
+            await db.execute(
+                "UPDATE pair_history SET player_b=? "
+                "WHERE tournament_id=? AND player_b=?",
+                (new_player_id, tid, old_player_id),
+            )
+            # Past + current match participation
+            for col in ("p1", "p2", "p3", "p4"):
+                await db.execute(
+                    f"UPDATE matches SET {col}=? "
+                    f"WHERE {col}=? AND round_id IN "
+                    f"  (SELECT id FROM rounds WHERE tournament_id=?)",
+                    (new_player_id, old_player_id, tid),
+                )
+            await db.execute("COMMIT")
+        except Exception:
+            await db.execute("ROLLBACK")
+            raise
+
+
 async def get_monthly_leaderboard(year: int, month: int) -> tuple[list, int]:
     """Per-player totals aggregated across all FINISHED tournaments whose
     created_at falls in the given calendar month. Returns (rows, tournaments_count).

@@ -37,3 +37,22 @@ export function useFinishTournament() {
     },
   });
 }
+
+export function useReplacePlayer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tid, oldPlayerId, newPlayerId }: {
+      tid: number; oldPlayerId: number; newPlayerId: number;
+    }) =>
+      api(`/api/tournaments/${tid}/replace-player`, {
+        method: 'POST',
+        body: JSON.stringify({
+          old_player_id: oldPlayerId,
+          new_player_id: newPlayerId,
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['active-tournament'] });
+    },
+  });
+}
