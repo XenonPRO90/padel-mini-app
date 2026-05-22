@@ -4,6 +4,8 @@ import { api } from '../api/client';
 import { T } from '../lib/tokens';
 import { LevelBadge } from '../components/Badges';
 import { ELabel, EMedal, EPlace, EBtn, EGoldFrame, EOrnRule } from '../lib/elegant';
+import { MonthLeaderboardPoster } from './MonthLeaderboardPoster';
+import { ShareTextModal } from '../components/ShareTextModal';
 import type { HistoryItem, MonthlyLeaderboardResponse } from '../lib/types';
 
 interface HistoryScreenProps {
@@ -144,6 +146,8 @@ function MonthLeaderboard({
     queryKey: ['monthly', ym.year, ym.month],
     queryFn: () => api(`/api/leaderboard/monthly?year=${ym.year}&month=${ym.month}`),
   });
+  const [posterOpen, setPosterOpen] = useState(false);
+  const [shareText, setShareText] = useState<string | null>(null);
 
   const step = (delta: number) => {
     let m = ym.month + delta;
@@ -165,12 +169,44 @@ function MonthLeaderboard({
     }
   }
 
+  const monthLabel = `${monthName(ym.month).toUpperCase()} ${ym.year}`;
+
+  // Top-20 standings as forwardable text (medals for podium, places below).
+  const buildShareText = (): string => {
+    const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    const lines = [
+      `🏆 *PADEL CLUB · Лидеры месяца*`,
+      `${monthLabel} · ${data?.tournaments_count ?? 0} турниров`,
+      '',
+    ];
+    for (const { place, row } of ranked.slice(0, 20)) {
+      const prefix = medals[place] ?? `${place}.`;
+      lines.push(`${prefix} ${row.name} — ${row.points} pts (W${row.wins} L${row.losses})`);
+    }
+    return lines.join('\n');
+  };
+
   if (error) return <CenterError onRetry={() => refetch()} />;
+
+  if (posterOpen && data && ranked.length > 0) {
+    return (
+      <MonthLeaderboardPoster
+        monthLabel={monthLabel}
+        tournamentsCount={data.tournaments_count}
+        ranked={ranked}
+        onClose={() => setPosterOpen(false)}
+        onShareText={() => setShareText(buildShareText())}
+      />
+    );
+  }
 
   return (
     <div style={{
       flex: 1, overflowY: 'auto', padding: '14px 18px 36px',
     }}>
+      {shareText !== null && (
+        <ShareTextModal text={shareText} onClose={() => setShareText(null)} />
+      )}
       {/* Month picker */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -208,6 +244,12 @@ function MonthLeaderboard({
             fontSize: 13, color: T.muted,
           }}>
             {data.tournaments_count} {data.tournaments_count === 1 ? 'tournament' : 'tournaments'} played · {data.items.length} players
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <EBtn kind="primary" style={{ width: '100%' }} onClick={() => setPosterOpen(true)}>
+              Share poster · Top 20
+            </EBtn>
           </div>
 
           <EGoldFrame>
