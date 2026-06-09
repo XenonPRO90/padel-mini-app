@@ -9,11 +9,14 @@ import { ELabel, EBtn } from '../lib/elegant';
 interface Props {
   match: Match;
   onClose: () => void;
+  // Open straight into winner-picking (used when editing an already-recorded
+  // match from an archived round, so it skips the "Result recorded" step).
+  initialEditing?: boolean;
 }
 
-export function CourtSheet({ match, onClose }: Props) {
+export function CourtSheet({ match, onClose, initialEditing }: Props) {
   const setWinner = useSetWinner();
-  const [editing, setEditing] = useState(match.winner === null);
+  const [editing, setEditing] = useState(initialEditing ?? match.winner === null);
   const [celebrate, setCelebrate] = useState<1 | 2 | null>(null);
 
   const winner = celebrate ?? match.winner;

@@ -1,5 +1,14 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
+
+// A result/roster edit can land in the live round, a past round, or a finished
+// tournament — and it shifts standings everywhere. Invalidate every view that
+// renders matches or scores so they all refetch.
+function invalidateResultViews(qc: QueryClient) {
+  for (const key of ['active-tournament', 'round', 'tournament', 'history', 'monthly']) {
+    qc.invalidateQueries({ queryKey: [key] });
+  }
+}
 
 export function useSetWinner() {
   const qc = useQueryClient();
@@ -9,9 +18,27 @@ export function useSetWinner() {
         method: 'POST',
         body: JSON.stringify({ winner }),
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['active-tournament'] });
-    },
+    onSuccess: () => invalidateResultViews(qc),
+  });
+}
+
+export interface SwapSlot {
+  matchId: number;
+  slot: 1 | 2 | 3 | 4;
+}
+
+export function useSwapPlayers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ a, b }: { a: SwapSlot; b: SwapSlot }) =>
+      api(`/api/rounds/swap`, {
+        method: 'POST',
+        body: JSON.stringify({
+          a_match_id: a.matchId, a_slot: a.slot,
+          b_match_id: b.matchId, b_slot: b.slot,
+        }),
+      }),
+    onSuccess: () => invalidateResultViews(qc),
   });
 }
 

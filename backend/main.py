@@ -143,6 +143,25 @@ async def set_match_winner(match_id: int, body: WinnerBody, _user=Depends(get_tg
         raise HTTPException(400, str(e))
 
 
+class SwapBody(BaseModel):
+    a_match_id: int
+    a_slot: int  # 1..4
+    b_match_id: int
+    b_slot: int  # 1..4
+
+
+@app.post("/api/rounds/swap")
+async def swap_players(body: SwapBody, _user=Depends(get_tg_user)):
+    """Swap two player slots within a round (cross-court move or intra-court
+    re-pairing). Scores + pair_history recompute on the server."""
+    try:
+        return await q.swap_round_players(
+            body.a_match_id, body.a_slot, body.b_match_id, body.b_slot
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/tournaments/{tid}/next-round")
 async def next_round(tid: int, _user=Depends(get_tg_user)):
     try:
