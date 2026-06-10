@@ -170,6 +170,16 @@ async def next_round(tid: int, _user=Depends(get_tg_user)):
         raise HTTPException(400, str(e))
 
 
+@app.post("/api/tournaments/{tid}/undo-last-round")
+async def undo_last_round(tid: int, _user=Depends(get_tg_user)):
+    """Roll back to the previous round (deletes the latest round) so a wrong
+    result can be fixed before the next round is replayed."""
+    try:
+        return await q.undo_last_round(tid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/tournaments/{tid}/finish")
 async def finish(tid: int, _user=Depends(get_tg_user)):
     return await q.finish_tournament(tid)

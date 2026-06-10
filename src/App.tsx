@@ -41,6 +41,7 @@ declare global {
         setHeaderColor?: (c: string) => void;
         setBackgroundColor?: (c: string) => void;
         HapticFeedback?: { impactOccurred?: (style: string) => void };
+        showConfirm?: (message: string, cb: (ok: boolean) => void) => void;
         BackButton?: {
           show: () => void;
           hide: () => void;

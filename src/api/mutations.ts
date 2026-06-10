@@ -42,6 +42,15 @@ export function useSwapPlayers() {
   });
 }
 
+export function useUndoLastRound() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tid: number) =>
+      api(`/api/tournaments/${tid}/undo-last-round`, { method: 'POST' }),
+    onSuccess: () => invalidateResultViews(qc),
+  });
+}
+
 export function useNextRound() {
   const qc = useQueryClient();
   return useMutation({

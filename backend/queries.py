@@ -677,6 +677,73 @@ async def advance_to_next_round(tid: int):
     return {"ok": True, "new_round_num": new_round_num}
 
 
+async def undo_last_round(tid: int):
+    """Roll the tournament back to the previous round. Deletes the latest round
+    (its matches + pair_history contributions) and re-activates the one before
+    it, restoring each player's court to that round's placement. Use when a
+    wrong result was entered and the next round was already generated: undo →
+    fix the winner in the now-active previous round → advance again to
+    regenerate the next round with the corrected standings.
+
+    The latest round's recorded results (if any) are discarded — they'd be
+    meaningless once pairings change, so the caller confirms before calling."""
+    async with conn() as db:
+        await db.execute("BEGIN")
+        try:
+            cur = await db.execute(
+                "SELECT * FROM rounds WHERE tournament_id=? ORDER BY round_num DESC LIMIT 1",
+                (tid,),
+            )
+            latest = await cur.fetchone()
+            if not latest:
+                raise ValueError("No rounds to undo")
+            if latest["round_num"] <= 1:
+                raise ValueError("Нельзя откатить первый раунд")
+
+            prev_num = latest["round_num"] - 1
+            cur = await db.execute(
+                "SELECT * FROM rounds WHERE tournament_id=? AND round_num=?",
+                (tid, prev_num),
+            )
+            prev = await cur.fetchone()
+            if not prev:
+                raise ValueError("Previous round not found")
+
+            # Drop the latest round entirely.
+            await db.execute("DELETE FROM matches WHERE round_id=?", (latest["id"],))
+            await db.execute("DELETE FROM rounds WHERE id=?", (latest["id"],))
+
+            # Re-activate the previous round and rewind the tournament pointer.
+            # status -> 'active' also un-finishes a tournament if it was ended.
+            await db.execute("UPDATE rounds SET status='active' WHERE id=?", (prev["id"],))
+            await db.execute(
+                "UPDATE tournaments SET current_round=?, status='active' WHERE id=?",
+                (prev_num, tid),
+            )
+
+            # Restore each player's current_court to their court in the now-active
+            # round (where they physically were before the rolled-back round).
+            cur = await db.execute(
+                "SELECT court_num, p1, p2, p3, p4 FROM matches WHERE round_id=?",
+                (prev["id"],),
+            )
+            for m in await cur.fetchall():
+                for pid in (m["p1"], m["p2"], m["p3"], m["p4"]):
+                    await db.execute(
+                        "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
+                        (m["court_num"], tid, pid),
+                    )
+
+            await _recompute_pair_history(db, tid)
+            await _recompute_scores(db, tid)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    return {"ok": True, "active_round": prev_num}
+
+
 async def finish_tournament(tid: int):
     """Mark tournament as finished. Doesn't delete data — history endpoints will see it."""
     async with conn() as db:
