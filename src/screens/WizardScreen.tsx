@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Mode = 'rotating' | 'fixed' | 'americano';
+type Mode = 'rotating' | 'fixed' | 'americano' | 'groups8';
 
 interface State {
   name: string;
@@ -48,9 +48,10 @@ export function WizardScreen({ onClose }: Props) {
 
   const create = useCreateTournament();
 
-  // Americano needs only name / mode / order / players / confirm — points and
-  // court count are derived, so those steps are skipped.
-  const STEPS = s.mode === 'americano' ? [1, 3, 4, 8, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  // Americano & groups8 need only name / mode / order / players / confirm —
+  // points and court count are derived, so those steps are skipped.
+  const derivedMode = s.mode === 'americano' || s.mode === 'groups8';
+  const STEPS = derivedMode ? [1, 3, 4, 8, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
   const stepIdx = Math.max(0, STEPS.indexOf(step));
   const isLastStep = step === STEPS[STEPS.length - 1];
 
@@ -87,9 +88,10 @@ export function WizardScreen({ onClose }: Props) {
   };
 
   const playersDivisible = s.player_ids.length > 0 && s.player_ids.length % 4 === 0;
-  // Americano: courts are derived (pairs/2); just need ≥ 4 pairs (8 players).
-  const minPlayers = s.mode === 'americano' ? 8 : s.num_courts * 4;
-  const enoughForCourts = s.player_ids.length >= minPlayers;
+  // groups8 needs exactly 16 (8 pairs); americano ≥ 4 pairs; else courts×4.
+  const enoughForCourts = s.mode === 'groups8'
+    ? s.player_ids.length === 16
+    : s.player_ids.length >= (s.mode === 'americano' ? 8 : s.num_courts * 4);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -126,7 +128,7 @@ export function WizardScreen({ onClose }: Props) {
           onChange={(v) => update('player_ids', v)}
         />}
         {step === 9 && <StepConfirm s={s} cp={ensureCourtPoints(s.num_courts)} />}
-        {step === 9 && (s.mode === 'fixed' || s.mode === 'americano') && s.player_ids.length > 0 && (
+        {step === 9 && (s.mode === 'fixed' || s.mode === 'americano' || s.mode === 'groups8') && s.player_ids.length > 0 && (
           <PairsPreview playerIds={s.player_ids} />
         )}
       </div>
@@ -139,7 +141,9 @@ export function WizardScreen({ onClose }: Props) {
         )}
         {step === 8 && playersDivisible && !enoughForCourts && (
           <ValidationBanner text={
-            s.mode === 'americano'
+            s.mode === 'groups8'
+              ? `Нужно ровно 16 игроков (8 пар) — выбрано ${s.player_ids.length}`
+              : s.mode === 'americano'
               ? 'Need at least 8 players (4 pairs)'
               : `Need at least ${s.num_courts * 4} players for ${s.num_courts} courts`
           } />
@@ -324,6 +328,12 @@ function StepMode({ value, onChange }: { value: Mode; onChange: (v: Mode) => voi
         desc="Fixed pairs, round-robin — every pair plays every other once. 1 win = 1 point."
         onClick={() => onChange('americano')}
       />
+      <CardChoice
+        active={value === 'groups8'}
+        title="8 команд · группы + плей-офф"
+        desc="16 игроков (8 пар), 2 группы по 4, round-robin → сетка за места 1–8. Счёт по геймам."
+        onClick={() => onChange('groups8')}
+      />
     </>
   );
 }
@@ -481,8 +491,8 @@ function StepPlayers({
   selected: number[];
   onChange: (v: number[]) => void;
 }) {
-  // Fixed pairs and americano both pair adjacent picks; show the pair UI.
-  const pairMode = mode === 'fixed' || mode === 'americano';
+  // Fixed pairs, americano and groups8 all pair adjacent picks; show pair UI.
+  const pairMode = mode === 'fixed' || mode === 'americano' || mode === 'groups8';
   const { data, isLoading } = useQuery<{ items: Player[] }>({
     queryKey: ['players'],
     queryFn: () => api('/api/players'),
@@ -619,8 +629,19 @@ function StepPlayers({
 
 function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
   const modeLabel = s.mode === 'rotating' ? 'Rotating partners'
-    : s.mode === 'americano' ? 'Team Americano' : 'Fixed pairs';
-  const summary: { label: string; value: string }[] = s.mode === 'americano'
+    : s.mode === 'americano' ? 'Team Americano'
+    : s.mode === 'groups8' ? '8 команд · группы + плей-офф' : 'Fixed pairs';
+  const summary: { label: string; value: string }[] = s.mode === 'groups8'
+    ? [
+        { label: 'Name',    value: s.name },
+        { label: 'Mode',    value: modeLabel },
+        { label: 'Groups',  value: '2 × 4 команды' },
+        { label: 'Courts',  value: '4' },
+        { label: 'Stage',   value: 'Round-robin → плей-офф за места 1–8' },
+        { label: 'Scoring', value: 'Счёт по геймам' },
+        { label: 'Players', value: `${s.player_ids.length} / 16` },
+      ]
+    : s.mode === 'americano'
     ? [
         { label: 'Name',    value: s.name },
         { label: 'Mode',    value: modeLabel },

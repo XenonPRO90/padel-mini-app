@@ -84,7 +84,7 @@ async def get_round_matches(round_id: int):
     """Returns matches with player names and levels resolved, structured for UI."""
     async with conn() as db:
         cur = await db.execute(
-            """SELECT m.id, m.court_num, m.winner, cp.label AS court_label,
+            """SELECT m.id, m.court_num, m.winner, m.score1, m.score2, cp.label AS court_label,
                       m.p1, p1.name AS p1_name, p1.level AS p1_level, p1.side AS p1_side,
                       m.p2, p2.name AS p2_name, p2.level AS p2_level, p2.side AS p2_side,
                       m.p3, p3.name AS p3_name, p3.level AS p3_level, p3.side AS p3_side,
@@ -108,6 +108,8 @@ async def get_round_matches(round_id: int):
             "court_num": r["court_num"],
             "court_label": r["court_label"],
             "winner": r["winner"],
+            "score1": r["score1"],
+            "score2": r["score2"],
             "team1": [
                 {"player_id": r["p1"], "name": r["p1_name"], "level": r["p1_level"], "side": r["p1_side"]},
                 {"player_id": r["p2"], "name": r["p2_name"], "level": r["p2_level"], "side": r["p2_side"]},
@@ -478,6 +480,40 @@ async def record_match_winner(match_id: int, winner: int):
     return {"ok": True, "match_id": match_id, "winner": winner}
 
 
+async def record_match_score(match_id: int, score1: int, score2: int):
+    """Record a game score (score-based modes like groups8). Stores both scores,
+    derives the winner from them, then recomputes the tournament's scores."""
+    if score1 < 0 or score2 < 0:
+        raise ValueError("Счёт не может быть отрицательным")
+    if score1 == score2:
+        raise ValueError("Счёт не может быть равным — нужен победитель")
+    winner = 1 if score1 > score2 else 2
+
+    async with conn() as db:
+        await db.execute("BEGIN")
+        try:
+            cur = await db.execute(
+                """SELECT r.tournament_id FROM matches m JOIN rounds r ON r.id=m.round_id
+                   WHERE m.id=?""",
+                (match_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise ValueError("Match not found")
+            tid = row["tournament_id"]
+            await db.execute(
+                "UPDATE matches SET score1=?, score2=?, winner=? WHERE id=?",
+                (score1, score2, winner, match_id),
+            )
+            await _recompute_scores(db, tid)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    return {"ok": True, "match_id": match_id, "winner": winner, "score1": score1, "score2": score2}
+
+
 # Maps a 1-based slot index to its column. team1 = slots 1,2 / team2 = slots 3,4.
 _SLOT_COL = {1: "p1", 2: "p2", 3: "p3", 4: "p4"}
 
@@ -622,6 +658,46 @@ async def advance_to_next_round(tid: int):
             )
             new_round_id = cur.lastrowid
             for c in _americano_round_courts(ordered_ids, new_round_num):
+                t1, t2 = c["team1"], c["team2"]
+                await db.execute(
+                    "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
+                    (new_round_id, c["court_num"],
+                     t1[0]["player_id"], t1[1]["player_id"], t2[0]["player_id"], t2[1]["player_id"]),
+                )
+            await db.execute("UPDATE tournaments SET current_round=? WHERE id=?", (new_round_num, tid))
+            await db.commit()
+            return {"ok": True, "new_round_num": new_round_num}
+
+        # 8-team groups → playoff: group-stage rounds are pre-set; round 4 is
+        # seeded from group standings; round 5 from round-4 results; then finish.
+        if t["mode"] == "groups8":
+            cur = await db.execute(
+                "SELECT player_id FROM tournament_players WHERE tournament_id=? ORDER BY position",
+                (tid,),
+            )
+            ordered_ids = [r["player_id"] for r in await cur.fetchall()]
+            rn = round_obj["round_num"]
+            await db.execute("UPDATE rounds SET status='done' WHERE id=?", (round_obj["id"],))
+
+            if rn >= GROUPS8_ROUNDS:
+                await _groups8_finish(db, tid)
+                await db.commit()
+                return {"ok": True, "finished": True}
+
+            new_round_num = rn + 1
+            if rn < 3:
+                courts_out = _groups8_group_round_courts(ordered_ids, new_round_num)
+            elif rn == 3:
+                rankedA, rankedB = await _groups8_standings(db, tid, ordered_ids)
+                courts_out = _groups8_semis(rankedA, rankedB)
+            else:  # rn == 4 → finals
+                courts_out = await _groups8_finals(db, tid)
+
+            cur = await db.execute(
+                "INSERT INTO rounds(tournament_id, round_num) VALUES(?,?)", (tid, new_round_num)
+            )
+            new_round_id = cur.lastrowid
+            for c in courts_out:
                 t1, t2 = c["team1"], c["team2"]
                 await db.execute(
                     "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
@@ -898,6 +974,157 @@ def _americano_round_courts(ordered_player_ids: list[int], round_num: int) -> li
     return out
 
 
+# ─── 8-team groups + playoff (score-based) ────────────────
+#
+# 16 players = 8 fixed pairs. Pairs 0-3 = group A, 4-7 = group B (by entry
+# order). Rounds 1-3: group round-robin (A on courts 1-2, B on courts 3-4).
+# Round 4: semis A1-B2 / B1-A2 (courts 1-2) + placement A3-B4 / A4-B3 (3-4).
+# Round 5: finals — 1st (c1), 3rd (c2), 5th (c3), 7th (c4) place matches.
+# Results are entered as game scores; group order is wins, then game diff.
+
+GROUPS8_ROUNDS = 5
+_RR4 = [[(0, 3), (1, 2)], [(0, 2), (3, 1)], [(0, 1), (2, 3)]]  # round-robin of 4
+
+
+def _groups8_pairs(ordered_player_ids: list[int]) -> list[tuple[int, int]]:
+    return [(ordered_player_ids[2 * k], ordered_player_ids[2 * k + 1]) for k in range(8)]
+
+
+def _court(out, court_num, ta, tb):
+    out.append({
+        "court_num": court_num,
+        "team1": [{"player_id": ta[0]}, {"player_id": ta[1]}],
+        "team2": [{"player_id": tb[0]}, {"player_id": tb[1]}],
+    })
+
+
+def _groups8_group_round_courts(ordered_player_ids: list[int], round_num: int) -> list[dict]:
+    """Group-stage round (1..3): group A on courts 1-2, group B on courts 3-4."""
+    pairs = _groups8_pairs(ordered_player_ids)
+    A, B = pairs[0:4], pairs[4:8]
+    out = []
+    for ci, (a, b) in enumerate(_RR4[round_num - 1]):
+        _court(out, ci + 1, A[a], A[b])
+    for ci, (a, b) in enumerate(_RR4[round_num - 1]):
+        _court(out, ci + 3, B[a], B[b])
+    return out
+
+
+def _winner_loser(m) -> tuple[tuple, tuple]:
+    """(winning team, losing team) tuples from a match row with winner set."""
+    t1, t2 = (m["p1"], m["p2"]), (m["p3"], m["p4"])
+    return (t1, t2) if m["winner"] == 1 else (t2, t1)
+
+
+async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
+    """Returns (rankedA, rankedB): each 4 team tuples best-first, ranked by
+    wins, then game difference, then games for, then entry order."""
+    pairs = _groups8_pairs(ordered_player_ids)
+    A, B = pairs[0:4], pairs[4:8]
+    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i}
+             for i, p in enumerate(pairs)}
+    cur = await db.execute(
+        """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, m.score1, m.score2
+           FROM matches m JOIN rounds r ON r.id=m.round_id
+           WHERE r.tournament_id=? AND r.round_num<=3""",
+        (tid,),
+    )
+    for m in await cur.fetchall():
+        k1, k2 = frozenset((m["p1"], m["p2"])), frozenset((m["p3"], m["p4"]))
+        s1, s2 = (m["score1"] or 0), (m["score2"] or 0)
+        if k1 in stats:
+            stats[k1]["gf"] += s1; stats[k1]["ga"] += s2
+        if k2 in stats:
+            stats[k2]["gf"] += s2; stats[k2]["ga"] += s1
+        if m["winner"] == 1 and k1 in stats:
+            stats[k1]["wins"] += 1
+        elif m["winner"] == 2 and k2 in stats:
+            stats[k2]["wins"] += 1
+
+    def rank(group):
+        ordered = sorted(
+            (stats[frozenset(p)] for p in group),
+            key=lambda s: (-s["wins"], -(s["gf"] - s["ga"]), -s["gf"], s["order"]),
+        )
+        return [s["team"] for s in ordered]
+
+    return rank(A), rank(B)
+
+
+def _groups8_semis(rankedA, rankedB) -> list[dict]:
+    A1, A2, A3, A4 = rankedA
+    B1, B2, B3, B4 = rankedB
+    out = []
+    _court(out, 1, A1, B2)   # SF1
+    _court(out, 2, B1, A2)   # SF2
+    _court(out, 3, A3, B4)   # placement semi 1
+    _court(out, 4, A4, B3)   # placement semi 2
+    return out
+
+
+async def _groups8_finals(db, tid: int) -> list[dict]:
+    """Round 5 from round-4 results: finals & placement deciders."""
+    cur = await db.execute(
+        """SELECT m.court_num, m.p1, m.p2, m.p3, m.p4, m.winner
+           FROM matches m JOIN rounds r ON r.id=m.round_id
+           WHERE r.tournament_id=? AND r.round_num=4 ORDER BY m.court_num""",
+        (tid,),
+    )
+    by_court = {m["court_num"]: _winner_loser(m) for m in await cur.fetchall()}
+    w1, l1 = by_court[1]; w2, l2 = by_court[2]   # championship semis
+    w3, l3 = by_court[3]; w4, l4 = by_court[4]   # placement semis
+    out = []
+    _court(out, 1, w1, w2)   # 1st place
+    _court(out, 2, l1, l2)   # 3rd place
+    _court(out, 3, w3, w4)   # 5th place
+    _court(out, 4, l3, l4)   # 7th place
+    return out
+
+
+async def _groups8_finish(db, tid: int):
+    """Compute final 1st-8th placement from rounds 4-5 and write it into scores
+    (points = 9 - place so order is correct, with wins/losses across all rounds)."""
+    cur = await db.execute(
+        """SELECT m.court_num, m.p1, m.p2, m.p3, m.p4, m.winner
+           FROM matches m JOIN rounds r ON r.id=m.round_id
+           WHERE r.tournament_id=? AND r.round_num=5 ORDER BY m.court_num""",
+        (tid,),
+    )
+    finals = {m["court_num"]: _winner_loser(m) for m in await cur.fetchall()}
+    place_of_team = {}  # frozenset(team) -> place 1..8
+    court_to_places = {1: (1, 2), 2: (3, 4), 3: (5, 6), 4: (7, 8)}
+    for court, (winp, losep) in court_to_places.items():
+        w, l = finals[court]
+        place_of_team[frozenset(w)] = winp
+        place_of_team[frozenset(l)] = losep
+
+    # Per-player wins/losses across every round.
+    cur = await db.execute(
+        """SELECT m.p1, m.p2, m.p3, m.p4, m.winner
+           FROM matches m JOIN rounds r ON r.id=m.round_id
+           WHERE r.tournament_id=? AND m.winner IS NOT NULL""",
+        (tid,),
+    )
+    wl = {}  # player_id -> [wins, losses]
+    for m in await cur.fetchall():
+        win = (m["p1"], m["p2"]) if m["winner"] == 1 else (m["p3"], m["p4"])
+        los = (m["p3"], m["p4"]) if m["winner"] == 1 else (m["p1"], m["p2"])
+        for p in win:
+            wl.setdefault(p, [0, 0])[0] += 1
+        for p in los:
+            wl.setdefault(p, [0, 0])[1] += 1
+
+    await db.execute("DELETE FROM scores WHERE tournament_id=?", (tid,))
+    for team_key, place in place_of_team.items():
+        for pid in team_key:
+            w, l = wl.get(pid, [0, 0])
+            await db.execute(
+                "INSERT INTO scores(tournament_id, player_id, points, wins, losses) VALUES(?,?,?,?,?)",
+                (tid, pid, 9 - place, w, l),
+            )
+    await db.execute("UPDATE tournaments SET status='finished' WHERE id=?", (tid,))
+
+
 # ─── Tournament create ────────────────────────────────────
 
 async def create_tournament(
@@ -918,14 +1145,23 @@ async def create_tournament(
     from .pairing import assign_courts
     import random
 
-    if mode not in ("rotating", "fixed", "americano"):
-        raise ValueError("mode must be 'rotating', 'fixed' or 'americano'")
+    if mode not in ("rotating", "fixed", "americano", "groups8"):
+        raise ValueError("mode must be 'rotating', 'fixed', 'americano' or 'groups8'")
     if initial_order not in ("keep", "random"):
         raise ValueError("initial_order must be 'keep' or 'random'")
     if len(player_ids) % 4 != 0:
         raise ValueError("player count must be divisible by 4")
 
-    if mode == "americano":
+    if mode == "groups8":
+        # 8 fixed pairs (16 players), 4 courts, score-based. Points are derived
+        # from final placement on finish, so court points don't apply.
+        if len(player_ids) != 16:
+            raise ValueError("Турнир на 8 команд: нужно ровно 16 игроков (8 пар)")
+        num_courts = 4
+        court_points = {}
+        initial_points = 1
+        start_round = 10 ** 9
+    elif mode == "americano":
         # Fixed-pair round-robin: pairs = players/2 (even), one match per court
         # each round, every pair meets every other once. Always 1 point per win,
         # so court points / start_round don't apply.
@@ -993,7 +1229,10 @@ async def create_tournament(
 
     # Build round-1 matches outside the transaction (assign_courts reads players)
     tp = await get_tournament_players(tid)
-    if mode == "americano":
+    if mode == "groups8":
+        ordered_ids = [p["player_id"] for p in sorted(tp, key=lambda x: x["position"])]
+        courts_out = _groups8_group_round_courts(ordered_ids, 1)
+    elif mode == "americano":
         ordered_ids = [p["player_id"] for p in sorted(tp, key=lambda x: x["position"])]
         courts_out = _americano_round_courts(ordered_ids, 1)
     elif mode == "fixed":

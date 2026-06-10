@@ -26,7 +26,7 @@ type Screen =
   | { name: 'wizard' }
   | { name: 'playerEdit'; player: Player | null }
   | { name: 'tournamentDetail'; tid: number }
-  | { name: 'roundDetail'; tid: number; roundNum: number }
+  | { name: 'roundDetail'; tid: number; roundNum: number; mode?: string }
   | { name: 'celebration'; tid: number }
   | { name: 'schedulePoster' };
 
@@ -130,11 +130,11 @@ export default function App() {
             <TournamentDetailScreen
               tid={top.tid}
               onBack={pop}
-              onOpenRound={(rn) => push({ name: 'roundDetail', tid: top.tid, roundNum: rn })}
+              onOpenRound={(rn, mode) => push({ name: 'roundDetail', tid: top.tid, roundNum: rn, mode })}
             />
           )}
           {top.name === 'roundDetail' && (
-            <RoundDetailScreen tid={top.tid} roundNum={top.roundNum} onBack={pop} />
+            <RoundDetailScreen tid={top.tid} roundNum={top.roundNum} mode={top.mode} onBack={pop} />
           )}
           {top.name === 'celebration' && (
             <CelebrationScreen tid={top.tid} onClose={pop} />

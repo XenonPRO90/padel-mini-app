@@ -22,6 +22,18 @@ export function useSetWinner() {
   });
 }
 
+export function useSetScore() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ matchId, score1, score2 }: { matchId: number; score1: number; score2: number }) =>
+      api(`/api/matches/${matchId}/score`, {
+        method: 'POST',
+        body: JSON.stringify({ score1, score2 }),
+      }),
+    onSuccess: () => invalidateResultViews(qc),
+  });
+}
+
 export interface SwapSlot {
   matchId: number;
   slot: 1 | 2 | 3 | 4;
@@ -56,9 +68,9 @@ export function useNextRound() {
   return useMutation({
     mutationFn: (tid: number) =>
       api(`/api/tournaments/${tid}/next-round`, { method: 'POST' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['active-tournament'] });
-    },
+    // advance() can also finish a tournament (americano/groups8 last round), so
+    // refresh history too.
+    onSuccess: () => invalidateResultViews(qc),
   });
 }
 

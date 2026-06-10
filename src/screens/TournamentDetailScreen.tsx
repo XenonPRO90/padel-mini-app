@@ -7,7 +7,7 @@ import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 interface Props {
   tid: number;
   onBack: () => void;
-  onOpenRound: (roundNum: number) => void;
+  onOpenRound: (roundNum: number, mode: string) => void;
 }
 
 interface Resp {
@@ -36,7 +36,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
   const { tournament: t, rounds, leaderboard, pair_leaderboard } = data;
 
   type Row = { name: string; points: number; wins: number; losses: number };
-  const rows: Row[] = t.mode === 'fixed' && pair_leaderboard
+  const rows: Row[] = pair_leaderboard
     ? pair_leaderboard.map((p) => ({
         name: `${p.name_a} & ${p.name_b}`,
         points: p.points, wins: p.wins, losses: p.losses,
@@ -149,7 +149,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
           {rounds.map((r) => (
             <div
               key={r.id}
-              onClick={() => onOpenRound(r.round_num)}
+              onClick={() => onOpenRound(r.round_num, t.mode)}
               style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '12px 16px',

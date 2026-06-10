@@ -54,7 +54,7 @@ export function useCreateTournament() {
     mutationFn: (body: {
       name: string;
       num_courts: number;
-      mode: 'rotating' | 'fixed' | 'americano';
+      mode: 'rotating' | 'fixed' | 'americano' | 'groups8';
       initial_order: 'keep' | 'random';
       initial_points: number;
       start_round: number;

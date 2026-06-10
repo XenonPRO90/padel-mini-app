@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
-import { useSetWinner } from '../api/mutations';
+import { useSetWinner, useSetScore } from '../api/mutations';
 import { courtDisplay, type Match, type MatchPlayer } from '../lib/types';
 import { Avatar } from './PlayersScreen';
 import { ELabel, EBtn } from '../lib/elegant';
@@ -12,14 +12,32 @@ interface Props {
   // Open straight into winner-picking (used when editing an already-recorded
   // match from an archived round, so it skips the "Result recorded" step).
   initialEditing?: boolean;
+  // Score-based recording (groups8): enter games per team instead of tapping.
+  scoreMode?: boolean;
 }
 
-export function CourtSheet({ match, onClose, initialEditing }: Props) {
+export function CourtSheet({ match, onClose, initialEditing, scoreMode }: Props) {
   const setWinner = useSetWinner();
+  const setScore = useSetScore();
   const [editing, setEditing] = useState(initialEditing ?? match.winner === null);
   const [celebrate, setCelebrate] = useState<1 | 2 | null>(null);
+  const [s1, setS1] = useState(match.score1 ?? 0);
+  const [s2, setS2] = useState(match.score2 ?? 0);
 
   const winner = celebrate ?? match.winner;
+
+  const onSaveScore = async () => {
+    if (s1 === s2) { alert('Счёт не может быть равным'); return; }
+    try {
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium');
+    } catch { /* ignore */ }
+    try {
+      await setScore.mutateAsync({ matchId: match.match_id, score1: s1, score2: s2 });
+      setTimeout(() => onClose(), 400);
+    } catch (e) {
+      alert((e as Error).message || 'Не удалось сохранить счёт');
+    }
+  };
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -90,61 +108,89 @@ export function CourtSheet({ match, onClose, initialEditing }: Props) {
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, padding: '16px 18px', overflowY: 'auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 14 }}>
-            <ELabel>{editing ? 'Who won this court?' : 'Result recorded'}</ELabel>
-          </div>
+        {scoreMode ? (
+          <>
+            <div style={{ flex: 1, padding: '16px 18px', overflowY: 'auto' }}>
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <ELabel>Счёт по геймам</ELabel>
+              </div>
+              <ScoreRow team={match.team1} value={s1} other={s2}
+                onChange={setS1} disabled={setScore.isPending} />
+              <div style={{ display: 'flex', alignItems: 'center', margin: '12px 0' }}>
+                <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
+                <span style={{ fontFamily: T.fontSerif, fontStyle: 'italic', color: T.gold, padding: '0 14px', fontSize: 16 }}>vs</span>
+                <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
+              </div>
+              <ScoreRow team={match.team2} value={s2} other={s1}
+                onChange={setS2} disabled={setScore.isPending} />
+            </div>
+            <div style={{ padding: '4px 18px 0' }}>
+              <EBtn kind="primary" style={{ width: '100%' }}
+                disabled={setScore.isPending || s1 === s2}
+                onClick={onSaveScore}>
+                {setScore.isPending ? 'Сохранение…' : (match.winner !== null ? 'Обновить счёт' : 'Сохранить счёт')}
+              </EBtn>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ flex: 1, padding: '16px 18px', overflowY: 'auto' }}>
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <ELabel>{editing ? 'Who won this court?' : 'Result recorded'}</ELabel>
+              </div>
 
-          <TeamZone
-            teamLabel="Team 1"
-            team={match.team1}
-            isWinner={winner === 1}
-            isLoser={winner !== null && winner !== 1}
-            isCelebrating={celebrate === 1}
-            tappable={editing && !setWinner.isPending}
-            onTap={() => onPick(1)}
-          />
+              <TeamZone
+                teamLabel="Team 1"
+                team={match.team1}
+                isWinner={winner === 1}
+                isLoser={winner !== null && winner !== 1}
+                isCelebrating={celebrate === 1}
+                tappable={editing && !setWinner.isPending}
+                onTap={() => onPick(1)}
+              />
 
-          <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0' }}>
-            <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
-            <span style={{
-              fontFamily: T.fontSerif, fontStyle: 'italic',
-              color: T.gold, padding: '0 14px', fontSize: 16,
-            }}>or</span>
-            <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
-          </div>
+              <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0' }}>
+                <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
+                <span style={{
+                  fontFamily: T.fontSerif, fontStyle: 'italic',
+                  color: T.gold, padding: '0 14px', fontSize: 16,
+                }}>or</span>
+                <div style={{ flex: 1, height: 1, background: T.paperEdge }} />
+              </div>
 
-          <TeamZone
-            teamLabel="Team 2"
-            team={match.team2}
-            isWinner={winner === 2}
-            isLoser={winner !== null && winner !== 2}
-            isCelebrating={celebrate === 2}
-            tappable={editing && !setWinner.isPending}
-            onTap={() => onPick(2)}
-          />
-        </div>
+              <TeamZone
+                teamLabel="Team 2"
+                team={match.team2}
+                isWinner={winner === 2}
+                isLoser={winner !== null && winner !== 2}
+                isCelebrating={celebrate === 2}
+                tappable={editing && !setWinner.isPending}
+                onTap={() => onPick(2)}
+              />
+            </div>
 
-        {/* Footer */}
-        <div style={{ padding: '4px 18px 0' }}>
-          {!editing && match.winner !== null ? (
-            <EBtn kind="ghost" style={{ width: '100%' }} onClick={() => setEditing(true)}>
-              Edit result
-            </EBtn>
-          ) : setWinner.isPending ? (
-            <div style={{
-              textAlign: 'center', color: T.emerald,
-              fontFamily: T.fontDisplay, fontSize: 12, letterSpacing: 2,
-              padding: 14, fontWeight: 600, textTransform: 'uppercase',
-            }}>Saving…</div>
-          ) : (
-            <div style={{
-              textAlign: 'center', color: T.muted,
-              fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
-              padding: 14,
-            }}>Tap a team above to record the winner</div>
-          )}
-        </div>
+            {/* Footer */}
+            <div style={{ padding: '4px 18px 0' }}>
+              {!editing && match.winner !== null ? (
+                <EBtn kind="ghost" style={{ width: '100%' }} onClick={() => setEditing(true)}>
+                  Edit result
+                </EBtn>
+              ) : setWinner.isPending ? (
+                <div style={{
+                  textAlign: 'center', color: T.emerald,
+                  fontFamily: T.fontDisplay, fontSize: 12, letterSpacing: 2,
+                  padding: 14, fontWeight: 600, textTransform: 'uppercase',
+                }}>Saving…</div>
+              ) : (
+                <div style={{
+                  textAlign: 'center', color: T.muted,
+                  fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
+                  padding: 14,
+                }}>Tap a team above to record the winner</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -199,6 +245,50 @@ function TeamZone({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ScoreRow({ team, value, other, onChange, disabled }: {
+  team: MatchPlayer[];
+  value: number;
+  other: number;
+  onChange: (v: number) => void;
+  disabled: boolean;
+}) {
+  const leading = value > other;
+  return (
+    <div style={{
+      border: leading ? `1.5px solid ${T.gold}` : `1px solid ${T.paperEdge}`,
+      background: leading ? '#f9f1de' : T.paper,
+      borderRadius: 14, padding: '12px 14px',
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {team.map((p, i) => (
+          <div key={i} style={{
+            fontFamily: T.fontDisplay, fontSize: 15, fontWeight: 600,
+            color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{p.name}</div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button disabled={disabled} onClick={() => onChange(Math.max(0, value - 1))} style={{
+          width: 34, height: 34, borderRadius: 999, border: `1px solid ${T.rule}`,
+          background: T.cream, color: T.ink, fontFamily: T.fontDisplay, fontSize: 18,
+          fontWeight: 600, cursor: 'pointer',
+        }}>−</button>
+        <div style={{
+          minWidth: 30, textAlign: 'center',
+          fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 700,
+          color: leading ? T.goldDeep : T.ink, fontVariantNumeric: 'tabular-nums',
+        }}>{value}</div>
+        <button disabled={disabled} onClick={() => onChange(Math.min(99, value + 1))} style={{
+          width: 34, height: 34, borderRadius: 999, border: `1px solid ${T.rule}`,
+          background: T.cream, color: T.ink, fontFamily: T.fontDisplay, fontSize: 18,
+          fontWeight: 600, cursor: 'pointer',
+        }}>+</button>
+      </div>
     </div>
   );
 }

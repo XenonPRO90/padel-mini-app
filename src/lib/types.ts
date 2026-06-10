@@ -29,9 +29,19 @@ export interface Match {
   court_num: number;
   court_label?: string | null;  // display label; falls back to court_num
   winner: 1 | 2 | null;
+  score1?: number | null;  // games won by team 1 (score-based modes)
+  score2?: number | null;
   team1: MatchPlayer[];
   team2: MatchPlayer[];
   points: number;
+}
+
+// Per-court tag for the 8-team groups+playoff bracket (round 1-5, court 1-4).
+export function groups8CourtTag(roundNum: number, court: number): string | undefined {
+  if (roundNum <= 3) return court <= 2 ? 'Группа A' : 'Группа B';
+  if (roundNum === 4) return court <= 2 ? '½ финала' : 'Плей-офф 5–8';
+  if (roundNum === 5) return ['Финал', 'За 3-е', 'За 5-е', 'За 7-е'][court - 1];
+  return undefined;
 }
 
 // Court display: custom label if set, otherwise the internal number.
@@ -53,7 +63,7 @@ export interface Tournament {
   id: number;
   name: string;
   num_courts: number;
-  mode: 'fixed' | 'rotating' | 'americano';
+  mode: 'fixed' | 'rotating' | 'americano' | 'groups8';
   initial_order: 'keep' | 'random';
   initial_points: number;
   start_round: number;

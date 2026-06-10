@@ -47,6 +47,8 @@ async def tournaments_active(_user=Depends(get_tg_user)):
     if t.get("mode") == "americano":
         tp = await q.get_tournament_players(t["id"])
         t["total_rounds"] = q.americano_total_rounds(len(tp))
+    elif t.get("mode") == "groups8":
+        t["total_rounds"] = q.GROUPS8_ROUNDS
 
     round_obj = await q.get_current_round(t["id"])
     round_payload = None
@@ -92,11 +94,13 @@ async def tournament_detail(tid: int, _user=Depends(get_tg_user)):
     if t.get("mode") == "americano":
         tp = await q.get_tournament_players(tid)
         t["total_rounds"] = q.americano_total_rounds(len(tp))
+    elif t.get("mode") == "groups8":
+        t["total_rounds"] = q.GROUPS8_ROUNDS
     payload = {"tournament": t, "rounds": rounds, "leaderboard": leaderboard}
-    # For fixed-pair tournaments (incl. americano) also return a pair-level
-    # leaderboard (one row per pair instead of one per player) so the UI can
-    # show places by pair rather than duplicating medals across partners.
-    if t["mode"] in ("fixed", "americano"):
+    # For fixed-pair tournaments (incl. americano, groups8) also return a
+    # pair-level leaderboard (one row per pair instead of one per player) so the
+    # UI can show places by pair rather than duplicating medals across partners.
+    if t["mode"] in ("fixed", "americano", "groups8"):
         payload["pair_leaderboard"] = await q.get_pair_leaderboard(tid)
     return payload
 
@@ -155,6 +159,20 @@ class SwapBody(BaseModel):
     a_slot: int  # 1..4
     b_match_id: int
     b_slot: int  # 1..4
+
+
+class ScoreBody(BaseModel):
+    score1: int
+    score2: int
+
+
+@app.post("/api/matches/{match_id}/score")
+async def set_match_score(match_id: int, body: ScoreBody, _user=Depends(get_tg_user)):
+    """Record a game score (groups8 / score-based). Winner derived from scores."""
+    try:
+        return await q.record_match_score(match_id, body.score1, body.score2)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/rounds/swap")

@@ -6,11 +6,12 @@ import { CourtCard, type Slot } from '../components/CourtCard';
 import { ELabel } from '../lib/elegant';
 import { useSwapPlayers } from '../api/mutations';
 import { CourtSheet } from './CourtSheet';
-import type { Round, Match } from '../lib/types';
+import { groups8CourtTag, type Round, type Match } from '../lib/types';
 
 interface Props {
   tid: number;
   roundNum: number;
+  mode?: string;
   onBack: () => void;
 }
 
@@ -21,7 +22,8 @@ interface Resp {
 
 interface Selection { matchId: number; slot: Slot; }
 
-export function RoundDetailScreen({ tid, roundNum, onBack }: Props) {
+export function RoundDetailScreen({ tid, roundNum, mode, onBack }: Props) {
+  const isGroups8 = mode === 'groups8';
   const { data, isLoading } = useQuery<Resp>({
     queryKey: ['round', tid, roundNum],
     queryFn: () => api(`/api/tournaments/${tid}/rounds/${roundNum}`),
@@ -103,12 +105,14 @@ export function RoundDetailScreen({ tid, roundNum, onBack }: Props) {
           ))
         ) : (
           data?.matches.map((m) => {
-            const medal = m.court_num <= 3 ? (m.court_num as 1 | 2 | 3) : undefined;
+            const tag = isGroups8 ? groups8CourtTag(roundNum, m.court_num) : undefined;
+            const medal = !isGroups8 && m.court_num <= 3 ? (m.court_num as 1 | 2 | 3) : undefined;
             return (
               <div key={m.match_id} style={{ opacity: editMode ? 1 : 0.92 }}>
                 <CourtCard
                   match={m}
                   medal={medal}
+                  tag={tag}
                   readonly
                   editable={editMode}
                   selectedSlot={selected?.matchId === m.match_id ? selected.slot : null}
@@ -125,6 +129,7 @@ export function RoundDetailScreen({ tid, roundNum, onBack }: Props) {
         <CourtSheet
           match={winnerMatch}
           initialEditing
+          scoreMode={isGroups8}
           onClose={() => setWinnerMatch(null)}
         />
       )}

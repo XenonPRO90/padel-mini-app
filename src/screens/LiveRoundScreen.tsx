@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useNextRound, useUndoLastRound, useFinishTournament } from '../api/mutations';
+import { useNextRound, useUndoLastRound } from '../api/mutations';
 import { T } from '../lib/tokens';
 import { CourtCard } from '../components/CourtCard';
 import { MainCTA } from '../components/MainCTA';
 import { CourtSheet } from './CourtSheet';
 import { RosterSheet } from './RosterSheet';
 import { ELabel, EShareIcon, EPeopleIcon } from '../lib/elegant';
-import type { ActiveTournamentResponse, Match } from '../lib/types';
+import { groups8CourtTag, type ActiveTournamentResponse, type Match } from '../lib/types';
 
 // Telegram's WebApp.showConfirm (window.confirm is unreliable in the in-app
 // WebView); falls back to window.confirm outside Telegram.
@@ -34,7 +34,6 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const [rosterOpen, setRosterOpen] = useState(false);
   const nextRound = useNextRound();
   const undoRound = useUndoLastRound();
-  const finishT = useFinishTournament();
 
   if (isLoading) {
     return (
@@ -61,8 +60,14 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const allDone = total > 0 && recorded === total;
   const totalRounds = t.total_rounds ?? Math.max(round.round_num, 7);
   const canUndo = round.round_num > 1;
-  // Americano has a fixed number of rounds; the last one ends the tournament.
+  // Americano / groups8 have a fixed number of rounds; the last one ends it.
   const isLastRound = t.total_rounds != null && round.round_num >= t.total_rounds;
+  const isGroups8 = t.mode === 'groups8';
+  const phaseLabel = isGroups8
+    ? (round.round_num <= 3 ? `Групповой этап · тур ${round.round_num}`
+       : round.round_num === 4 ? 'Полуфиналы и плей-офф 5–8'
+       : 'Финалы')
+    : null;
 
   const onUndo = async () => {
     if (undoRound.isPending) return;
@@ -100,8 +105,8 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
           }}>ROUND {round.round_num} <span style={{ color: T.muted, fontWeight: 500 }}>/ {totalRounds}</span></div>
           <div style={{
             fontFamily: T.fontSerif, fontStyle: 'italic',
-            fontSize: 12, color: T.muted, marginTop: 2,
-          }}>{t.name}</div>
+            fontSize: 12, color: phaseLabel ? T.gold : T.muted, marginTop: 2,
+          }}>{phaseLabel ?? t.name}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button onClick={() => setRosterOpen(true)} aria-label="Roster" style={{
@@ -128,13 +133,15 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
         {round.matches.map((m) => {
-          const medal = m.court_num <= 3 ? (m.court_num as 1 | 2 | 3) : undefined;
+          const tag = isGroups8 ? groups8CourtTag(round.round_num, m.court_num) : undefined;
+          const medal = !isGroups8 && m.court_num <= 3 ? (m.court_num as 1 | 2 | 3) : undefined;
           return (
             <CourtCard
               key={m.match_id}
               match={m}
               onClick={() => setOpenMatch(m)}
               medal={medal}
+              tag={tag}
             />
           );
         })}
@@ -158,27 +165,18 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
             ))}
           </div>
         </div>
-        {isLastRound ? (
-          <MainCTA
-            label={
-              finishT.isPending ? 'Finishing…'
-              : allDone ? 'Завершить турнир'
-              : `Waiting · ${recorded}/${total}`
-            }
-            disabled={!allDone || finishT.isPending}
-            onClick={() => allDone && finishT.mutate(t.id)}
-          />
-        ) : (
-          <MainCTA
-            label={
-              nextRound.isPending ? 'Generating…'
-              : allDone ? 'Next round'
-              : `Waiting · ${recorded}/${total}`
-            }
-            disabled={!allDone || nextRound.isPending}
-            onClick={() => allDone && nextRound.mutate(t.id)}
-          />
-        )}
+        {/* Last round of americano/groups8: advance() finishes the tournament
+            (groups8 also computes final 1–8 placement there). */}
+        <MainCTA
+          label={
+            nextRound.isPending ? (isLastRound ? 'Finishing…' : 'Generating…')
+            : !allDone ? `Waiting · ${recorded}/${total}`
+            : isLastRound ? 'Завершить турнир'
+            : 'Next round'
+          }
+          disabled={!allDone || nextRound.isPending}
+          onClick={() => allDone && nextRound.mutate(t.id)}
+        />
         {canUndo && (
           <button onClick={onUndo} disabled={undoRound.isPending} style={{
             width: '100%', marginTop: 8, padding: '8px',
@@ -191,7 +189,7 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
       </div>
 
       {openMatch && (
-        <CourtSheet match={openMatch} onClose={() => setOpenMatch(null)} />
+        <CourtSheet match={openMatch} scoreMode={isGroups8} onClose={() => setOpenMatch(null)} />
       )}
       {rosterOpen && (
         <RosterSheet

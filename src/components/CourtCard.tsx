@@ -10,6 +10,7 @@ interface Props {
   onClick?: () => void;
   readonly?: boolean;
   medal?: 1 | 2 | 3;
+  tag?: string;  // bracket/phase label (groups8): "Группа A", "Финал", …
   // ─ Edit mode (archived round editing) ─
   editable?: boolean;
   // Slot (1..4) selected for a swap within THIS card, or null.
@@ -21,11 +22,12 @@ interface Props {
 // Elegant court card — emerald label-block on the left (КОРТ + number + ball),
 // score-card on the right with two team rows separated by a gold "vs".
 export function CourtCard({
-  match, onClick, readonly, medal,
+  match, onClick, readonly, medal, tag,
   editable, selectedSlot, onPlayerTap, onWinnerTap,
 }: Props) {
   const winner = match.winner;
   const recorded = winner !== null;
+  const hasScore = match.score1 != null && match.score2 != null;
   return (
     <div onClick={editable ? undefined : onClick} style={{
       display: 'flex', borderRadius: 18, overflow: 'hidden',
@@ -53,9 +55,9 @@ export function CourtCard({
         <div style={{ width: 22, height: 1, background: T.goldSoft, opacity: 0.6 }} />
         {medal ? <EMedal place={medal} size={20} /> : <EBallIcon size={14} color={T.goldSoft} />}
         <div style={{
-          fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 2,
-          color: T.goldSoft, opacity: 0.9,
-        }}>{match.points} {match.points === 1 ? 'PT' : 'PTS'}</div>
+          fontFamily: T.fontDisplay, fontSize: tag ? 8 : 9, letterSpacing: tag ? 1 : 2,
+          color: T.goldSoft, opacity: 0.95, lineHeight: 1.2, padding: '0 2px',
+        }}>{tag ? tag.toUpperCase() : `${match.points} ${match.points === 1 ? 'PT' : 'PTS'}`}</div>
         {recorded && (
           <div style={{
             position: 'absolute', top: 6, right: 6,
@@ -120,7 +122,9 @@ export function CourtCard({
               borderRadius: 999, padding: '3px 10px',
               fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600,
               letterSpacing: 1.5, textTransform: 'uppercase',
-            }}>✓ Team {winner} <span style={{ opacity: 0.75 }}>+{match.points}</span></span>
+            }}>{hasScore
+              ? <>✓ Team {winner} <span style={{ opacity: 0.85 }}>{match.score1}:{match.score2}</span></>
+              : <>✓ Team {winner} <span style={{ opacity: 0.75 }}>+{match.points}</span></>}</span>
           </div>
         )}
       </div>
