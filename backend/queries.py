@@ -1018,10 +1018,11 @@ def _winner_loser(m) -> tuple[tuple, tuple]:
 
 async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
     """Returns (rankedA, rankedB): each 4 team tuples best-first, ranked by
-    wins, then game difference, then games for, then entry order."""
+    wins, then head-to-head (among teams tied on wins — works for 2 or 3+ way
+    ties), then game difference, then games for, then entry order."""
     pairs = _groups8_pairs(ordered_player_ids)
     A, B = pairs[0:4], pairs[4:8]
-    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i}
+    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i, "beat": set()}
              for i, p in enumerate(pairs)}
     cur = await db.execute(
         """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, m.score1, m.score2
@@ -1038,15 +1039,19 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
             stats[k2]["gf"] += s2; stats[k2]["ga"] += s1
         if m["winner"] == 1 and k1 in stats:
             stats[k1]["wins"] += 1
+            stats[k1]["beat"].add(k2)
         elif m["winner"] == 2 and k2 in stats:
             stats[k2]["wins"] += 1
+            stats[k2]["beat"].add(k1)
 
     def rank(group):
-        ordered = sorted(
-            (stats[frozenset(p)] for p in group),
-            key=lambda s: (-s["wins"], -(s["gf"] - s["ga"]), -s["gf"], s["order"]),
-        )
-        return [s["team"] for s in ordered]
+        items = [stats[frozenset(p)] for p in group]
+        for s in items:
+            # head-to-head wins counted only among teams tied on overall wins
+            tied = [o for o in items if o is not s and o["wins"] == s["wins"]]
+            s["h2h"] = sum(1 for o in tied if frozenset(o["team"]) in s["beat"])
+        items.sort(key=lambda s: (-s["wins"], -s["h2h"], -(s["gf"] - s["ga"]), -s["gf"], s["order"]))
+        return [s["team"] for s in items]
 
     return rank(A), rank(B)
 
