@@ -330,8 +330,8 @@ function StepMode({ value, onChange }: { value: Mode; onChange: (v: Mode) => voi
       />
       <CardChoice
         active={value === 'groups8'}
-        title="8 команд · группы + плей-офф"
-        desc="16 игроков (8 пар), 2 группы по 4, round-robin → сетка за места 1–8. Счёт по геймам."
+        title="Mini Tournament · 8 teams"
+        desc="Group stage + play-off. 16 players (8 pairs), 2 groups of 4, round-robin → bracket for places 1–8. Score by games."
         onClick={() => onChange('groups8')}
       />
     </>
@@ -630,15 +630,15 @@ function StepPlayers({
 function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
   const modeLabel = s.mode === 'rotating' ? 'Rotating partners'
     : s.mode === 'americano' ? 'Team Americano'
-    : s.mode === 'groups8' ? '8 команд · группы + плей-офф' : 'Fixed pairs';
+    : s.mode === 'groups8' ? 'Mini Tournament · 8 teams' : 'Fixed pairs';
   const summary: { label: string; value: string }[] = s.mode === 'groups8'
     ? [
         { label: 'Name',    value: s.name },
         { label: 'Mode',    value: modeLabel },
-        { label: 'Groups',  value: '2 × 4 команды' },
+        { label: 'Groups',  value: '2 × 4 teams' },
         { label: 'Courts',  value: '4' },
-        { label: 'Stage',   value: 'Round-robin → плей-офф за места 1–8' },
-        { label: 'Scoring', value: 'Счёт по геймам' },
+        { label: 'Stage',   value: 'Round-robin → play-off for places 1–8' },
+        { label: 'Scoring', value: 'By games' },
         { label: 'Players', value: `${s.player_ids.length} / 16` },
       ]
     : s.mode === 'americano'
