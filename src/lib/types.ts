@@ -85,6 +85,7 @@ export interface ActiveTournamentResponse {
   tournament: Tournament | null;
   round?: Round & { matches: Match[]; matches_total: number; matches_recorded: number };
   leaderboard?: ScoredPlayer[];
+  pair_leaderboard?: ScoredPair[];
 }
 
 export interface HistoryItem extends Tournament {

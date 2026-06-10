@@ -66,11 +66,14 @@ async def tournaments_active(_user=Depends(get_tg_user)):
         }
 
     leaderboard = await q.get_leaderboard(t["id"])
-    return {
+    payload = {
         "tournament": t,
         "round": round_payload,
         "leaderboard": leaderboard,
     }
+    if t["mode"] in ("fixed", "americano", "groups8"):
+        payload["pair_leaderboard"] = await q.get_pair_leaderboard(t["id"])
+    return payload
 
 
 @app.get("/api/tournaments/history")

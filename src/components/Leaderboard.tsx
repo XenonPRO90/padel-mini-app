@@ -24,7 +24,7 @@ export function LeaderboardRow({ rank, player, max: _max }: { rank: number; play
           fontFamily: T.fontDisplay, fontSize: 15, fontWeight: isPodium ? 600 : 500, color: T.ink,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{player.name}</span>
-        <LevelBadge level={player.level} size="sm" />
+        {player.level && <LevelBadge level={player.level} size="sm" />}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
         <span style={{

@@ -28,11 +28,18 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
 
   if (!data?.tournament) return <HomeEmpty onCreate={onCreateTournament} />;
 
-  const { tournament: t, round, leaderboard } = data;
+  const { tournament: t, round, leaderboard, pair_leaderboard } = data;
   const total = round?.matches_total ?? 0;
   const recorded = round?.matches_recorded ?? 0;
   const allDone = total > 0 && recorded === total;
-  const max = leaderboard?.[0]?.points || 1;
+  // Pair-based modes show one row per pair; otherwise per player.
+  const lbRows = pair_leaderboard?.length
+    ? pair_leaderboard.map((p, i) => ({
+        id: -(i + 1), player_id: -(i + 1), name: `${p.name_a} & ${p.name_b}`,
+        level: '', side: 'both' as const, points: p.points, wins: p.wins, losses: p.losses,
+      }))
+    : (leaderboard ?? []);
+  const max = lbRows[0]?.points || 1;
   const totalRounds = t.total_rounds ?? Math.max(t.current_round, 7);
 
   return (
@@ -91,12 +98,12 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
           </EGoldFrame>
         )}
 
-        {leaderboard && leaderboard.length > 0 && (
+        {lbRows.length > 0 && (
           <div>
             <ELabel style={{ textAlign: 'center', marginBottom: 8 }}>Leaderboard · Top 3</ELabel>
             <EGoldFrame>
               <div style={{ padding: '4px 0' }}>
-                {leaderboard.slice(0, 3).map((p, i) => (
+                {lbRows.slice(0, 3).map((p, i) => (
                   <LeaderboardRow key={p.player_id} rank={i + 1} player={p} max={max} />
                 ))}
               </div>

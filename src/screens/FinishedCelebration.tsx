@@ -43,10 +43,10 @@ export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboar
   const posterRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
 
-  // For fixed-pair tournaments collapse partners into one row — otherwise
-  // both members of the winning pair get their own gold medal which is
-  // semantically wrong (it's one pair sharing 1st place).
-  const rows: PosterRow[] = t.mode === 'fixed' && pairLeaderboard?.length
+  // For pair-based tournaments (fixed, americano, groups8) collapse partners
+  // into one row — otherwise both members of the winning pair get their own
+  // gold medal which is semantically wrong (it's one pair sharing the place).
+  const rows: PosterRow[] = pairLeaderboard?.length
     ? pairLeaderboard.map((pair, i) => ({
         key: `pair-${i}`,
         name: `${pair.name_a} & ${pair.name_b}`,
