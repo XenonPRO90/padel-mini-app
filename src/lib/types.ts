@@ -53,13 +53,14 @@ export interface Tournament {
   id: number;
   name: string;
   num_courts: number;
-  mode: 'fixed' | 'rotating';
+  mode: 'fixed' | 'rotating' | 'americano';
   initial_order: 'keep' | 'random';
   initial_points: number;
   start_round: number;
   status: 'setup' | 'active' | 'finished';
   current_round: number;
   created_at: string;
+  total_rounds?: number | null;  // known up-front for americano (round-robin)
 }
 
 export interface ScoredPair {

@@ -13,10 +13,12 @@ interface Props {
   onClose: () => void;
 }
 
+type Mode = 'rotating' | 'fixed' | 'americano';
+
 interface State {
   name: string;
   num_courts: number;
-  mode: 'rotating' | 'fixed';
+  mode: Mode;
   initial_order: 'keep' | 'random';
   initial_points: number;
   start_round: number;
@@ -25,7 +27,6 @@ interface State {
   player_ids: number[];
 }
 
-const TOTAL_STEPS = 9;
 
 export function WizardScreen({ onClose }: Props) {
   const today = new Date();
@@ -47,8 +48,14 @@ export function WizardScreen({ onClose }: Props) {
 
   const create = useCreateTournament();
 
-  const next = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1));
-  const back = () => (step === 1 ? onClose() : setStep((s) => s - 1));
+  // Americano needs only name / mode / order / players / confirm — points and
+  // court count are derived, so those steps are skipped.
+  const STEPS = s.mode === 'americano' ? [1, 3, 4, 8, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const stepIdx = Math.max(0, STEPS.indexOf(step));
+  const isLastStep = step === STEPS[STEPS.length - 1];
+
+  const next = () => setStep(STEPS[Math.min(STEPS.length - 1, stepIdx + 1)]);
+  const back = () => (stepIdx <= 0 ? onClose() : setStep(STEPS[stepIdx - 1]));
 
   const update = <K extends keyof State>(k: K, v: State[K]) =>
     setS((prev) => ({ ...prev, [k]: v }));
@@ -80,11 +87,13 @@ export function WizardScreen({ onClose }: Props) {
   };
 
   const playersDivisible = s.player_ids.length > 0 && s.player_ids.length % 4 === 0;
-  const enoughForCourts = s.player_ids.length >= s.num_courts * 4;
+  // Americano: courts are derived (pairs/2); just need ≥ 4 pairs (8 players).
+  const minPlayers = s.mode === 'americano' ? 8 : s.num_courts * 4;
+  const enoughForCourts = s.player_ids.length >= minPlayers;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Header step={step} onBack={back} />
+      <Header pos={stepIdx + 1} total={STEPS.length} onBack={back} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 16px' }}>
         {step === 1 && <StepName value={s.name} onChange={(v) => update('name', v)} />}
         {step === 2 && <StepCourts value={s.num_courts} onChange={(v) => update('num_courts', v)} />}
@@ -117,7 +126,7 @@ export function WizardScreen({ onClose }: Props) {
           onChange={(v) => update('player_ids', v)}
         />}
         {step === 9 && <StepConfirm s={s} cp={ensureCourtPoints(s.num_courts)} />}
-        {step === 9 && s.mode === 'fixed' && s.player_ids.length > 0 && (
+        {step === 9 && (s.mode === 'fixed' || s.mode === 'americano') && s.player_ids.length > 0 && (
           <PairsPreview playerIds={s.player_ids} />
         )}
       </div>
@@ -129,9 +138,13 @@ export function WizardScreen({ onClose }: Props) {
           <ValidationBanner text="Need a multiple of 4 players" />
         )}
         {step === 8 && playersDivisible && !enoughForCourts && (
-          <ValidationBanner text={`Need at least ${s.num_courts * 4} players for ${s.num_courts} courts`} />
+          <ValidationBanner text={
+            s.mode === 'americano'
+              ? 'Need at least 8 players (4 pairs)'
+              : `Need at least ${s.num_courts * 4} players for ${s.num_courts} courts`
+          } />
         )}
-        {step < TOTAL_STEPS ? (
+        {!isLastStep ? (
           <MainCTA
             label="Continue"
             disabled={
@@ -152,7 +165,7 @@ export function WizardScreen({ onClose }: Props) {
   );
 }
 
-function Header({ step, onBack }: { step: number; onBack: () => void }) {
+function Header({ pos, total, onBack }: { pos: number; total: number; onBack: () => void }) {
   return (
     <div style={{
       padding: '10px 16px 14px',
@@ -167,15 +180,15 @@ function Header({ step, onBack }: { step: number; onBack: () => void }) {
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600,
             color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
-          }}>Step {step} of {TOTAL_STEPS}</div>
+          }}>Step {pos} of {total}</div>
         </div>
         <div style={{ width: 60 }} />
       </div>
       {/* Gold-dot progress */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+        {Array.from({ length: total }).map((_, i) => {
           const n = i + 1;
-          const filled = n <= step;
+          const filled = n <= pos;
           return (
             <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{
@@ -184,11 +197,11 @@ function Header({ step, onBack }: { step: number; onBack: () => void }) {
                 border: `1px solid ${filled ? T.gold : T.rule}`,
                 flexShrink: 0,
               }} />
-              {i < TOTAL_STEPS - 1 && (
+              {i < total - 1 && (
                 <div style={{
                   flex: 1, height: 1,
-                  background: n < step ? T.gold : T.rule,
-                  opacity: n < step ? 1 : 0.4,
+                  background: n < pos ? T.gold : T.rule,
+                  opacity: n < pos ? 1 : 0.4,
                 }} />
               )}
             </div>
@@ -289,7 +302,7 @@ function CardChoice({
   );
 }
 
-function StepMode({ value, onChange }: { value: 'rotating' | 'fixed'; onChange: (v: 'rotating' | 'fixed') => void }) {
+function StepMode({ value, onChange }: { value: Mode; onChange: (v: Mode) => void }) {
   return (
     <>
       <StepTitle title="Pairing Mode" subtitle="How the matches unfold" />
@@ -304,6 +317,12 @@ function StepMode({ value, onChange }: { value: 'rotating' | 'fixed'; onChange: 
         title="Fixed Pairs"
         desc="Same partner all tournament."
         onClick={() => onChange('fixed')}
+      />
+      <CardChoice
+        active={value === 'americano'}
+        title="Team Americano"
+        desc="Fixed pairs, round-robin — every pair plays every other once. 1 win = 1 point."
+        onClick={() => onChange('americano')}
       />
     </>
   );
@@ -458,10 +477,12 @@ const PAIR_COLORS = ['#2f4a3a', '#a6864d', '#8a6a35', '#1d3327', '#7a4a20', '#5a
 function StepPlayers({
   mode, selected, onChange,
 }: {
-  mode: 'rotating' | 'fixed';
+  mode: Mode;
   selected: number[];
   onChange: (v: number[]) => void;
 }) {
+  // Fixed pairs and americano both pair adjacent picks; show the pair UI.
+  const pairMode = mode === 'fixed' || mode === 'americano';
   const { data, isLoading } = useQuery<{ items: Player[] }>({
     queryKey: ['players'],
     queryFn: () => api('/api/players'),
@@ -508,13 +529,13 @@ function StepPlayers({
           fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 1.5,
           textTransform: 'uppercase',
         }}>
-          {mode === 'fixed'
+          {pairMode
             ? `${pairCount} pair${pairCount === 1 ? '' : 's'}`
             : `÷ 4 · ${Math.floor(selected.length / 4)} courts`}
         </div>
       </div>
 
-      {mode === 'fixed' && (
+      {pairMode && (
         <div style={{
           fontFamily: T.fontSerif, fontStyle: 'italic',
           fontSize: 13, color: T.muted, padding: '0 4px 12px',
@@ -549,7 +570,7 @@ function StepPlayers({
               const order = isSelected ? selected.indexOf(p.id) + 1 : null;
               const pairIdx = isSelected ? Math.floor((order! - 1) / 2) : -1;
               const pairColor = pairIdx >= 0 ? PAIR_COLORS[pairIdx % PAIR_COLORS.length] : '';
-              const isFixedSelected = mode === 'fixed' && isSelected;
+              const isFixedSelected = pairMode && isSelected;
               return (
                 <div
                   key={p.id}
@@ -597,16 +618,29 @@ function StepPlayers({
 }
 
 function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
-  const summary: { label: string; value: string }[] = [
-    { label: 'Name',            value: s.name },
-    { label: 'Courts',          value: String(s.num_courts) },
-    { label: 'Mode',            value: s.mode === 'rotating' ? 'Rotating partners' : 'Fixed pairs' },
-    { label: 'Order',           value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
-    { label: 'Initial points',  value: `${s.initial_points} pt` },
-    { label: 'Start round',     value: `Round ${s.start_round}` },
-    { label: 'Court points',    value: Array.from({ length: s.num_courts }, (_, i) => cp[i + 1]).join(' / ') },
-    { label: 'Players',         value: String(s.player_ids.length) },
-  ];
+  const modeLabel = s.mode === 'rotating' ? 'Rotating partners'
+    : s.mode === 'americano' ? 'Team Americano' : 'Fixed pairs';
+  const summary: { label: string; value: string }[] = s.mode === 'americano'
+    ? [
+        { label: 'Name',    value: s.name },
+        { label: 'Mode',    value: modeLabel },
+        { label: 'Order',   value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
+        { label: 'Pairs',   value: String(Math.floor(s.player_ids.length / 2)) },
+        { label: 'Courts',  value: String(Math.floor(s.player_ids.length / 4)) },
+        { label: 'Rounds',  value: String(Math.max(0, Math.floor(s.player_ids.length / 2) - 1)) },
+        { label: 'Scoring', value: '1 point per win' },
+        { label: 'Players', value: String(s.player_ids.length) },
+      ]
+    : [
+        { label: 'Name',            value: s.name },
+        { label: 'Courts',          value: String(s.num_courts) },
+        { label: 'Mode',            value: modeLabel },
+        { label: 'Order',           value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
+        { label: 'Initial points',  value: `${s.initial_points} pt` },
+        { label: 'Start round',     value: `Round ${s.start_round}` },
+        { label: 'Court points',    value: Array.from({ length: s.num_courts }, (_, i) => cp[i + 1]).join(' / ') },
+        { label: 'Players',         value: String(s.player_ids.length) },
+      ];
   return (
     <>
       <StepTitle title="Ready to Begin" subtitle="Review and start the tournament" />

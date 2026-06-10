@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useNextRound, useUndoLastRound } from '../api/mutations';
+import { useNextRound, useUndoLastRound, useFinishTournament } from '../api/mutations';
 import { T } from '../lib/tokens';
 import { CourtCard } from '../components/CourtCard';
 import { MainCTA } from '../components/MainCTA';
@@ -34,6 +34,7 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const [rosterOpen, setRosterOpen] = useState(false);
   const nextRound = useNextRound();
   const undoRound = useUndoLastRound();
+  const finishT = useFinishTournament();
 
   if (isLoading) {
     return (
@@ -58,8 +59,10 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const total = round.matches_total;
   const recorded = round.matches_recorded;
   const allDone = total > 0 && recorded === total;
-  const totalRounds = Math.max(round.round_num, 7);
+  const totalRounds = t.total_rounds ?? Math.max(round.round_num, 7);
   const canUndo = round.round_num > 1;
+  // Americano has a fixed number of rounds; the last one ends the tournament.
+  const isLastRound = t.total_rounds != null && round.round_num >= t.total_rounds;
 
   const onUndo = async () => {
     if (undoRound.isPending) return;
@@ -155,15 +158,27 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
             ))}
           </div>
         </div>
-        <MainCTA
-          label={
-            nextRound.isPending ? 'Generating…'
-            : allDone ? 'Next round'
-            : `Waiting · ${recorded}/${total}`
-          }
-          disabled={!allDone || nextRound.isPending}
-          onClick={() => allDone && nextRound.mutate(t.id)}
-        />
+        {isLastRound ? (
+          <MainCTA
+            label={
+              finishT.isPending ? 'Finishing…'
+              : allDone ? 'Завершить турнир'
+              : `Waiting · ${recorded}/${total}`
+            }
+            disabled={!allDone || finishT.isPending}
+            onClick={() => allDone && finishT.mutate(t.id)}
+          />
+        ) : (
+          <MainCTA
+            label={
+              nextRound.isPending ? 'Generating…'
+              : allDone ? 'Next round'
+              : `Waiting · ${recorded}/${total}`
+            }
+            disabled={!allDone || nextRound.isPending}
+            onClick={() => allDone && nextRound.mutate(t.id)}
+          />
+        )}
         {canUndo && (
           <button onClick={onUndo} disabled={undoRound.isPending} style={{
             width: '100%', marginTop: 8, padding: '8px',

@@ -44,6 +44,10 @@ async def tournaments_active(_user=Depends(get_tg_user)):
     if not t:
         return {"tournament": None}
 
+    if t.get("mode") == "americano":
+        tp = await q.get_tournament_players(t["id"])
+        t["total_rounds"] = q.americano_total_rounds(len(tp))
+
     round_obj = await q.get_current_round(t["id"])
     round_payload = None
     if round_obj:
@@ -85,11 +89,14 @@ async def tournament_detail(tid: int, _user=Depends(get_tg_user)):
         raise HTTPException(404, "Tournament not found")
     rounds = await q.get_tournament_rounds(tid)
     leaderboard = await q.get_leaderboard(tid)
+    if t.get("mode") == "americano":
+        tp = await q.get_tournament_players(tid)
+        t["total_rounds"] = q.americano_total_rounds(len(tp))
     payload = {"tournament": t, "rounds": rounds, "leaderboard": leaderboard}
-    # For fixed-pair tournaments also return a pair-level leaderboard
-    # (one row per pair instead of one per player) so the UI can show
-    # places by pair rather than duplicating medals across partners.
-    if t["mode"] == "fixed":
+    # For fixed-pair tournaments (incl. americano) also return a pair-level
+    # leaderboard (one row per pair instead of one per player) so the UI can
+    # show places by pair rather than duplicating medals across partners.
+    if t["mode"] in ("fixed", "americano"):
         payload["pair_leaderboard"] = await q.get_pair_leaderboard(tid)
     return payload
 

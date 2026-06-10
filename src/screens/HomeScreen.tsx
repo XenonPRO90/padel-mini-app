@@ -33,7 +33,7 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
   const recorded = round?.matches_recorded ?? 0;
   const allDone = total > 0 && recorded === total;
   const max = leaderboard?.[0]?.points || 1;
-  const totalRounds = Math.max(t.current_round, 7);
+  const totalRounds = t.total_rounds ?? Math.max(t.current_round, 7);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

@@ -598,6 +598,40 @@ async def advance_to_next_round(tid: int):
         cur = await db.execute("SELECT * FROM tournaments WHERE id=?", (tid,))
         t = row_to_dict(await cur.fetchone())
 
+        # Americano: schedule is a fixed round-robin, not result-driven. Reveal
+        # the next pre-determined round (or finish once every pair has met).
+        if t["mode"] == "americano":
+            cur = await db.execute(
+                "SELECT player_id FROM tournament_players WHERE tournament_id=? ORDER BY position",
+                (tid,),
+            )
+            ordered_ids = [r["player_id"] for r in await cur.fetchall()]
+            total = americano_total_rounds(len(ordered_ids))
+            new_round_num = round_obj["round_num"] + 1
+
+            await db.execute("UPDATE rounds SET status='done' WHERE id=?", (round_obj["id"],))
+
+            if new_round_num > total:
+                # All pairs have played each other — end the tournament.
+                await db.execute("UPDATE tournaments SET status='finished' WHERE id=?", (tid,))
+                await db.commit()
+                return {"ok": True, "finished": True}
+
+            cur = await db.execute(
+                "INSERT INTO rounds(tournament_id, round_num) VALUES(?,?)", (tid, new_round_num)
+            )
+            new_round_id = cur.lastrowid
+            for c in _americano_round_courts(ordered_ids, new_round_num):
+                t1, t2 = c["team1"], c["team2"]
+                await db.execute(
+                    "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
+                    (new_round_id, c["court_num"],
+                     t1[0]["player_id"], t1[1]["player_id"], t2[0]["player_id"], t2[1]["player_id"]),
+                )
+            await db.execute("UPDATE tournaments SET current_round=? WHERE id=?", (new_round_num, tid))
+            await db.commit()
+            return {"ok": True, "new_round_num": new_round_num}
+
         # Move players up/down by their match outcome
         match_dicts = []
         for m in matches:
@@ -822,6 +856,48 @@ async def delete_player(pid: int):
     return {"ok": True}
 
 
+# ─── Team Americano (fixed-pair round-robin) ──────────────
+
+def _round_robin_pairs(n: int) -> list[list[tuple[int, int]]]:
+    """Circle-method round-robin over n teams (n even, >= 2). Returns n-1
+    rounds, each a list of (teamA_idx, teamB_idx) with 0-based team indices —
+    every team meets every other exactly once."""
+    if n < 2 or n % 2 != 0:
+        raise ValueError("round-robin needs an even number of teams >= 2")
+    rot = list(range(1, n))
+    rounds = []
+    for _ in range(n - 1):
+        order = [0] + rot
+        rounds.append([(order[i], order[n - 1 - i]) for i in range(n // 2)])
+        rot = [rot[-1]] + rot[:-1]  # rotate all but the fixed team 0
+    return rounds
+
+
+def americano_total_rounds(player_count: int) -> int:
+    """Number of rounds in a fixed-pair americano with `player_count` players."""
+    return max(0, (player_count // 2) - 1)
+
+
+def _americano_round_courts(ordered_player_ids: list[int], round_num: int) -> list[dict]:
+    """Courts for a 1-based round of a fixed-pair americano. Pairs are adjacent
+    positions (p[0]&p[1], p[2]&p[3], ...); one match per court. Deterministic
+    from the player order, so it can be regenerated on each advance."""
+    n_pairs = len(ordered_player_ids) // 2
+    schedule = _round_robin_pairs(n_pairs)
+    if round_num < 1 or round_num > len(schedule):
+        return []
+    pairs = [(ordered_player_ids[2 * k], ordered_player_ids[2 * k + 1]) for k in range(n_pairs)]
+    out = []
+    for ci, (a, b) in enumerate(schedule[round_num - 1]):
+        pa, pb = pairs[a], pairs[b]
+        out.append({
+            "court_num": ci + 1,
+            "team1": [{"player_id": pa[0]}, {"player_id": pa[1]}],
+            "team2": [{"player_id": pb[0]}, {"player_id": pb[1]}],
+        })
+    return out
+
+
 # ─── Tournament create ────────────────────────────────────
 
 async def create_tournament(
@@ -842,16 +918,28 @@ async def create_tournament(
     from .pairing import assign_courts
     import random
 
-    if mode not in ("rotating", "fixed"):
-        raise ValueError("mode must be 'rotating' or 'fixed'")
+    if mode not in ("rotating", "fixed", "americano"):
+        raise ValueError("mode must be 'rotating', 'fixed' or 'americano'")
     if initial_order not in ("keep", "random"):
         raise ValueError("initial_order must be 'keep' or 'random'")
-    if num_courts < 1 or num_courts > 8:
-        raise ValueError("num_courts out of range")
     if len(player_ids) % 4 != 0:
         raise ValueError("player count must be divisible by 4")
-    if len(player_ids) // 4 < num_courts:
-        raise ValueError("Not enough players for the requested number of courts")
+
+    if mode == "americano":
+        # Fixed-pair round-robin: pairs = players/2 (even), one match per court
+        # each round, every pair meets every other once. Always 1 point per win,
+        # so court points / start_round don't apply.
+        num_courts = len(player_ids) // 4
+        court_points = {}
+        initial_points = 1
+        start_round = 10 ** 9
+        if num_courts < 1:
+            raise ValueError("Need at least 4 players (2 pairs) for americano")
+    else:
+        if num_courts < 1 or num_courts > 8:
+            raise ValueError("num_courts out of range")
+        if len(player_ids) // 4 < num_courts:
+            raise ValueError("Not enough players for the requested number of courts")
 
     # Apply ordering
     ordered = list(player_ids)
@@ -905,7 +993,10 @@ async def create_tournament(
 
     # Build round-1 matches outside the transaction (assign_courts reads players)
     tp = await get_tournament_players(tid)
-    if mode == "fixed":
+    if mode == "americano":
+        ordered_ids = [p["player_id"] for p in sorted(tp, key=lambda x: x["position"])]
+        courts_out = _americano_round_courts(ordered_ids, 1)
+    elif mode == "fixed":
         sorted_players = sorted(tp, key=lambda x: (x["current_court"] or 999, x["position"]))
         courts_out = []
         for ci in range(num_courts):
