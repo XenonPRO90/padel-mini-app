@@ -21,6 +21,7 @@ interface State {
   initial_points: number;
   start_round: number;
   court_points: Record<number, number>;
+  court_labels: Record<number, string>;  // court_num -> display label (e.g. real court number)
   player_ids: number[];
 }
 
@@ -40,6 +41,7 @@ export function WizardScreen({ onClose }: Props) {
     initial_points: 1,
     start_round: 4,
     court_points: { 1: 3, 2: 2, 3: 1, 4: 1 },
+    court_labels: {},
     player_ids: [],
   });
 
@@ -63,7 +65,14 @@ export function WizardScreen({ onClose }: Props) {
   const onSubmit = async () => {
     try {
       const cp = ensureCourtPoints(s.num_courts);
-      await create.mutateAsync({ ...s, court_points: cp });
+      // Only send labels for the courts that exist, trimmed; backend drops
+      // labels equal to the court number.
+      const labels: Record<number, string> = {};
+      for (let i = 1; i <= s.num_courts; i++) {
+        const v = (s.court_labels[i] ?? '').trim();
+        if (v) labels[i] = v;
+      }
+      await create.mutateAsync({ ...s, court_points: cp, court_labels: labels });
       onClose();
     } catch (e) {
       alert((e as Error).message);
@@ -99,6 +108,8 @@ export function WizardScreen({ onClose }: Props) {
           courts={s.num_courts}
           value={ensureCourtPoints(s.num_courts)}
           onChange={(v) => update('court_points', v)}
+          labels={s.court_labels}
+          onChangeLabels={(v) => update('court_labels', v)}
         />}
         {step === 8 && <StepPlayers
           mode={s.mode}
@@ -359,8 +370,9 @@ function StepNum({ title, caption, value, onChange, min, max }: {
   );
 }
 
-function StepCourtPoints({ courts, value, onChange }: {
+function StepCourtPoints({ courts, value, onChange, labels, onChangeLabels }: {
   courts: number; value: Record<number, number>; onChange: (v: Record<number, number>) => void;
+  labels: Record<number, string>; onChangeLabels: (v: Record<number, string>) => void;
 }) {
   const courtLabel = (n: number): string => {
     if (n === 1) return 'Centre Court';
@@ -388,12 +400,26 @@ function StepCourtPoints({ courts, value, onChange }: {
               <div style={{ fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 2 }}>КОРТ</div>
               <div style={{
                 fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 600, lineHeight: 1,
-              }}>{cn}</div>
+              }}>{(labels[cn] ?? '').trim() || cn}</div>
             </div>
-            <div style={{
-              fontFamily: T.fontSerif, fontStyle: 'italic',
-              fontSize: 14, color: T.muted,
-            }}>{courtLabel(cn)}</div>
+            <div>
+              <div style={{
+                fontFamily: T.fontSerif, fontStyle: 'italic',
+                fontSize: 14, color: T.muted, marginBottom: 6,
+              }}>{courtLabel(cn)}</div>
+              <input
+                value={labels[cn] ?? ''}
+                onChange={(e) => onChangeLabels({ ...labels, [cn]: e.target.value })}
+                placeholder={`№ на табло (${cn})`}
+                maxLength={6}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '6px 8px', borderRadius: 8,
+                  border: `1px solid ${T.paperEdge}`, background: T.cream,
+                  fontFamily: T.fontDisplay, fontSize: 13, color: T.ink,
+                }}
+              />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <button
                 onClick={() => onChange({ ...value, [cn]: Math.max(0, (value[cn] ?? 1) - 1) })}

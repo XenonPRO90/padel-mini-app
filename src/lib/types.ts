@@ -27,10 +27,16 @@ export interface MatchPlayer {
 export interface Match {
   match_id: number;
   court_num: number;
+  court_label?: string | null;  // display label; falls back to court_num
   winner: 1 | 2 | null;
   team1: MatchPlayer[];
   team2: MatchPlayer[];
   points: number;
+}
+
+// Court display: custom label if set, otherwise the internal number.
+export function courtDisplay(m: { court_label?: string | null; court_num: number }): string {
+  return (m.court_label ?? '').toString().trim() || String(m.court_num);
 }
 
 export interface Round {

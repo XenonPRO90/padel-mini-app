@@ -1,7 +1,7 @@
 import { T } from '../lib/tokens';
 import { LevelBadge } from './Badges';
 import { EMedal, EBallIcon } from '../lib/elegant';
-import type { Match } from '../lib/types';
+import { courtDisplay, type Match } from '../lib/types';
 
 export type Slot = 1 | 2 | 3 | 4;
 
@@ -49,7 +49,7 @@ export function CourtCard({
         }}>КОРТ</div>
         <div style={{
           fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 700, lineHeight: 1,
-        }}>{match.court_num}</div>
+        }}>{courtDisplay(match)}</div>
         <div style={{ width: 22, height: 1, background: T.goldSoft, opacity: 0.6 }} />
         {medal ? <EMedal place={medal} size={20} /> : <EBallIcon size={14} color={T.goldSoft} />}
         <div style={{

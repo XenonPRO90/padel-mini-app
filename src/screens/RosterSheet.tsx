@@ -6,7 +6,7 @@ import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { ELabel, EBtn } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
-import type { Match, MatchPlayer, Player } from '../lib/types';
+import { courtDisplay, type Match, type MatchPlayer, type Player } from '../lib/types';
 
 interface Props {
   tid: number;
@@ -90,7 +90,7 @@ export function RosterSheet({ tid, roundMatches, onClose }: Props) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 4px' }}>
           {roundMatches.map((m) => (
             <div key={m.match_id} style={{ marginBottom: 14 }}>
-              <ELabel style={{ marginBottom: 6, paddingLeft: 4 }}>Court {m.court_num}</ELabel>
+              <ELabel style={{ marginBottom: 6, paddingLeft: 4 }}>Court {courtDisplay(m)}</ELabel>
               <div style={{
                 background: T.cream, border: `1px solid ${T.paperEdge}`,
                 borderRadius: 14, overflow: 'hidden',

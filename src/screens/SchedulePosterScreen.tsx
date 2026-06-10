@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { T } from '../lib/tokens';
 import { MainCTA, SecondaryCTA } from '../components/MainCTA';
-import type { ActiveTournamentResponse, Match, MatchPlayer } from '../lib/types';
+import { courtDisplay, type ActiveTournamentResponse, type Match, type MatchPlayer } from '../lib/types';
 
 interface Props {
   onClose: () => void;
@@ -228,7 +228,7 @@ function CourtRow({ match }: { match: Match }) {
         <div style={{
           fontFamily: P.serif, fontSize: 30, fontWeight: 700, lineHeight: 1,
           marginTop: 2,
-        }}>{match.court_num}</div>
+        }}>{courtDisplay(match)}</div>
         <div style={{ marginTop: 6 }}>
           <TennisBallSmall />
         </div>

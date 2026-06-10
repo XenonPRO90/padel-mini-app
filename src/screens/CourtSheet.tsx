@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { useSetWinner } from '../api/mutations';
-import type { Match, MatchPlayer } from '../lib/types';
+import { courtDisplay, type Match, type MatchPlayer } from '../lib/types';
 import { Avatar } from './PlayersScreen';
 import { ELabel, EBtn } from '../lib/elegant';
 
@@ -77,7 +77,7 @@ export function CourtSheet({ match, onClose, initialEditing }: Props) {
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 44, fontWeight: 600,
             lineHeight: 1, margin: '4px 0',
-          }}>{match.court_num}</div>
+          }}>{courtDisplay(match)}</div>
           <div style={{
             fontFamily: T.fontSerif, fontSize: 13, fontStyle: 'italic',
             color: T.goldSoft,

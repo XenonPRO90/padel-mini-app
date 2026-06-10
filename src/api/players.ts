@@ -59,6 +59,7 @@ export function useCreateTournament() {
       initial_points: number;
       start_round: number;
       court_points: Record<number, number>;
+      court_labels?: Record<number, string>;
       player_ids: number[];
     }) =>
       api<{ tournament_id: number }>('/api/tournaments', {

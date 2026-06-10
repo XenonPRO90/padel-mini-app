@@ -84,12 +84,14 @@ async def get_round_matches(round_id: int):
     """Returns matches with player names and levels resolved, structured for UI."""
     async with conn() as db:
         cur = await db.execute(
-            """SELECT m.id, m.court_num, m.winner,
+            """SELECT m.id, m.court_num, m.winner, cp.label AS court_label,
                       m.p1, p1.name AS p1_name, p1.level AS p1_level, p1.side AS p1_side,
                       m.p2, p2.name AS p2_name, p2.level AS p2_level, p2.side AS p2_side,
                       m.p3, p3.name AS p3_name, p3.level AS p3_level, p3.side AS p3_side,
                       m.p4, p4.name AS p4_name, p4.level AS p4_level, p4.side AS p4_side
                FROM matches m
+               JOIN rounds r ON r.id=m.round_id
+               LEFT JOIN court_points cp ON cp.tournament_id=r.tournament_id AND cp.court_num=m.court_num
                JOIN players p1 ON p1.id=m.p1
                JOIN players p2 ON p2.id=m.p2
                JOIN players p3 ON p3.id=m.p3
@@ -104,6 +106,7 @@ async def get_round_matches(round_id: int):
         out.append({
             "match_id": r["id"],
             "court_num": r["court_num"],
+            "court_label": r["court_label"],
             "winner": r["winner"],
             "team1": [
                 {"player_id": r["p1"], "name": r["p1_name"], "level": r["p1_level"], "side": r["p1_side"]},
@@ -830,8 +833,12 @@ async def create_tournament(
     start_round: int,
     court_points: dict[int, int],
     player_ids: list[int],
+    court_labels: dict[int, str] | None = None,
 ) -> dict:
-    """Create a new tournament with players, generate round 1, and activate it."""
+    """Create a new tournament with players, generate round 1, and activate it.
+
+    `court_labels` optionally maps court_num -> display label (e.g. the real
+    club court number). Internal court_num still drives ranking/movement."""
     from .pairing import assign_courts
     import random
 
@@ -871,11 +878,18 @@ async def create_tournament(
                     (tid, pid, pos, court),
                 )
 
-            # court points
+            # court points (+ optional display labels)
+            labels = court_labels or {}
             for cn, pts in court_points.items():
+                raw = labels.get(cn) if isinstance(labels, dict) else None
+                label = (str(raw).strip() or None) if raw is not None else None
+                # Don't store a label that's just the court's own number — the UI
+                # falls back to court_num anyway, keeps data clean.
+                if label == str(cn):
+                    label = None
                 await db.execute(
-                    "INSERT INTO court_points(tournament_id, court_num, points) VALUES(?,?,?)",
-                    (tid, cn, pts),
+                    "INSERT INTO court_points(tournament_id, court_num, points, label) VALUES(?,?,?,?)",
+                    (tid, cn, pts, label),
                 )
 
             # round 1
@@ -969,7 +983,7 @@ async def _share_text_schedule(t: dict) -> str:
         n2 = " & ".join(p["name"] for p in m["team2"])
         l1 = "/".join(p["level"] for p in m["team1"])
         l2 = "/".join(p["level"] for p in m["team2"])
-        lines.append(f"🏟 КОРТ {m['court_num']}")
+        lines.append(f"🏟 КОРТ {m.get('court_label') or m['court_num']}")
         lines.append(f"  {n1}  ({l1})")
         lines.append(f"  vs")
         lines.append(f"  {n2}  ({l2})")
