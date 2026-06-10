@@ -1,6 +1,6 @@
 // Tiny fetch wrapper. Adds X-Init-Data header (validated by backend in prod).
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001';
+const API_BASE = 'https://padel-api-dev.cryptostart.my'; // dev branch: hardcoded dev API (Vercel env overrides .env, so pin it here)
 
 function getInitData(): string {
   return window.Telegram?.WebApp?.initData || '';
