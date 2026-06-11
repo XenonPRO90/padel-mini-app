@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useNextRound, useFinishTournament } from '../api/mutations';
+import { useMe } from '../api/me';
+import { JoinBanner } from './JoinBanner';
 import { T } from '../lib/tokens';
 import { Ring } from '../components/Ring';
 import { LeaderboardRow } from '../components/Leaderboard';
@@ -22,11 +24,13 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
   });
   const nextRound = useNextRound();
   const finishTour = useFinishTournament();
+  const { data: me } = useMe();
+  const isAdmin = !!me?.is_admin;
 
   if (isLoading) return <HomeSkeleton />;
   if (error) return <HomeError onRetry={() => refetch()} />;
 
-  if (!data?.tournament) return <HomeEmpty onCreate={onCreateTournament} />;
+  if (!data?.tournament) return <HomeEmpty onCreate={onCreateTournament} isAdmin={isAdmin} />;
 
   const { tournament: t, round, leaderboard, pair_leaderboard } = data;
   const total = round?.matches_total ?? 0;
@@ -45,6 +49,7 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, padding: '4px 16px 16px', overflowY: 'auto' }}>
+        <JoinBanner />
         <EHero title={t.name.toUpperCase()} compact />
         <EDivider />
 
@@ -116,46 +121,49 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
         </div>
       </div>
 
-      <div style={{
-        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
-        borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
-      }}>
-        <MainCTA
-          label={
-            nextRound.isPending ? 'Generating…'
-            : allDone ? 'Next round'
-            : `Waiting · ${recorded}/${total}`
-          }
-          disabled={!allDone || nextRound.isPending}
-          onClick={() => allDone && nextRound.mutate(t.id)}
-        />
-        <button
-          onClick={async () => {
-            const ok = window.Telegram?.WebApp ? true : confirm('End tournament now?');
-            if (!ok) return;
-            try {
-              await finishTour.mutateAsync(t.id);
-              onTournamentFinished?.(t.id);
-            } catch (e) { alert((e as Error).message); }
-          }}
-          disabled={finishTour.isPending}
-          style={{
-            background: 'transparent', border: 'none', color: T.burgundy,
-            fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 2,
-            width: '100%', padding: 12, textTransform: 'uppercase',
-            cursor: finishTour.isPending ? 'wait' : 'pointer',
-          }}
-        >{finishTour.isPending ? 'Finishing…' : 'End tournament'}</button>
-      </div>
+      {isAdmin && (
+        <div style={{
+          padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
+          borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
+        }}>
+          <MainCTA
+            label={
+              nextRound.isPending ? 'Generating…'
+              : allDone ? 'Next round'
+              : `Waiting · ${recorded}/${total}`
+            }
+            disabled={!allDone || nextRound.isPending}
+            onClick={() => allDone && nextRound.mutate(t.id)}
+          />
+          <button
+            onClick={async () => {
+              const ok = window.Telegram?.WebApp ? true : confirm('End tournament now?');
+              if (!ok) return;
+              try {
+                await finishTour.mutateAsync(t.id);
+                onTournamentFinished?.(t.id);
+              } catch (e) { alert((e as Error).message); }
+            }}
+            disabled={finishTour.isPending}
+            style={{
+              background: 'transparent', border: 'none', color: T.burgundy,
+              fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 2,
+              width: '100%', padding: 12, textTransform: 'uppercase',
+              cursor: finishTour.isPending ? 'wait' : 'pointer',
+            }}
+          >{finishTour.isPending ? 'Finishing…' : 'End tournament'}</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function HomeEmpty({ onCreate }: { onCreate?: () => void }) {
+function HomeEmpty({ onCreate, isAdmin }: { onCreate?: () => void; isAdmin?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <EHero title="PADEL CLUB" kicker="elegance in motion" compact />
       <div style={{ flex: 1, padding: '12px 22px 18px', display: 'flex', flexDirection: 'column' }}>
+        <JoinBanner />
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: 14,
@@ -183,7 +191,14 @@ function HomeEmpty({ onCreate }: { onCreate?: () => void }) {
         padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 6px)',
         borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
       }}>
-        <MainCTA label="Start new tournament" onClick={onCreate} />
+        {isAdmin ? (
+          <MainCTA label="Start new tournament" onClick={onCreate} />
+        ) : (
+          <div style={{
+            textAlign: 'center', color: T.muted, fontFamily: T.fontSerif,
+            fontStyle: 'italic', fontSize: 13, padding: 8,
+          }}>Турниры создают организаторы</div>
+        )}
       </div>
     </div>
   );

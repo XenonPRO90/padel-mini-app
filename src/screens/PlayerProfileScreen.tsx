@@ -6,6 +6,7 @@ import { LevelBadge, SideBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
 import { usePlayerProfile, useMintInvite } from '../api/players';
 import { useMe } from '../api/me';
+import { useUpdateMyRacket } from '../api/joinRequests';
 import { ShareTextModal } from '../components/ShareTextModal';
 import type { ProfilePlacement, ProfilePartner } from '../lib/types';
 
@@ -41,6 +42,10 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
 
   const isAdmin = !!me?.is_admin;
   const linked = !!data?.player?.telegram_id;
+  const isOwn = !!me?.player && me.player.id === pid;
+  const racketM = useUpdateMyRacket();
+  const [racket, setRacket] = useState<string | null>(null);
+  const racketVal = racket ?? data?.player?.racket ?? '';
 
   const onInvite = async () => {
     try {
@@ -80,10 +85,12 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
             }}>{mint.isPending ? '…' : 'Пригласить'}</button>
           )}
-          <button onClick={onEdit} aria-label="Edit" style={{
-            background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
-            color: T.gold, display: 'flex', alignItems: 'center', gap: 4,
-          }}><EEditIcon size={16} /></button>
+          {isAdmin && (
+            <button onClick={onEdit} aria-label="Edit" style={{
+              background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+              color: T.gold, display: 'flex', alignItems: 'center', gap: 4,
+            }}><EEditIcon size={16} /></button>
+          )}
         </div>
       </div>
 
@@ -123,6 +130,37 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   }}>✓ в приложении{data.player.username ? ` · @${data.player.username}` : ''}</span>
                 )}
               </div>
+
+              {/* Racket — visible to all; editable on your own profile */}
+              {isOwn ? (
+                <div style={{ display: 'flex', gap: 6, marginTop: 12, width: '100%', maxWidth: 320 }}>
+                  <input
+                    value={racketVal}
+                    onChange={(e) => setRacket(e.target.value)}
+                    placeholder="Твоя ракетка (напр. Babolat Air)"
+                    maxLength={40}
+                    style={{
+                      flex: 1, boxSizing: 'border-box', padding: '8px 12px', borderRadius: 999,
+                      border: `1px solid ${T.paperEdge}`, background: T.cream,
+                      fontFamily: T.fontDisplay, fontSize: 13, color: T.ink, textAlign: 'center',
+                    }}
+                  />
+                  {racket !== null && racket !== (data.player.racket ?? '') && (
+                    <button disabled={racketM.isPending}
+                      onClick={() => racketM.mutate(racketVal, { onSuccess: () => setRacket(null) })}
+                      style={{
+                        background: T.emerald, color: T.cream, border: 'none', borderRadius: 999,
+                        padding: '8px 14px', cursor: 'pointer',
+                        fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
+                      }}>{racketM.isPending ? '…' : 'OK'}</button>
+                  )}
+                </div>
+              ) : data.player.racket ? (
+                <div style={{
+                  marginTop: 10, fontFamily: T.fontSerif, fontStyle: 'italic',
+                  fontSize: 13, color: T.muted,
+                }}>🎾 {data.player.racket}</div>
+              ) : null}
             </div>
 
             {/* Achievements / stat grid */}

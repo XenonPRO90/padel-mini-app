@@ -33,28 +33,30 @@ WELCOME_IMAGE_PATH = (
     Path(__file__).resolve().parent.parent / "assets" / "padel-club-welcome.png"
 )
 
-# MarkdownV2 — these chars must be escaped where they appear as literals:
-# _ * [ ] ( ) ~ ` > # + - = | { } . !
-# Headings / labels use *bold*, soft accents use _italic_, paragraphs are
-# separated by blank lines so the welcome reads more like a card than a wall.
+# HTML parse mode (passed per-message in send_welcome) — only < > & need escaping,
+# none of which appear here, so the copy stays readable.
 WELCOME = (
-    "🎾 *PADEL CLUB*\n"
-    "_Tournaments, made elegant\\._\n"
+    "🎾 <b>PADEL CLUB</b>\n"
+    "<i>Турниры и личная статистика</i>\n"
     "\n"
-    "Помощник для проведения турниров по падел в формате "
-    "*King of the Court*\\. Создаёшь турнир — бот сам тасует пары "
-    "по уровням и сторонам, ты только записываешь результаты\\.\n"
+    "Клубное приложение по падел: интересные турниры, история игр "
+    "и личный кабинет у каждого участника.\n"
     "\n"
-    "*Что внутри:*\n"
-    "• умный алгоритм пар \\(B\\+ играет с самым слабым, партнёр "
-    "меняется каждый раунд, не сводит двух правшей или двух левшей\\)\n"
-    "• режим *fixed pairs* — для турниров с постоянными парами\n"
-    "• запись результата в один тап\n"
-    "• лидерборд, история, расписание и финальный постер для шеринга\n"
+    "<b>Для игроков:</b>\n"
+    "• личный кабинет со статистикой — турниры, победы, % побед, серии\n"
+    "• места и медали за призовые места и победы\n"
+    "• накопительная статистика и достижения за всё время\n"
+    "• профиль с твоим уровнем и ракеткой\n"
     "\n"
-    "*Как начать:*\n"
-    "Тапни *Управление* слева от поля ввода — откроется Mini App, где "
-    "ведёшь турнир от создания до финального постера\\."
+    "<b>Форматы турниров:</b>\n"
+    "• <b>King of the Court</b> — пары меняются каждый раунд\n"
+    "• <b>Team Americano</b> — каждая пара играет с каждой\n"
+    "• <b>Mini Tournament</b> — 8 команд, группы + плей-офф\n"
+    "\n"
+    "<b>Как попасть в клуб:</b>\n"
+    "Открой «Управление» слева от поля ввода и <b>подай заявку</b> — "
+    "организатор подтвердит, и откроется твой личный кабинет. "
+    "Если тебе прислали ссылку-приглашение — просто перейди по ней."
 )
 
 bot = Bot(
@@ -73,11 +75,12 @@ async def send_welcome(message: Message) -> None:
             await message.answer_photo(
                 photo=FSInputFile(WELCOME_IMAGE_PATH),
                 caption=WELCOME,
+                parse_mode=ParseMode.HTML,
             )
             return
         except Exception as e:
             logging.warning("send_photo failed, falling back to text: %s", e)
-    await message.answer(WELCOME)
+    await message.answer(WELCOME, parse_mode=ParseMode.HTML)
 
 
 async def handle_bind(message: Message, token: str) -> None:
