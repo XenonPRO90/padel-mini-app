@@ -354,6 +354,153 @@ async def get_player_stats(pid: int):
         }
 
 
+# ─── Player profile (stats + placements + partners + achievements) ────────
+
+async def _player_matches_derived(db, pid: int):
+    """One pass over the player's completed matches → games played, current &
+    longest win streak, and per-partner (teammate) games/wins."""
+    cur = await db.execute(
+        """SELECT m.winner, m.p1, m.p2, m.p3, m.p4
+           FROM matches m
+           JOIN rounds r ON r.id=m.round_id
+           JOIN tournaments t ON t.id=r.tournament_id
+           WHERE ? IN (m.p1, m.p2, m.p3, m.p4) AND m.winner IS NOT NULL
+           ORDER BY t.created_at, t.id, r.round_num, m.court_num""",
+        (pid,),
+    )
+    seq = []          # chronological win(True)/loss(False)
+    partners = {}     # mate_id -> [games, wins]
+    for m in await cur.fetchall():
+        if pid in (m["p1"], m["p2"]):
+            mate = m["p2"] if m["p1"] == pid else m["p1"]
+            won = m["winner"] == 1
+        else:
+            mate = m["p4"] if m["p3"] == pid else m["p3"]
+            won = m["winner"] == 2
+        seq.append(won)
+        pm = partners.setdefault(mate, [0, 0]); pm[0] += 1; pm[1] += 1 if won else 0
+
+    longest = cur_run = 0
+    for w in seq:
+        cur_run = cur_run + 1 if w else 0
+        longest = max(longest, cur_run)
+    current = 0
+    for w in reversed(seq):
+        if w: current += 1
+        else: break
+
+    return {"games": len(seq), "streak_best": longest, "streak_cur": current, "partners": partners}
+
+
+async def _player_placements(db, pid: int):
+    """Per finished tournament the player was in: dense place (points DESC,
+    wins DESC), with the player's points/wins/losses and tournament meta.
+    Newest first. Place is computed from per-player `scores` (pair modes share
+    identical scores, so per-player rank == per-pair place)."""
+    cur = await db.execute(
+        """SELECT s.tournament_id AS tid, s.points, s.wins, s.losses,
+                  t.name, t.created_at, t.mode
+           FROM scores s JOIN tournaments t ON t.id=s.tournament_id
+           WHERE s.player_id=? AND t.status='finished'
+           ORDER BY t.created_at DESC, t.id DESC""",
+        (pid,),
+    )
+    mine = rows_to_list(await cur.fetchall())
+    if not mine:
+        return []
+    tids = [m["tid"] for m in mine]
+    qmarks = ",".join("?" * len(tids))
+    cur = await db.execute(
+        f"SELECT tournament_id AS tid, points, wins FROM scores WHERE tournament_id IN ({qmarks})",
+        tids,
+    )
+    by_tid = {}
+    for r in await cur.fetchall():
+        by_tid.setdefault(r["tid"], set()).add((r["points"], r["wins"]))
+    out = []
+    for m in mine:
+        # dense place = 1 + number of distinct (points,wins) strictly better
+        better = sum(1 for (p, w) in by_tid.get(m["tid"], set())
+                     if p > m["points"] or (p == m["points"] and w > m["wins"]))
+        out.append({
+            "tid": m["tid"], "name": m["name"], "created_at": m["created_at"],
+            "mode": m["mode"], "place": better + 1,
+            "points": m["points"], "wins": m["wins"], "losses": m["losses"],
+        })
+    return out
+
+
+async def get_player_profile(pid: int):
+    player = await get_player(pid)
+    if not player:
+        return None
+    async with conn() as db:
+        derived = await _player_matches_derived(db, pid)
+        placements = await _player_placements(db, pid)
+        # resolve partner names (top by games; best by win-rate, min 4 games)
+        partner_ids = list(derived["partners"].keys())
+        names = {}
+        if partner_ids:
+            qmarks = ",".join("?" * len(partner_ids))
+            cur = await db.execute(
+                f"SELECT id, name FROM players WHERE id IN ({qmarks})", partner_ids
+            )
+            names = {r["id"]: r["name"] for r in await cur.fetchall()}
+
+    # Totals from scores (authoritative, all tournaments) so games == W+L.
+    base = await get_player_stats(pid)
+    total_wins = base["total_wins"]
+    total_losses = base["total_losses"]
+    total_points = base["total_points"]
+    tournaments_all = base["tournaments"]
+    games = total_wins + total_losses
+    win_rate = round(total_wins / games, 3) if games else 0.0
+    champion = sum(1 for p in placements if p["place"] == 1)
+    podium = sum(1 for p in placements if p["place"] <= 3)
+    best_place = min((p["place"] for p in placements), default=None)
+
+    partners_sorted = sorted(
+        ({"player_id": mid, "name": names.get(mid, "?"), "games": gw[0], "wins": gw[1]}
+         for mid, gw in derived["partners"].items()),
+        key=lambda x: (-x["games"], -x["wins"]),
+    )
+    eligible = [p for p in partners_sorted if p["games"] >= 4]
+    best_partner = max(
+        eligible, key=lambda x: (x["wins"] / x["games"], x["games"]), default=None
+    )
+
+    achievements = [
+        {"id": "champion", "label": "Чемпион", "value": champion, "unit": "×"},
+        {"id": "podium", "label": "Подиум", "value": podium, "unit": "×"},
+        {"id": "tournaments", "label": "Турниров", "value": tournaments_all, "unit": ""},
+        {"id": "games", "label": "Игр сыграно", "value": games, "unit": ""},
+        {"id": "win_rate", "label": "Винрейт", "value": round(win_rate * 100), "unit": "%"},
+        {"id": "streak_best", "label": "Лучшая серия", "value": derived["streak_best"], "unit": ""},
+        {"id": "total_points", "label": "Очков за карьеру", "value": total_points, "unit": ""},
+    ]
+
+    return {
+        "player": player,
+        "stats": {
+            "tournaments": tournaments_all,
+            "games": games,
+            "total_wins": total_wins,
+            "total_losses": total_losses,
+            "total_points": total_points,
+            "win_rate": win_rate,
+            "champion": champion,
+            "podium": podium,
+            "best_place": best_place,
+            "streak_best": derived["streak_best"],
+            "streak_cur": derived["streak_cur"],
+        },
+        "recent": placements[:8],
+        "partners": partners_sorted[:5],
+        "best_partner": best_partner,
+        "achievements": achievements,
+    }
+
+
 # ─── Admins ───────────────────────────────────────────────
 
 async def is_admin(tg_id: int) -> bool:

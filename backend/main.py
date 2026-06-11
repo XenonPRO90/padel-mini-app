@@ -139,6 +139,15 @@ async def player_detail(pid: int, _user=Depends(get_tg_user)):
     return {"player": p, "stats": stats}
 
 
+@app.get("/api/players/{pid}/profile")
+async def player_profile(pid: int, _user=Depends(get_tg_user)):
+    """Public profile: stats, placements/medals, streaks, partners, achievements."""
+    prof = await q.get_player_profile(pid)
+    if not prof:
+        raise HTTPException(404, "Player not found")
+    return prof
+
+
 # ─── Misc ──────────────────────────────────────────────────
 
 # ─── Mutations ─────────────────────────────────────────────

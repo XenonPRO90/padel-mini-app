@@ -6,6 +6,7 @@ import { PlayersScreen } from './screens/PlayersScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { LiveRoundScreen } from './screens/LiveRoundScreen';
 import { PlayerEditScreen } from './screens/PlayerEditScreen';
+import { PlayerProfileScreen } from './screens/PlayerProfileScreen';
 import { WizardScreen } from './screens/WizardScreen';
 import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
@@ -25,6 +26,7 @@ type Screen =
   | { name: 'liveRound' }
   | { name: 'wizard' }
   | { name: 'playerEdit'; player: Player | null }
+  | { name: 'playerProfile'; player: Player }
   | { name: 'tournamentDetail'; tid: number }
   | { name: 'roundDetail'; tid: number; roundNum: number; mode?: string }
   | { name: 'celebration'; tid: number }
@@ -105,7 +107,7 @@ export default function App() {
           )}
           {top.name === 'home' && tab === 'players' && (
             <PlayersScreen
-              onOpenPlayer={(p) => push({ name: 'playerEdit', player: p })}
+              onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onAddPlayer={() => push({ name: 'playerEdit', player: null })}
             />
           )}
@@ -125,6 +127,14 @@ export default function App() {
           )}
           {top.name === 'playerEdit' && (
             <PlayerEditScreen player={top.player} onClose={pop} />
+          )}
+          {top.name === 'playerProfile' && (
+            <PlayerProfileScreen
+              pid={top.player.id}
+              onBack={pop}
+              onEdit={() => push({ name: 'playerEdit', player: top.player })}
+              onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
+            />
           )}
           {top.name === 'tournamentDetail' && (
             <TournamentDetailScreen

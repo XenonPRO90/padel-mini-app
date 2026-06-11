@@ -100,6 +100,52 @@ export interface PlayerStats {
   total_losses: number;
 }
 
+export interface ProfilePlacement {
+  tid: number;
+  name: string;
+  created_at: string;
+  mode: string;
+  place: number;
+  points: number;
+  wins: number;
+  losses: number;
+}
+
+export interface ProfilePartner {
+  player_id: number;
+  name: string;
+  games: number;
+  wins: number;
+}
+
+export interface ProfileAchievement {
+  id: string;
+  label: string;
+  value: number;
+  unit: string;
+}
+
+export interface PlayerProfile {
+  player: Player;
+  stats: {
+    tournaments: number;
+    games: number;
+    total_wins: number;
+    total_losses: number;
+    total_points: number;
+    win_rate: number;
+    champion: number;
+    podium: number;
+    best_place: number | null;
+    streak_best: number;
+    streak_cur: number;
+  };
+  recent: ProfilePlacement[];
+  partners: ProfilePartner[];
+  best_partner: ProfilePartner | null;
+  achievements: ProfileAchievement[];
+}
+
 export interface MonthlyLeaderboardRow extends Player {
   player_id: number;
   points: number;
