@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { T } from '../lib/tokens';
 import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon } from '../lib/elegant';
 import { Ring } from '../components/Ring';
@@ -18,8 +19,20 @@ const ddmm = (s: string) => {
   return m && m.length === 3 ? `${m[2]}.${m[1]}` : '';
 };
 
+// Legend shown when tapping the "?" next to «Статистика».
+const STAT_HELP = [
+  { k: 'Турниров', v: 'сколько турниров сыграно' },
+  { k: 'Игр сыграно', v: 'сколько матчей (игр на корте) сыграно' },
+  { k: 'Винрейт', v: '% выигранных матчей: победы ÷ все матчи' },
+  { k: 'Чемпион', v: 'сколько раз занял 1-е место в турнире' },
+  { k: 'Подиум', v: 'сколько раз попал в топ-3 (1–3 место)' },
+  { k: 'Лучшая серия', v: 'самая длинная серия побед подряд' },
+  { k: 'Очков за карьеру', v: 'сумма очков по всем турнирам' },
+];
+
 export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: Props) {
   const { data, isLoading } = usePlayerProfile(pid);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -51,15 +64,22 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
           <>
             {/* Hero — avatar in win-rate ring */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 18 }}>
-              <Ring size={150} stroke={3} value={data.stats.win_rate} max={1} color={T.emerald}>
-                <Avatar name={data.player.name} size={92} />
+              <Ring size={140} stroke={4} value={data.stats.win_rate} max={1} color={T.emerald}>
+                <Avatar name={data.player.name} size={84} />
               </Ring>
               <div style={{
-                marginTop: -8, fontFamily: T.fontSerif, fontStyle: 'italic',
-                fontSize: 13, color: T.gold,
-              }}>{Math.round(data.stats.win_rate * 100)}% побед</div>
+                marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 6,
+              }}>
+                <span style={{
+                  fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 700,
+                  color: T.goldDeep, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                }}>{Math.round(data.stats.win_rate * 100)}%</span>
+                <span style={{
+                  fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted,
+                }}>побед в матчах</span>
+              </div>
               <div style={{
-                marginTop: 8, fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
+                marginTop: 10, fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
                 color: T.ink, textAlign: 'center',
               }}>{data.player.name}</div>
               <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
@@ -69,7 +89,36 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             </div>
 
             {/* Achievements / stat grid */}
-            <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Статистика</ELabel>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 2,
+            }}>
+              <ELabel>Статистика</ELabel>
+              <button onClick={() => setInfoOpen((v) => !v)} aria-label="Что это" style={{
+                width: 18, height: 18, borderRadius: 999, cursor: 'pointer',
+                border: `1px solid ${infoOpen ? T.gold : T.rule}`,
+                background: infoOpen ? T.gold : 'transparent',
+                color: infoOpen ? T.cream : T.gold,
+                fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 700,
+                lineHeight: 1, padding: 0,
+              }}>?</button>
+            </div>
+            {infoOpen && (
+              <div style={{ marginBottom: 12 }}>
+                <EGoldFrame>
+                  <div style={{ padding: '10px 14px' }}>
+                    {STAT_HELP.map((h, i) => (
+                      <div key={h.k} style={{
+                        padding: '7px 0',
+                        borderBottom: i === STAT_HELP.length - 1 ? 'none' : `1px dotted ${T.rule}`,
+                      }}>
+                        <span style={{ fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, color: T.ink }}>{h.k}</span>
+                        <span style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}> — {h.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </EGoldFrame>
+              </div>
+            )}
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18,
             }}>
