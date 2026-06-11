@@ -13,6 +13,7 @@ import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
 import { CelebrationScreen } from './screens/CelebrationScreen';
 import { SchedulePosterScreen } from './screens/SchedulePosterScreen';
+import { useMe } from './api/me';
 import { T } from './lib/tokens';
 import type { Player } from './lib/types';
 
@@ -28,6 +29,7 @@ type Screen =
   | { name: 'wizard' }
   | { name: 'playerEdit'; player: Player | null }
   | { name: 'playerProfile'; player: Player }
+  | { name: 'myProfile' }
   | { name: 'adminRequests' }
   | { name: 'tournamentDetail'; tid: number }
   | { name: 'roundDetail'; tid: number; roundNum: number; mode?: string }
@@ -132,6 +134,13 @@ export default function App() {
           {top.name === 'playerEdit' && (
             <PlayerEditScreen player={top.player} onClose={pop} />
           )}
+          {top.name === 'myProfile' && (
+            <MyCabinet
+              onBack={pop}
+              onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
+              onEdit={(p) => push({ name: 'playerEdit', player: p })}
+            />
+          )}
           {top.name === 'adminRequests' && (
             <AdminRequestsScreen onBack={pop} />
           )}
@@ -161,9 +170,40 @@ export default function App() {
           )}
         </div>
         {showTabBar && (
-          <TabBar active={tab} onChange={(t) => { setTab(t); }} />
+          <TabBar
+            active={tab}
+            onChange={(t) => { if (t === 'cabinet') push({ name: 'myProfile' }); else setTab(t); }}
+          />
         )}
       </div>
     </QueryClientProvider>
+  );
+}
+
+// Personal cabinet entry: resolves the current user's linked player and shows
+// their profile. Lives inside the provider so it can read /api/me.
+function MyCabinet({ onBack, onOpenTournament, onEdit }: {
+  onBack: () => void;
+  onOpenTournament: (tid: number) => void;
+  onEdit: (p: Player) => void;
+}) {
+  const { data: me, isLoading } = useMe();
+  if (isLoading) return null;
+  if (!me?.player) {
+    return (
+      <div style={{
+        height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24, textAlign: 'center', color: '#7c7468',
+        fontFamily: 'Georgia, serif', fontStyle: 'italic',
+      }}>Профиль не привязан</div>
+    );
+  }
+  return (
+    <PlayerProfileScreen
+      pid={me.player.id}
+      onBack={onBack}
+      onEdit={() => onEdit(me.player!)}
+      onOpenTournament={onOpenTournament}
+    />
   );
 }

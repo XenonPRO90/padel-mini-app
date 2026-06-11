@@ -102,7 +102,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             {/* Hero — avatar in win-rate ring */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 18 }}>
               <Ring size={140} stroke={4} value={data.stats.win_rate} max={1} color={T.emerald}>
-                <Avatar name={data.player.name} size={84} />
+                <Avatar name={data.player.name} size={84} photoUrl={data.player.photo_url} />
               </Ring>
               <div style={{
                 marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 6,

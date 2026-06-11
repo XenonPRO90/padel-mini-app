@@ -115,7 +115,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
                     cursor: onOpenPlayer ? 'pointer' : 'default',
                   }}
                 >
-                  <Avatar name={p.name} size={32} />
+                  <Avatar name={p.name} size={32} photoUrl={p.photo_url} />
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 500,
                     color: T.ink, whiteSpace: 'nowrap',
@@ -134,8 +134,23 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
 }
 
 // Elegant avatar — soft cream circle with gold border + ink initials in Playfair.
-export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 40, photoUrl }: { name: string; size?: number; photoUrl?: string | null }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+  const [imgError, setImgError] = useState(false);
+  if (photoUrl && !imgError) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        referrerPolicy="no-referrer"
+        onError={() => setImgError(true)}
+        style={{
+          width: size, height: size, borderRadius: '50%', objectFit: 'cover',
+          border: `1px solid ${T.rule}`, flexShrink: 0, background: T.cream2,
+        }}
+      />
+    );
+  }
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
