@@ -8,7 +8,7 @@ import { usePlayerProfile, useMintInvite } from '../api/players';
 import { useMe } from '../api/me';
 import { useUpdateMyRacket } from '../api/joinRequests';
 import { ShareTextModal } from '../components/ShareTextModal';
-import type { ProfilePlacement, ProfilePartner } from '../lib/types';
+import type { ProfilePlacement, ProfilePartner, ProfileOpponent } from '../lib/types';
 
 interface Props {
   pid: number;
@@ -27,9 +27,11 @@ const STAT_HELP = [
   { k: 'Турниров', v: 'сколько турниров сыграно' },
   { k: 'Игр сыграно', v: 'сколько матчей (игр на корте) сыграно' },
   { k: 'Винрейт', v: '% выигранных матчей: победы ÷ все матчи' },
+  { k: '% призовых', v: 'доля турниров, где попал в топ-3' },
   { k: 'Чемпион', v: 'сколько раз занял 1-е место в турнире' },
   { k: 'Подиум', v: 'сколько раз попал в топ-3 (1–3 место)' },
   { k: 'Лучшая серия', v: 'самая длинная серия побед подряд' },
+  { k: 'Гроза старших', v: 'победы над игроками выше уровнем' },
   { k: 'Очков за карьеру', v: 'сумма очков по всем турнирам' },
 ];
 
@@ -115,13 +117,50 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted,
                 }}>побед в матчах</span>
               </div>
+
+              {/* Form (last 5) + 30-day dynamics */}
+              {(data.stats.form.length > 0 || data.stats.recent_win_rate !== null) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                  {data.stats.form.length > 0 && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {data.stats.form.map((r, i) => (
+                        <span key={i} style={{
+                          width: 18, height: 18, borderRadius: 999, display: 'flex',
+                          alignItems: 'center', justifyContent: 'center',
+                          fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, color: T.cream,
+                          background: r === 'W' ? T.win : T.burgundy,
+                        }}>{r}</span>
+                      ))}
+                    </div>
+                  )}
+                  {data.stats.recent_win_rate !== null && (() => {
+                    const rec = Math.round(data.stats.recent_win_rate * 100);
+                    const diff = rec - Math.round(data.stats.win_rate * 100);
+                    const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
+                    const col = diff > 0 ? T.win : diff < 0 ? T.burgundy : T.muted;
+                    return (
+                      <span style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}>
+                        30 дней: <b style={{ color: col, fontStyle: 'normal' }}>{rec}% {arrow}</b>
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
+
               <div style={{
                 marginTop: 10, fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
                 color: T.ink, textAlign: 'center',
               }}>{data.player.name}</div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <LevelBadge level={data.player.level} />
                 <SideBadge side={data.player.side} />
+                {data.stats.club_rank && (
+                  <span style={{
+                    fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                    color: T.goldDeep, border: `1px solid ${T.gold}`, borderRadius: 999,
+                    padding: '2px 8px',
+                  }}>#{data.stats.club_rank} в клубе</span>
+                )}
                 {linked && (
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
@@ -225,6 +264,24 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               </div>
             )}
 
+            {/* Head-to-head: nemesis & favourite opponent */}
+            {(data.nemesis || data.favorite_opponent) && (
+              <div style={{ marginBottom: 18 }}>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Личные счёты</ELabel>
+                <EGoldFrame>
+                  <div style={{ padding: '2px 0' }}>
+                    {data.nemesis && (
+                      <H2HRow icon="🔥" label="Немезида" o={data.nemesis}
+                        last={!data.favorite_opponent} />
+                    )}
+                    {data.favorite_opponent && (
+                      <H2HRow icon="😎" label="Любимый соперник" o={data.favorite_opponent} last />
+                    )}
+                  </div>
+                </EGoldFrame>
+              </div>
+            )}
+
             {/* Recent tournaments */}
             {data.recent.length > 0 && (
               <div style={{ marginBottom: 18 }}>
@@ -315,6 +372,31 @@ function PartnerRow({ p, last, highlight }: { p: ProfilePartner; last?: boolean;
       }}>{p.name}</div>
       <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}>
         {p.games} игр · {wr}%
+      </div>
+    </div>
+  );
+}
+
+function H2HRow({ icon, label, o, last }: {
+  icon: string; label: string; o: ProfileOpponent; last?: boolean;
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+      borderBottom: last ? 'none' : `1px solid ${T.paperEdge}`,
+    }}>
+      <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted }}>{label}</div>
+        <div style={{
+          fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, color: T.ink,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{o.name}</div>
+      </div>
+      <div style={{ fontFamily: T.fontDisplay, fontSize: 13, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+        <span style={{ color: T.win }}>{o.wins}</span>
+        <span style={{ color: T.muted }}> : </span>
+        <span style={{ color: T.burgundy }}>{o.losses}</span>
       </div>
     </div>
   );

@@ -549,15 +549,23 @@ async def _player_matches_derived(db, pid: int):
     )
     seq = []          # chronological win(True)/loss(False)
     partners = {}     # mate_id -> [games, wins]
+    opponents = {}    # opp_id -> [meetings, player_wins_vs]
+    won_opp_pairs = []  # opponent id-pairs for matches the player won (giant-killer)
     for m in await cur.fetchall():
         if pid in (m["p1"], m["p2"]):
             mate = m["p2"] if m["p1"] == pid else m["p1"]
             won = m["winner"] == 1
+            opps = (m["p3"], m["p4"])
         else:
             mate = m["p4"] if m["p3"] == pid else m["p3"]
             won = m["winner"] == 2
+            opps = (m["p1"], m["p2"])
         seq.append(won)
         pm = partners.setdefault(mate, [0, 0]); pm[0] += 1; pm[1] += 1 if won else 0
+        for o in opps:
+            op = opponents.setdefault(o, [0, 0]); op[0] += 1; op[1] += 1 if won else 0
+        if won:
+            won_opp_pairs.append(opps)
 
     longest = cur_run = 0
     for w in seq:
@@ -568,7 +576,14 @@ async def _player_matches_derived(db, pid: int):
         if w: current += 1
         else: break
 
-    return {"games": len(seq), "streak_best": longest, "streak_cur": current, "partners": partners}
+    # recent form — last up-to-5 results, newest first
+    form = list(reversed([("W" if w else "L") for w in seq[-5:]]))
+
+    return {
+        "games": len(seq), "streak_best": longest, "streak_cur": current,
+        "partners": partners, "opponents": opponents,
+        "won_opp_pairs": won_opp_pairs, "form": form,
+    }
 
 
 async def _player_placements(db, pid: int):
@@ -609,22 +624,56 @@ async def _player_placements(db, pid: int):
     return out
 
 
+async def _player_club_rank(db, pid: int):
+    """Rank by total career points among all players who have a score row.
+    Dense-ish: rank = 1 + players with strictly more points. Returns {rank,total}."""
+    cur = await db.execute(
+        "SELECT player_id, COALESCE(SUM(points),0) AS pts FROM scores GROUP BY player_id"
+    )
+    rows = await cur.fetchall()
+    if not rows:
+        return None
+    mine = next((r["pts"] for r in rows if r["player_id"] == pid), None)
+    if mine is None:
+        return None
+    rank = 1 + sum(1 for r in rows if r["pts"] > mine)
+    return {"rank": rank, "total": len(rows), "points": mine}
+
+
+async def _player_recent_record(db, pid: int, days: int = 30):
+    """Wins/losses over tournaments started in the last `days` days."""
+    from datetime import datetime, timedelta
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    cur = await db.execute(
+        """SELECT COALESCE(SUM(s.wins),0) AS w, COALESCE(SUM(s.losses),0) AS l
+           FROM scores s JOIN tournaments t ON t.id=s.tournament_id
+           WHERE s.player_id=? AND t.created_at >= ?""",
+        (pid, since),
+    )
+    r = await cur.fetchone()
+    return {"wins": r["w"], "losses": r["l"]}
+
+
 async def get_player_profile(pid: int):
+    from .pairing import level_value
     player = await get_player(pid)
     if not player:
         return None
     async with conn() as db:
         derived = await _player_matches_derived(db, pid)
         placements = await _player_placements(db, pid)
-        # resolve partner names (top by games; best by win-rate, min 4 games)
-        partner_ids = list(derived["partners"].keys())
-        names = {}
-        if partner_ids:
-            qmarks = ",".join("?" * len(partner_ids))
+        club_rank = await _player_club_rank(db, pid)
+        recent_rec = await _player_recent_record(db, pid, 30)
+        # resolve names + levels for partners AND opponents in one query
+        ids = set(derived["partners"]) | set(derived["opponents"])
+        names, levels = {}, {}
+        if ids:
+            qmarks = ",".join("?" * len(ids))
             cur = await db.execute(
-                f"SELECT id, name FROM players WHERE id IN ({qmarks})", partner_ids
+                f"SELECT id, name, level FROM players WHERE id IN ({qmarks})", list(ids)
             )
-            names = {r["id"]: r["name"] for r in await cur.fetchall()}
+            for r in await cur.fetchall():
+                names[r["id"]] = r["name"]; levels[r["id"]] = r["level"]
 
     # Totals from scores (authoritative, all tournaments) so games == W+L.
     base = await get_player_stats(pid)
@@ -637,6 +686,9 @@ async def get_player_profile(pid: int):
     champion = sum(1 for p in placements if p["place"] == 1)
     podium = sum(1 for p in placements if p["place"] <= 3)
     best_place = min((p["place"] for p in placements), default=None)
+    n_placed = len(placements)
+    podium_rate = round(podium / n_placed * 100) if n_placed else 0
+    avg_finish = round(sum(p["place"] for p in placements) / n_placed, 1) if n_placed else None
 
     partners_sorted = sorted(
         ({"player_id": mid, "name": names.get(mid, "?"), "games": gw[0], "wins": gw[1]}
@@ -648,13 +700,41 @@ async def get_player_profile(pid: int):
         eligible, key=lambda x: (x["wins"] / x["games"], x["games"]), default=None
     )
 
+    # Head-to-head: nemesis (most losses to) & favourite victim (most wins vs),
+    # min 3 meetings to be meaningful.
+    opp = [
+        {"player_id": oid, "name": names.get(oid, "?"),
+         "meetings": mw[0], "wins": mw[1], "losses": mw[0] - mw[1]}
+        for oid, mw in derived["opponents"].items() if mw[0] >= 3
+    ]
+    # nemesis = worst net record (they beat you), favourite = best net record.
+    nemesis = max(opp, key=lambda x: (x["losses"] - x["wins"], x["meetings"]), default=None)
+    if nemesis and nemesis["losses"] <= nemesis["wins"]:
+        nemesis = None
+    favorite_opp = max(opp, key=lambda x: (x["wins"] - x["losses"], x["meetings"]), default=None)
+    if favorite_opp and favorite_opp["wins"] <= favorite_opp["losses"]:
+        favorite_opp = None
+
+    # Giant-killer: wins where any opponent is rated above you.
+    my_lvl = level_value(player["level"])
+    giant_kills = sum(
+        1 for pair in derived["won_opp_pairs"]
+        if max((level_value(levels.get(o, "C")) for o in pair), default=0) > my_lvl
+    )
+
+    # Form / dynamics: last-30d win-rate vs lifetime.
+    rg = recent_rec["wins"] + recent_rec["losses"]
+    recent_win_rate = round(recent_rec["wins"] / rg, 3) if rg else None
+
     achievements = [
         {"id": "champion", "label": "Чемпион", "value": champion, "unit": "×"},
         {"id": "podium", "label": "Подиум", "value": podium, "unit": "×"},
         {"id": "tournaments", "label": "Турниров", "value": tournaments_all, "unit": ""},
         {"id": "games", "label": "Игр сыграно", "value": games, "unit": ""},
         {"id": "win_rate", "label": "Винрейт", "value": round(win_rate * 100), "unit": "%"},
+        {"id": "podium_rate", "label": "% призовых", "value": podium_rate, "unit": "%"},
         {"id": "streak_best", "label": "Лучшая серия", "value": derived["streak_best"], "unit": ""},
+        {"id": "giant_kills", "label": "Гроза старших", "value": giant_kills, "unit": ""},
         {"id": "total_points", "label": "Очков за карьеру", "value": total_points, "unit": ""},
     ]
 
@@ -672,10 +752,20 @@ async def get_player_profile(pid: int):
             "best_place": best_place,
             "streak_best": derived["streak_best"],
             "streak_cur": derived["streak_cur"],
+            "podium_rate": podium_rate,
+            "avg_finish": avg_finish,
+            "giant_kills": giant_kills,
+            "club_rank": club_rank["rank"] if club_rank else None,
+            "club_total": club_rank["total"] if club_rank else None,
+            "recent_win_rate": recent_win_rate,
+            "recent_games": rg,
+            "form": derived["form"],
         },
         "recent": placements[:8],
         "partners": partners_sorted[:5],
         "best_partner": best_partner,
+        "nemesis": nemesis,
+        "favorite_opponent": favorite_opp,
         "achievements": achievements,
     }
 
