@@ -45,6 +45,8 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
         name: p.name, points: p.points, wins: p.wins, losses: p.losses,
       }));
 
+  // Mini Tournament (groups8): points = place, confusing next to W–L → hide.
+  const hidePoints = t.mode === 'groups8';
   // Dense ranking with (points, wins) tiebreaker.
   const ranked: { place: number; row: Row }[] = [];
   let lastPts = -1;
@@ -121,17 +123,21 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
                     display: 'flex', alignItems: 'center', gap: 8,
                     justifySelf: 'end',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                      <span style={{
-                        fontFamily: T.fontDisplay, fontWeight: 600,
-                        fontSize: isPodium ? 18 : 15, color: T.goldDeep,
-                      }}>{row.points}</span>
-                      <span style={{
-                        fontFamily: T.fontSerif, fontSize: 11,
-                        fontStyle: 'italic', color: T.muted,
-                      }}>pts</span>
-                    </div>
-                    <div style={{ width: 1, height: 14, background: T.paperEdge }} />
+                    {!hidePoints && (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                          <span style={{
+                            fontFamily: T.fontDisplay, fontWeight: 600,
+                            fontSize: isPodium ? 18 : 15, color: T.goldDeep,
+                          }}>{row.points}</span>
+                          <span style={{
+                            fontFamily: T.fontSerif, fontSize: 11,
+                            fontStyle: 'italic', color: T.muted,
+                          }}>pts</span>
+                        </div>
+                        <div style={{ width: 1, height: 14, background: T.paperEdge }} />
+                      </>
+                    )}
                     <div style={{ fontFamily: T.fontDisplay, fontSize: 12, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
                       <span style={{ color: T.win }}>W {row.wins}</span>
                       <span style={{ margin: '0 4px', color: T.paperEdge }}>·</span>

@@ -42,6 +42,9 @@ const P = {
 export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboard, onClose, onShareText }: Props) {
   const posterRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
+  // Mini Tournament (groups8): points ARE the place (9−place), which reads as
+  // confusing next to the W–L column. Show place (medal/number) + W–L only.
+  const hidePoints = t.mode === 'groups8';
 
   // For pair-based tournaments (fixed, americano, groups8) collapse partners
   // into one row — otherwise both members of the winning pair get their own
@@ -244,20 +247,24 @@ export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboar
                     display: 'flex', alignItems: 'center', gap: 10,
                     justifySelf: 'end', whiteSpace: 'nowrap',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{
-                        fontFamily: P.serif,
-                        fontSize: isPodium ? 24 : 18,
-                        fontWeight: 600,
-                        color: P.accentGold, lineHeight: 1,
-                        fontVariantNumeric: 'tabular-nums',
-                      }}>{row.points}</span>
-                      <span style={{
-                        fontFamily: P.serif, fontSize: 12, fontStyle: 'italic',
-                        color: P.textMuted,
-                      }}>pts</span>
-                    </div>
-                    <div style={{ width: 1, height: 22, background: P.divider, opacity: 0.6 }} />
+                    {!hidePoints && (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                          <span style={{
+                            fontFamily: P.serif,
+                            fontSize: isPodium ? 24 : 18,
+                            fontWeight: 600,
+                            color: P.accentGold, lineHeight: 1,
+                            fontVariantNumeric: 'tabular-nums',
+                          }}>{row.points}</span>
+                          <span style={{
+                            fontFamily: P.serif, fontSize: 12, fontStyle: 'italic',
+                            color: P.textMuted,
+                          }}>pts</span>
+                        </div>
+                        <div style={{ width: 1, height: 22, background: P.divider, opacity: 0.6 }} />
+                      </>
+                    )}
                     <div style={{
                       fontFamily: P.serif, fontSize: 13, color: P.textMuted,
                       fontVariantNumeric: 'tabular-nums',

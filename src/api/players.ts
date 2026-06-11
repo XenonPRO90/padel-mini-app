@@ -1,7 +1,15 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { api } from './client';
+import type { PlayerProfile } from '../lib/types';
 
 export type SideValue = 'right' | 'left' | 'both';
+
+export function usePlayerProfile(pid: number) {
+  return useQuery<PlayerProfile>({
+    queryKey: ['profile', pid],
+    queryFn: () => api(`/api/players/${pid}/profile`),
+  });
+}
 
 export interface PlayerInput {
   name: string;
