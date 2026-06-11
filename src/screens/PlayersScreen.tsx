@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useMe } from '../api/me';
 import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { ELabel, EGoldFrame, EBtn } from '../lib/elegant';
@@ -9,10 +10,14 @@ import type { Player } from '../lib/types';
 interface PlayersScreenProps {
   onOpenPlayer?: (p: Player) => void;
   onAddPlayer?: () => void;
+  onOpenRequests?: () => void;
 }
 
-export function PlayersScreen({ onOpenPlayer, onAddPlayer }: PlayersScreenProps = {}) {
+export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: PlayersScreenProps = {}) {
   const [q, setQ] = useState('');
+  const { data: me } = useMe();
+  const isAdmin = !!me?.is_admin;
+  const pending = me?.pending_requests ?? 0;
   const { data, isLoading, error, refetch } = useQuery<{ items: Player[] }>({
     queryKey: ['players'],
     queryFn: () => api('/api/players'),
@@ -39,7 +44,18 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer }: PlayersScreenProps 
             fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 14, color: T.muted,
           }}>guests</span></div>
         </div>
-        {onAddPlayer && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {isAdmin && onOpenRequests && (
+          <button onClick={onOpenRequests} style={{
+            background: 'transparent', color: T.gold, border: `1px solid ${T.gold}`,
+            borderRadius: 999, padding: '8px 14px', cursor: 'pointer',
+            fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, letterSpacing: 1,
+            position: 'relative',
+          }}>
+            Заявки{pending > 0 ? ` · ${pending}` : ''}
+          </button>
+        )}
+        {isAdmin && onAddPlayer && (
           <button onClick={onAddPlayer} style={{
             background: T.emerald, color: T.cream, border: 'none',
             borderRadius: 999, padding: '8px 16px',
@@ -52,6 +68,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer }: PlayersScreenProps 
             Add
           </button>
         )}
+        </div>
       </div>
 
       <div style={{ padding: '12px 18px 8px' }}>

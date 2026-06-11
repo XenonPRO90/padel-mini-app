@@ -5,6 +5,7 @@ import { T } from '../lib/tokens';
 import { CourtCard, type Slot } from '../components/CourtCard';
 import { ELabel } from '../lib/elegant';
 import { useSwapPlayers } from '../api/mutations';
+import { useMe } from '../api/me';
 import { CourtSheet } from './CourtSheet';
 import { groups8CourtTag, type Round, type Match } from '../lib/types';
 
@@ -29,6 +30,8 @@ export function RoundDetailScreen({ tid, roundNum, mode, onBack }: Props) {
     queryFn: () => api(`/api/tournaments/${tid}/rounds/${roundNum}`),
   });
 
+  const { data: me } = useMe();
+  const isAdmin = !!me?.is_admin;
   const [editMode, setEditMode] = useState(false);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [winnerMatch, setWinnerMatch] = useState<Match | null>(null);
@@ -74,13 +77,15 @@ export function RoundDetailScreen({ tid, roundNum, mode, onBack }: Props) {
             color: T.ink, letterSpacing: 3,
           }}>ROUND {roundNum}</div>
         </div>
-        <button onClick={() => (editMode ? exitEdit() : setEditMode(true))} style={{
-          background: editMode ? T.emerald : 'transparent',
-          border: `1px solid ${editMode ? T.emerald : T.gold}`,
-          borderRadius: 999, padding: '5px 12px', cursor: 'pointer',
-          color: editMode ? T.cream : T.gold,
-          fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 1,
-        }}>{editMode ? 'Готово' : 'Править'}</button>
+        {isAdmin ? (
+          <button onClick={() => (editMode ? exitEdit() : setEditMode(true))} style={{
+            background: editMode ? T.emerald : 'transparent',
+            border: `1px solid ${editMode ? T.emerald : T.gold}`,
+            borderRadius: 999, padding: '5px 12px', cursor: 'pointer',
+            color: editMode ? T.cream : T.gold,
+            fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 1,
+          }}>{editMode ? 'Готово' : 'Править'}</button>
+        ) : <div style={{ width: 60 }} />}
       </div>
 
       <div style={{ padding: '12px 18px 8px', textAlign: 'center' }}>

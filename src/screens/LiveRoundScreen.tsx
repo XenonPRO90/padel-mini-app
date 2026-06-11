@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useNextRound, useUndoLastRound } from '../api/mutations';
+import { useMe } from '../api/me';
 import { T } from '../lib/tokens';
 import { CourtCard } from '../components/CourtCard';
 import { MainCTA } from '../components/MainCTA';
@@ -34,6 +35,8 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   const [rosterOpen, setRosterOpen] = useState(false);
   const nextRound = useNextRound();
   const undoRound = useUndoLastRound();
+  const { data: me } = useMe();
+  const isAdmin = !!me?.is_admin;
 
   if (isLoading) {
     return (
@@ -109,12 +112,14 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
           }}>{phaseLabel ?? t.name}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button onClick={() => setRosterOpen(true)} aria-label="Roster" style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            padding: 4, color: T.gold,
-          }}>
-            <EPeopleIcon size={20} />
-          </button>
+          {isAdmin && (
+            <button onClick={() => setRosterOpen(true)} aria-label="Roster" style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              padding: 4, color: T.gold,
+            }}>
+              <EPeopleIcon size={20} />
+            </button>
+          )}
           <button onClick={() => onShareSchedule?.()} aria-label="Share schedule" style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
             padding: 4, color: T.gold,
@@ -139,7 +144,7 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
             <CourtCard
               key={m.match_id}
               match={m}
-              onClick={() => setOpenMatch(m)}
+              onClick={isAdmin ? () => setOpenMatch(m) : undefined}
               medal={medal}
               tag={tag}
             />
@@ -165,26 +170,30 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
             ))}
           </div>
         </div>
-        {/* Last round of americano/groups8: advance() finishes the tournament
-            (groups8 also computes final 1–8 placement there). */}
-        <MainCTA
-          label={
-            nextRound.isPending ? (isLastRound ? 'Finishing…' : 'Generating…')
-            : !allDone ? `Waiting · ${recorded}/${total}`
-            : isLastRound ? 'Завершить турнир'
-            : 'Next round'
-          }
-          disabled={!allDone || nextRound.isPending}
-          onClick={() => allDone && nextRound.mutate(t.id)}
-        />
-        {canUndo && (
-          <button onClick={onUndo} disabled={undoRound.isPending} style={{
-            width: '100%', marginTop: 8, padding: '8px',
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: T.muted, fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
-          }}>
-            {undoRound.isPending ? 'Откат…' : `↩ Ошибка в прошлом раунде? Откатить к раунду ${round.round_num - 1}`}
-          </button>
+        {/* Admin-only controls. Last round of americano/groups8: advance()
+            finishes the tournament (groups8 also computes final 1–8 placement). */}
+        {isAdmin && (
+          <>
+            <MainCTA
+              label={
+                nextRound.isPending ? (isLastRound ? 'Finishing…' : 'Generating…')
+                : !allDone ? `Waiting · ${recorded}/${total}`
+                : isLastRound ? 'Завершить турнир'
+                : 'Next round'
+              }
+              disabled={!allDone || nextRound.isPending}
+              onClick={() => allDone && nextRound.mutate(t.id)}
+            />
+            {canUndo && (
+              <button onClick={onUndo} disabled={undoRound.isPending} style={{
+                width: '100%', marginTop: 8, padding: '8px',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: T.muted, fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
+              }}>
+                {undoRound.isPending ? 'Откат…' : `↩ Ошибка в прошлом раунде? Откатить к раунду ${round.round_num - 1}`}
+              </button>
+            )}
+          </>
         )}
       </div>
 

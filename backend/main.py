@@ -158,6 +158,60 @@ async def player_profile(pid: int, _user=Depends(get_tg_user)):
     return prof
 
 
+class JoinReqBody(BaseModel):
+    name: str
+    level: str = "C"
+
+
+@app.post("/api/join-requests")
+async def join_request_create(body: JoinReqBody, user=Depends(get_tg_user)):
+    """Self-serve: a Telegram user requests to join the club (admin approves)."""
+    if user.get("_dev_mode"):
+        raise HTTPException(400, "dev mode")
+    try:
+        return await q.create_join_request(user["id"], user.get("username"), body.name, body.level)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/join-requests")
+async def join_requests_list(status: str = "pending", _admin=Depends(get_admin)):
+    return {"items": await q.list_join_requests(status)}
+
+
+@app.post("/api/join-requests/{rid}/approve")
+async def join_request_approve(rid: int, admin=Depends(get_admin)):
+    try:
+        return await q.approve_join_request(rid, admin["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/join-requests/{rid}/reject")
+async def join_request_reject(rid: int, admin=Depends(get_admin)):
+    return await q.reject_join_request(rid, admin["id"])
+
+
+class OwnProfileBody(BaseModel):
+    racket: str | None = None
+
+
+@app.put("/api/me/profile")
+async def update_me_profile(body: OwnProfileBody, user=Depends(get_tg_user)):
+    """Self-edit: a linked participant updates their own racket."""
+    if user.get("_dev_mode"):
+        raise HTTPException(400, "dev mode")
+    try:
+        return await q.update_own_profile(user["id"], body.racket)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/rackets/stats")
+async def rackets_stats(_user=Depends(get_tg_user)):
+    return {"items": await q.get_racket_stats()}
+
+
 @app.post("/api/players/{pid}/invite")
 async def player_invite(pid: int, admin=Depends(get_admin)):
     """Admin: mint a one-time deep-link to bind this player to a Telegram account."""
@@ -182,7 +236,7 @@ class WinnerBody(BaseModel):
 
 
 @app.post("/api/matches/{match_id}/winner")
-async def set_match_winner(match_id: int, body: WinnerBody, _user=Depends(get_tg_user)):
+async def set_match_winner(match_id: int, body: WinnerBody, _user=Depends(get_admin)):
     if body.winner not in (1, 2):
         raise HTTPException(400, "winner must be 1 or 2")
     try:
@@ -204,7 +258,7 @@ class ScoreBody(BaseModel):
 
 
 @app.post("/api/matches/{match_id}/score")
-async def set_match_score(match_id: int, body: ScoreBody, _user=Depends(get_tg_user)):
+async def set_match_score(match_id: int, body: ScoreBody, _user=Depends(get_admin)):
     """Record a game score (groups8 / score-based). Winner derived from scores."""
     try:
         return await q.record_match_score(match_id, body.score1, body.score2)
@@ -213,7 +267,7 @@ async def set_match_score(match_id: int, body: ScoreBody, _user=Depends(get_tg_u
 
 
 @app.post("/api/rounds/swap")
-async def swap_players(body: SwapBody, _user=Depends(get_tg_user)):
+async def swap_players(body: SwapBody, _user=Depends(get_admin)):
     """Swap two player slots within a round (cross-court move or intra-court
     re-pairing). Scores + pair_history recompute on the server."""
     try:
@@ -225,7 +279,7 @@ async def swap_players(body: SwapBody, _user=Depends(get_tg_user)):
 
 
 @app.post("/api/tournaments/{tid}/next-round")
-async def next_round(tid: int, _user=Depends(get_tg_user)):
+async def next_round(tid: int, _user=Depends(get_admin)):
     try:
         return await q.advance_to_next_round(tid)
     except ValueError as e:
@@ -233,7 +287,7 @@ async def next_round(tid: int, _user=Depends(get_tg_user)):
 
 
 @app.post("/api/tournaments/{tid}/undo-last-round")
-async def undo_last_round(tid: int, _user=Depends(get_tg_user)):
+async def undo_last_round(tid: int, _user=Depends(get_admin)):
     """Roll back to the previous round (deletes the latest round) so a wrong
     result can be fixed before the next round is replayed."""
     try:
@@ -243,7 +297,7 @@ async def undo_last_round(tid: int, _user=Depends(get_tg_user)):
 
 
 @app.post("/api/tournaments/{tid}/finish")
-async def finish(tid: int, _user=Depends(get_tg_user)):
+async def finish(tid: int, _user=Depends(get_admin)):
     return await q.finish_tournament(tid)
 
 
@@ -256,7 +310,7 @@ class PlayerBody(BaseModel):
 
 
 @app.post("/api/players")
-async def players_create(body: PlayerBody, _user=Depends(get_tg_user)):
+async def players_create(body: PlayerBody, _user=Depends(get_admin)):
     try:
         return await q.create_player(body.name, body.level, body.side)
     except ValueError as e:
@@ -264,7 +318,7 @@ async def players_create(body: PlayerBody, _user=Depends(get_tg_user)):
 
 
 @app.put("/api/players/{pid}")
-async def players_update(pid: int, body: PlayerBody, _user=Depends(get_tg_user)):
+async def players_update(pid: int, body: PlayerBody, _user=Depends(get_admin)):
     try:
         return await q.update_player(pid, body.name, body.level, body.side)
     except ValueError as e:
@@ -272,7 +326,7 @@ async def players_update(pid: int, body: PlayerBody, _user=Depends(get_tg_user))
 
 
 @app.delete("/api/players/{pid}")
-async def players_delete(pid: int, _user=Depends(get_tg_user)):
+async def players_delete(pid: int, _user=Depends(get_admin)):
     try:
         return await q.delete_player(pid)
     except ValueError as e:
@@ -294,7 +348,7 @@ class TournamentCreateBody(BaseModel):
 
 
 @app.post("/api/tournaments")
-async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_tg_user)):
+async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_admin)):
     try:
         return await q.create_tournament(
             name=body.name,
@@ -320,7 +374,7 @@ class ReplacePlayerBody(BaseModel):
 
 @app.post("/api/tournaments/{tid}/replace-player")
 async def replace_player(
-    tid: int, body: ReplacePlayerBody, _user=Depends(get_tg_user),
+    tid: int, body: ReplacePlayerBody, _user=Depends(get_admin),
 ):
     """Swap one tournament participant for another from the library.
     The new player inherits the old slot, scores, pair-history and past
@@ -365,8 +419,16 @@ async def share_text(tid: int, _user=Depends(get_tg_user)):
 async def me(user=Depends(get_tg_user)):
     """Current Telegram user + admin flag + linked player (identity) + join status."""
     if user.get("_dev_mode"):
-        return {"user": user, "is_admin": True, "player": None, "join_status": None}
+        return {"user": user, "is_admin": True, "player": None, "join_status": None, "pending_requests": 0}
     is_adm = await q.is_admin(user["id"])
     player = await q.get_player_by_tg(user["id"])
+    # Auto-populate avatar from Telegram initData (photo_url) once linked.
+    if player and user.get("photo_url") and player.get("photo_url") != user["photo_url"]:
+        await q.set_player_photo(player["id"], user["photo_url"])
+        player["photo_url"] = user["photo_url"]
     join_status = None if player else await q.get_join_status(user["id"])
-    return {"user": user, "is_admin": is_adm, "player": player, "join_status": join_status}
+    pending = await q.count_pending_join_requests() if is_adm else 0
+    return {
+        "user": user, "is_admin": is_adm, "player": player,
+        "join_status": join_status, "pending_requests": pending,
+    }

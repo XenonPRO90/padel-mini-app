@@ -7,6 +7,7 @@ export interface Me {
   is_admin: boolean;
   player: Player | null;       // linked participant (identity), or null
   join_status: string | null;  // 'pending' | 'approved' | 'rejected' | null
+  pending_requests?: number;   // count of pending join requests (admins)
 }
 
 // Who am I: admin flag + linked player. Identity rarely changes in a session.

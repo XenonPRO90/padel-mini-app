@@ -409,6 +409,114 @@ async def unlink_player(player_id: int):
     return {"ok": True}
 
 
+# ─── Join requests (self-serve onboarding) ────────────────
+
+async def create_join_request(tg_id: int, username, name: str, level: str):
+    async with conn() as db:
+        cur = await db.execute("SELECT id FROM players WHERE telegram_id=?", (tg_id,))
+        if await cur.fetchone():
+            raise ValueError("Ты уже в приложении")
+        cur = await db.execute(
+            "SELECT id FROM join_requests WHERE tg_id=? AND status='pending'", (tg_id,)
+        )
+        if await cur.fetchone():
+            raise ValueError("Заявка уже на рассмотрении")
+        await db.execute(
+            "INSERT INTO join_requests(tg_id, username, name, level) VALUES(?,?,?,?)",
+            (tg_id, username, (name or "").strip() or (username or "Игрок"), level or "C"),
+        )
+        await db.commit()
+    return {"ok": True, "status": "pending"}
+
+
+async def list_join_requests(status: str = "pending"):
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, tg_id, username, name, level, status, created_at "
+            "FROM join_requests WHERE status=? ORDER BY id DESC",
+            (status,),
+        )
+        return rows_to_list(await cur.fetchall())
+
+
+async def count_pending_join_requests() -> int:
+    async with conn() as db:
+        cur = await db.execute("SELECT COUNT(*) AS c FROM join_requests WHERE status='pending'")
+        return (await cur.fetchone())["c"]
+
+
+async def approve_join_request(req_id: int, reviewed_by: int):
+    """Approve: create a player linked to the requester's Telegram, mark approved."""
+    async with conn() as db:
+        cur = await db.execute("SELECT * FROM join_requests WHERE id=?", (req_id,))
+        r = await cur.fetchone()
+        if not r:
+            raise ValueError("Заявка не найдена")
+        if r["status"] != "pending":
+            raise ValueError("Заявка уже обработана")
+        cur = await db.execute("SELECT id FROM players WHERE telegram_id=?", (r["tg_id"],))
+        if await cur.fetchone():
+            await db.execute(
+                "UPDATE join_requests SET status='approved', reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+                (reviewed_by, req_id),
+            )
+            await db.commit()
+            raise ValueError("Этот Telegram уже привязан к игроку")
+        cur = await db.execute(
+            "INSERT INTO players(name, level, side, telegram_id, username) VALUES(?,?,?,?,?)",
+            (r["name"], r["level"] or "C", "both", r["tg_id"], r["username"]),
+        )
+        pid = cur.lastrowid
+        await db.execute(
+            "UPDATE join_requests SET status='approved', reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+            (reviewed_by, req_id),
+        )
+        await db.commit()
+    return {"ok": True, "player_id": pid}
+
+
+async def reject_join_request(req_id: int, reviewed_by: int):
+    async with conn() as db:
+        await db.execute(
+            "UPDATE join_requests SET status='rejected', reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+            (reviewed_by, req_id),
+        )
+        await db.commit()
+    return {"ok": True}
+
+
+async def update_own_profile(tg_id: int, racket):
+    """Self-edit: a linked participant updates their own racket."""
+    async with conn() as db:
+        cur = await db.execute("SELECT id FROM players WHERE telegram_id=?", (tg_id,))
+        p = await cur.fetchone()
+        if not p:
+            raise ValueError("Профиль не привязан")
+        await db.execute(
+            "UPDATE players SET racket=? WHERE id=?",
+            ((racket or "").strip() or None, p["id"]),
+        )
+        await db.commit()
+    return {"ok": True}
+
+
+async def set_player_photo(player_id: int, photo_url: str):
+    async with conn() as db:
+        await db.execute("UPDATE players SET photo_url=? WHERE id=?", (photo_url, player_id))
+        await db.commit()
+
+
+async def get_racket_stats():
+    """Club racket popularity: players per racket (non-empty), most popular first."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT racket, COUNT(*) AS players FROM players "
+            "WHERE racket IS NOT NULL AND TRIM(racket) <> '' "
+            "GROUP BY racket ORDER BY players DESC, racket"
+        )
+        return rows_to_list(await cur.fetchall())
+
+
 async def get_player_stats(pid: int):
     async with conn() as db:
         cur = await db.execute(
