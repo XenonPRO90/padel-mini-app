@@ -12,6 +12,10 @@ DB_PATH = os.getenv("DB_PATH", "/home/ubuntu/padel-mini-app/padel-dev.db")
 # In dev we keep it in .env at /home/ubuntu/padel-mini-app/.env (not committed).
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
+# Bot @username used to build invite deep links (https://t.me/<username>?start=…).
+# Dev → PadelMastersDev_bot, prod → PadelMasters_bot.
+BOT_USERNAME = os.getenv("BOT_USERNAME", "PadelMasters_bot")
+
 # Vercel/preview URLs that are allowed to hit the API. Comma-separated env.
 # In dev we open localhost too.
 CORS_ORIGINS = [

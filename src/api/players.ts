@@ -11,6 +11,15 @@ export function usePlayerProfile(pid: number) {
   });
 }
 
+export function useMintInvite() {
+  return useMutation({
+    mutationFn: (pid: number) =>
+      api<{ deep_link: string; token: string; expires_at: string }>(
+        `/api/players/${pid}/invite`, { method: 'POST' },
+      ),
+  });
+}
+
 export interface PlayerInput {
   name: string;
   level: string;

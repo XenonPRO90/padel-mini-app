@@ -332,10 +332,81 @@ async def get_all_players():
 async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
-            "SELECT id, name, level, side FROM players WHERE id=?",
+            "SELECT id, name, level, side, telegram_id, username, photo_url, racket FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
+
+
+async def get_player_by_tg(tg_id: int):
+    """The player row linked to a Telegram account, or None (identity)."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, name, level, side, telegram_id, username, photo_url, racket "
+            "FROM players WHERE telegram_id=?",
+            (tg_id,),
+        )
+        return row_to_dict(await cur.fetchone())
+
+
+async def get_join_status(tg_id: int):
+    """Status of this tg's most recent join request (pending/approved/rejected) or None."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT status FROM join_requests WHERE tg_id=? ORDER BY id DESC LIMIT 1",
+            (tg_id,),
+        )
+        row = await cur.fetchone()
+        return row["status"] if row else None
+
+
+async def mint_player_invite(player_id: int, created_by: int):
+    """Create a one-time 7-day invite for a player and return its deep link.
+    Supersedes any prior unused invite for that player. Errors if the player is
+    already linked to a Telegram account (caller can unlink first)."""
+    import secrets
+    from datetime import datetime, timedelta
+    from .config import BOT_USERNAME
+
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, telegram_id FROM players WHERE id=?", (player_id,)
+        )
+        p = await cur.fetchone()
+        if not p:
+            raise ValueError("Player not found")
+        if p["telegram_id"]:
+            raise ValueError("Игрок уже привязан к Telegram")
+
+        await db.execute(
+            "DELETE FROM player_invites WHERE player_id=? AND used_at IS NULL", (player_id,)
+        )
+        token = secrets.token_urlsafe(16)
+        now = datetime.utcnow()
+        expires = (now + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        await db.execute(
+            "INSERT INTO player_invites(token, player_id, created_by, created_at, expires_at) "
+            "VALUES(?,?,?,?,?)",
+            (token, player_id, created_by, now.strftime("%Y-%m-%d %H:%M:%S"), expires),
+        )
+        await db.commit()
+
+    return {
+        "token": token,
+        "deep_link": f"https://t.me/{BOT_USERNAME}?start=bind_{token}",
+        "expires_at": expires,
+    }
+
+
+async def unlink_player(player_id: int):
+    """Clear a player's Telegram link (admin correction / re-invite)."""
+    async with conn() as db:
+        await db.execute(
+            "UPDATE players SET telegram_id=NULL, username=NULL, photo_url=NULL WHERE id=?",
+            (player_id,),
+        )
+        await db.commit()
+    return {"ok": True}
 
 
 async def get_player_stats(pid: int):

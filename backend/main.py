@@ -12,6 +12,16 @@ from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from .auth import get_tg_user
 from . import queries as q
 
+
+async def get_admin(user=Depends(get_tg_user)):
+    """Admin-only dependency. Under dev-mode auth (off) it's a no-op; with real
+    auth it requires the Telegram id to be in `admins` (else 403)."""
+    if user.get("_dev_mode"):
+        return user
+    if not await q.is_admin(user["id"]):
+        raise HTTPException(403, "admin only")
+    return user
+
 app = FastAPI(
     title="Padel KOTH Mini App API",
     version="0.1.0",
@@ -146,6 +156,21 @@ async def player_profile(pid: int, _user=Depends(get_tg_user)):
     if not prof:
         raise HTTPException(404, "Player not found")
     return prof
+
+
+@app.post("/api/players/{pid}/invite")
+async def player_invite(pid: int, admin=Depends(get_admin)):
+    """Admin: mint a one-time deep-link to bind this player to a Telegram account."""
+    try:
+        return await q.mint_player_invite(pid, admin["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/players/{pid}/link")
+async def player_unlink(pid: int, admin=Depends(get_admin)):
+    """Admin: clear a player's Telegram link (to re-invite / fix a mistake)."""
+    return await q.unlink_player(pid)
 
 
 # ─── Misc ──────────────────────────────────────────────────
@@ -338,8 +363,10 @@ async def share_text(tid: int, _user=Depends(get_tg_user)):
 
 @app.get("/api/me")
 async def me(user=Depends(get_tg_user)):
-    """Returns current Telegram user + whether they're an admin."""
+    """Current Telegram user + admin flag + linked player (identity) + join status."""
     if user.get("_dev_mode"):
-        return {"user": user, "is_admin": True}
+        return {"user": user, "is_admin": True, "player": None, "join_status": None}
     is_adm = await q.is_admin(user["id"])
-    return {"user": user, "is_admin": is_adm}
+    player = await q.get_player_by_tg(user["id"])
+    join_status = None if player else await q.get_join_status(user["id"])
+    return {"user": user, "is_admin": is_adm, "player": player, "join_status": join_status}
