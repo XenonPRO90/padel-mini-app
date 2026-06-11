@@ -324,7 +324,7 @@ async def get_monthly_leaderboard(year: int, month: int) -> tuple[list, int]:
 async def get_all_players():
     async with conn() as db:
         cur = await db.execute(
-            "SELECT id, name, level, side FROM players ORDER BY name"
+            "SELECT id, name, level, side, photo_url, racket FROM players ORDER BY name"
         )
         return rows_to_list(await cur.fetchall())
 
