@@ -129,6 +129,14 @@ export interface ProfileAchievement {
   unit: string;
 }
 
+export interface ProfileOpponent {
+  player_id: number;
+  name: string;
+  meetings: number;
+  wins: number;
+  losses: number;
+}
+
 export interface PlayerProfile {
   player: Player;
   stats: {
@@ -143,10 +151,20 @@ export interface PlayerProfile {
     best_place: number | null;
     streak_best: number;
     streak_cur: number;
+    podium_rate: number;
+    avg_finish: number | null;
+    giant_kills: number;
+    club_rank: number | null;
+    club_total: number | null;
+    recent_win_rate: number | null;
+    recent_games: number;
+    form: string[];
   };
   recent: ProfilePlacement[];
   partners: ProfilePartner[];
   best_partner: ProfilePartner | null;
+  nemesis: ProfileOpponent | null;
+  favorite_opponent: ProfileOpponent | null;
   achievements: ProfileAchievement[];
 }
 
