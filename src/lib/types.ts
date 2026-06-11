@@ -8,6 +8,10 @@ export interface Player {
   name: string;
   level: string;
   side: Side;
+  telegram_id?: number | null;  // set once linked to a Telegram account
+  username?: string | null;
+  photo_url?: string | null;
+  racket?: string | null;
 }
 
 export interface ScoredPlayer extends Player {

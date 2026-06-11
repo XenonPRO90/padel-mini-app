@@ -4,7 +4,9 @@ import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon } from '../lib/elegant';
 import { Ring } from '../components/Ring';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
-import { usePlayerProfile } from '../api/players';
+import { usePlayerProfile, useMintInvite } from '../api/players';
+import { useMe } from '../api/me';
+import { ShareTextModal } from '../components/ShareTextModal';
 import type { ProfilePlacement, ProfilePartner } from '../lib/types';
 
 interface Props {
@@ -32,7 +34,26 @@ const STAT_HELP = [
 
 export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: Props) {
   const { data, isLoading } = usePlayerProfile(pid);
+  const { data: me } = useMe();
+  const mint = useMintInvite();
   const [infoOpen, setInfoOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+
+  const isAdmin = !!me?.is_admin;
+  const linked = !!data?.player?.telegram_id;
+
+  const onInvite = async () => {
+    try {
+      const { deep_link } = await mint.mutateAsync(pid);
+      const tg = window.Telegram?.WebApp;
+      const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(deep_link)
+        + '&text=' + encodeURIComponent('Открой свой профиль в Padel Club');
+      if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+      else setShareLink(deep_link);
+    } catch (e) {
+      alert((e as Error).message || 'Не удалось создать приглашение');
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -51,10 +72,19 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
           }}>Профиль</div>
         </div>
-        <button onClick={onEdit} aria-label="Edit" style={{
-          background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
-          color: T.gold, display: 'flex', alignItems: 'center', gap: 4,
-        }}><EEditIcon size={16} /></button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isAdmin && !linked && (
+            <button onClick={onInvite} disabled={mint.isPending} style={{
+              background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 999,
+              padding: '4px 10px', cursor: 'pointer', color: T.gold,
+              fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
+            }}>{mint.isPending ? '…' : 'Пригласить'}</button>
+          )}
+          <button onClick={onEdit} aria-label="Edit" style={{
+            background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+            color: T.gold, display: 'flex', alignItems: 'center', gap: 4,
+          }}><EEditIcon size={16} /></button>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 40px' }}>
@@ -82,9 +112,16 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                 marginTop: 10, fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
                 color: T.ink, textAlign: 'center',
               }}>{data.player.name}</div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                 <LevelBadge level={data.player.level} />
                 <SideBadge side={data.player.side} />
+                {linked && (
+                  <span style={{
+                    fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
+                    color: T.emerald, border: `1px solid ${T.emerald}`, borderRadius: 999,
+                    padding: '2px 8px',
+                  }}>✓ в приложении{data.player.username ? ` · @${data.player.username}` : ''}</span>
+                )}
               </div>
             </div>
 
@@ -188,6 +225,10 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
           </>
         )}
       </div>
+
+      {shareLink && (
+        <ShareTextModal text={shareLink} onClose={() => setShareLink(null)} />
+      )}
     </div>
   );
 }
