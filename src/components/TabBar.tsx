@@ -8,6 +8,8 @@ interface Props { active: Tab; onChange: (t: Tab) => void }
 
 export function TabBar({ active, onChange }: Props) {
   const { data: me } = useMe();
+  // Brand-new users (not admin, not linked) only see the welcome/join screen.
+  if (me && !me.is_admin && !me.player) return null;
   const showCabinet = !!me?.player;  // linked participants get a personal cabinet tab
   const tabs: { id: Tab; label: string; icon: (size: number, c: string) => React.ReactNode }[] = [
     { id: 'tournament', label: 'TOURNAMENT', icon: (s, c) => <ETrophy size={s} color={c} /> },
