@@ -3,6 +3,7 @@ import { T } from '../lib/tokens';
 import { ELabel, EGoldFrame, EMedal, EPlace } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
 import { useClubLeaderboard, useClubPairs, useClubRecords } from '../api/club';
+import type { ClubBy, ClubRow } from '../api/club';
 import type { Player } from '../lib/types';
 
 type View = 'rating' | 'pairs' | 'records';
@@ -76,17 +77,26 @@ function Toggle({ options, value, onChange }: {
 
 function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
   const [period, setPeriod] = useState<'all' | 'month'>('all');
-  const [by, setBy] = useState<'points' | 'winrate'>('points');
-  const { data, isLoading } = useClubLeaderboard(period, by);
+  const [by, setBy] = useState<ClubBy>('rating');
+  // composite rating is all-time; period applies only to points/winrate
+  const effPeriod = by === 'rating' ? 'all' : period;
+  const { data, isLoading } = useClubLeaderboard(effPeriod, by);
   const items = data?.items ?? [];
+
+  const mainValue = (r: ClubRow) =>
+    by === 'rating' ? (r.rating ?? 0)
+    : by === 'points' ? r.points
+    : `${Math.round(r.win_rate * 100)}%`;
 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <Toggle options={[{ id: 'all', label: 'Всё время' }, { id: 'month', label: 'Месяц' }]}
-          value={period} onChange={(v) => setPeriod(v as 'all' | 'month')} />
-        <Toggle options={[{ id: 'points', label: 'Очки' }, { id: 'winrate', label: 'Винрейт' }]}
-          value={by} onChange={(v) => setBy(v as 'points' | 'winrate')} />
+        {by !== 'rating' ? (
+          <Toggle options={[{ id: 'all', label: 'Всё время' }, { id: 'month', label: 'Месяц' }]}
+            value={period} onChange={(v) => setPeriod(v as 'all' | 'month')} />
+        ) : <span />}
+        <Toggle options={[{ id: 'rating', label: 'Рейтинг' }, { id: 'points', label: 'Очки' }, { id: 'winrate', label: 'Винрейт' }]}
+          value={by} onChange={(v) => setBy(v as ClubBy)} />
       </div>
       {isLoading ? (
         <div className="skeleton" style={{ height: 240, borderRadius: 16 }} />
@@ -106,17 +116,29 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
                   {i < 3 ? <EMedal place={(i + 1) as 1 | 2 | 3} size={24} /> : <EPlace n={i + 1} />}
                 </div>
                 <Avatar name={r.name} size={28} photoUrl={r.photo_url} />
-                <span style={{
-                  fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 500, color: T.ink,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>{r.name}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 500, color: T.ink,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{r.name}</div>
+                  {by === 'rating' && (
+                    <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, whiteSpace: 'nowrap' }}>
+                      {Math.round(r.win_rate * 100)}% · {r.games}и{r.champion ? ` · ${r.champion}🏆` : ''}
+                    </div>
+                  )}
+                </div>
                 <span style={{ fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 700, color: T.goldDeep, fontVariantNumeric: 'tabular-nums' }}>
-                  {by === 'points' ? r.points : `${Math.round(r.win_rate * 100)}%`}
+                  {mainValue(r)}
                 </span>
               </div>
             ))}
           </div>
         </EGoldFrame>
+      )}
+      {by === 'rating' && (
+        <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, marginTop: 8, textAlign: 'center' }}>
+          композит: качество · титулы · опыт · форма · всё время
+        </div>
       )}
       {by === 'winrate' && (
         <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, marginTop: 8, textAlign: 'center' }}>

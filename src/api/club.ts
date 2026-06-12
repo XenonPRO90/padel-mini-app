@@ -12,6 +12,13 @@ export interface ClubRow {
   games: number;
   tournaments: number;
   win_rate: number;
+  // present only for by='rating' (composite)
+  rating?: number;
+  rank?: number;
+  champion?: number;
+  podium?: number;
+  recent_games?: number;
+  components?: { quality: number; titles: number; volume: number; form: number };
 }
 
 export interface ClubPair {
@@ -32,7 +39,9 @@ export interface ClubRecords {
   champions: ClubChampion[];
 }
 
-export function useClubLeaderboard(period: 'all' | 'month', by: 'points' | 'winrate') {
+export type ClubBy = 'rating' | 'points' | 'winrate';
+
+export function useClubLeaderboard(period: 'all' | 'month', by: ClubBy) {
   return useQuery<{ items: ClubRow[] }>({
     queryKey: ['club-lb', period, by],
     queryFn: () => api(`/api/club/leaderboard?period=${period}&by=${by}`),
