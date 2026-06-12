@@ -5,7 +5,10 @@ Run locally:
 Run from inside backend/:
     uvicorn main:app --reload --port 8001
 """
+import asyncio
+import urllib.request
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
@@ -147,6 +150,25 @@ async def player_detail(pid: int, _user=Depends(get_tg_user)):
         raise HTTPException(404, "Player not found")
     stats = await q.get_player_stats(pid)
     return {"player": p, "stats": stats}
+
+
+@app.get("/api/players/{pid}/avatar")
+async def player_avatar(pid: int, _user=Depends(get_tg_user)):
+    """Proxy the player's Telegram avatar so it can be drawn into a shareable
+    card (html2canvas can't read the cross-origin t.me image directly)."""
+    p = await q.get_player(pid)
+    if not p or not p.get("photo_url"):
+        raise HTTPException(404, "no avatar")
+
+    def fetch():
+        req = urllib.request.Request(p["photo_url"], headers={"User-Agent": "padel-club"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.read(), r.headers.get("Content-Type", "image/jpeg")
+    try:
+        data, ctype = await asyncio.to_thread(fetch)
+    except Exception:
+        raise HTTPException(404, "avatar fetch failed")
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/api/players/{pid}/profile")
