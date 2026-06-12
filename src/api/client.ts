@@ -21,3 +21,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return res.json();
 }
+
+// Fetch binary (e.g. avatar proxy) with the same auth header.
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await fetch(API_BASE + path, { headers: { 'X-Init-Data': getInitData() } });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.blob();
+}

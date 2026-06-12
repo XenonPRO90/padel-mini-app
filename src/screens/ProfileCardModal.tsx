@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { T } from '../lib/tokens';
 import { ELogo, EBtn } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
+import { apiBlob } from '../api/client';
 import type { PlayerProfile } from '../lib/types';
 
 // Poster palette (cream/gold, serif) — matches FinishedCelebration.
@@ -14,6 +15,23 @@ const P = {
 export function ProfileCardModal({ profile, onClose }: { profile: PlayerProfile; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
+  // Load avatar as a data URL — html2canvas can't capture cross-origin t.me images.
+  const [avatarData, setAvatarData] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (profile.player.photo_url) {
+      apiBlob(`/api/players/${profile.player.id}/avatar`)
+        .then((b) => new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = rej;
+          r.readAsDataURL(b);
+        }))
+        .then((d) => { if (!cancelled) setAvatarData(d); })
+        .catch(() => { /* fall back to initials */ });
+    }
+    return () => { cancelled = true; };
+  }, [profile.player.id, profile.player.photo_url]);
   const s = profile.stats;
 
   const tiles = [
@@ -69,7 +87,7 @@ export function ProfileCardModal({ profile, onClose }: { profile: PlayerProfile;
 
           <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0 10px' }}>
             <div style={{ borderRadius: '50%', padding: 4, border: `2px solid ${P.gold}` }}>
-              <Avatar name={profile.player.name} size={88} photoUrl={profile.player.photo_url} />
+              <Avatar name={profile.player.name} size={88} photoUrl={avatarData} />
             </div>
           </div>
 
