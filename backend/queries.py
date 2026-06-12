@@ -685,7 +685,6 @@ async def get_player_profile(pid: int):
     async with conn() as db:
         derived = await _player_matches_derived(db, pid)
         placements = await _player_placements(db, pid)
-        club_rank = await _player_club_rank(db, pid)
         recent_rec = await _player_recent_record(db, pid, 30)
         court_dist = await _player_court_distribution(db, pid)
         # resolve names + levels for partners AND opponents in one query
@@ -698,6 +697,12 @@ async def get_player_profile(pid: int):
             )
             for r in await cur.fetchall():
                 names[r["id"]] = r["name"]; levels[r["id"]] = r["level"]
+
+    # Club rank from the composite rating (same metric as Club → Рейтинг).
+    rating_list = await get_club_rating()
+    my_rating = next((x for x in rating_list if x["player_id"] == pid), None)
+    club_rank = {"rank": my_rating["rank"], "total": len(rating_list)} if my_rating else None
+    club_rating = my_rating["rating"] if my_rating else None
 
     # Totals from scores (authoritative, all tournaments) so games == W+L.
     base = await get_player_stats(pid)
@@ -781,6 +786,7 @@ async def get_player_profile(pid: int):
             "giant_kills": giant_kills,
             "club_rank": club_rank["rank"] if club_rank else None,
             "club_total": club_rank["total"] if club_rank else None,
+            "club_rating": club_rating,
             "recent_win_rate": recent_win_rate,
             "recent_games": rg,
             "form": derived["form"],
