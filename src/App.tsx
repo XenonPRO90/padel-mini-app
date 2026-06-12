@@ -9,6 +9,8 @@ import { PlayerEditScreen } from './screens/PlayerEditScreen';
 import { PlayerProfileScreen } from './screens/PlayerProfileScreen';
 import { AdminRequestsScreen } from './screens/AdminRequestsScreen';
 import { ClubScreen } from './screens/ClubScreen';
+import { WelcomeScreen } from './screens/WelcomeScreen';
+import { PlayerHome } from './screens/PlayerHome';
 import { WizardScreen } from './screens/WizardScreen';
 import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
@@ -105,10 +107,12 @@ export default function App() {
       }}>
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {top.name === 'home' && tab === 'tournament' && (
-            <HomeScreen
+            <HomeRouter
               onOpenLiveRound={() => push({ name: 'liveRound' })}
               onCreateTournament={() => push({ name: 'wizard' })}
               onTournamentFinished={(tid) => setStack([{ name: 'home' }, { name: 'celebration', tid }])}
+              onOpenMyProfile={(p) => push({ name: 'playerProfile', player: p })}
+              onOpenClub={() => setTab('club')}
             />
           )}
           {top.name === 'home' && tab === 'players' && (
@@ -184,6 +188,39 @@ export default function App() {
         )}
       </div>
     </QueryClientProvider>
+  );
+}
+
+// Role-aware first screen (the 'tournament' tab). Inside the provider so it can
+// read /api/me: admins → management home, linked players → personal dashboard,
+// brand-new users → welcome + join.
+function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub }: {
+  onOpenLiveRound: () => void;
+  onCreateTournament: () => void;
+  onTournamentFinished: (tid: number) => void;
+  onOpenMyProfile: (p: Player) => void;
+  onOpenClub: () => void;
+}) {
+  const { data: me, isLoading } = useMe();
+  if (isLoading) return null;
+  if (me && !me.is_admin && me.player) {
+    return (
+      <PlayerHome
+        onOpenProfile={() => onOpenMyProfile(me.player!)}
+        onOpenClub={onOpenClub}
+        onOpenLiveRound={onOpenLiveRound}
+      />
+    );
+  }
+  if (me && !me.is_admin && !me.player) {
+    return <WelcomeScreen />;
+  }
+  return (
+    <HomeScreen
+      onOpenLiveRound={onOpenLiveRound}
+      onCreateTournament={onCreateTournament}
+      onTournamentFinished={onTournamentFinished}
+    />
   );
 }
 
