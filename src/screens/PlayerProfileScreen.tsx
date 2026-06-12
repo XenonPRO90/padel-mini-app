@@ -282,6 +282,32 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               </div>
             )}
 
+            {/* Court distribution — King of the Court only */}
+            {data.court_distribution.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Корты · King of the Court</ELabel>
+                <EGoldFrame>
+                  <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {data.court_distribution.map((c) => (
+                      <div key={c.court} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{
+                          fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
+                          color: T.ink, width: 58, flexShrink: 0,
+                        }}>Корт {c.court}</span>
+                        <div style={{ flex: 1, height: 8, background: T.paperEdge, borderRadius: 999, overflow: 'hidden' }}>
+                          <div style={{ width: `${c.pct}%`, height: '100%', background: T.emerald }} />
+                        </div>
+                        <span style={{
+                          fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 700, color: T.goldDeep,
+                          width: 38, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                        }}>{c.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </EGoldFrame>
+              </div>
+            )}
+
             {/* Recent tournaments */}
             {data.recent.length > 0 && (
               <div style={{ marginBottom: 18 }}>

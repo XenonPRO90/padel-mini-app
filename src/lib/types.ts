@@ -137,6 +137,12 @@ export interface ProfileOpponent {
   losses: number;
 }
 
+export interface ProfileCourt {
+  court: number;
+  games: number;
+  pct: number;
+}
+
 export interface PlayerProfile {
   player: Player;
   stats: {
@@ -165,6 +171,7 @@ export interface PlayerProfile {
   best_partner: ProfilePartner | null;
   nemesis: ProfileOpponent | null;
   favorite_opponent: ProfileOpponent | null;
+  court_distribution: ProfileCourt[];
   achievements: ProfileAchievement[];
 }
 
