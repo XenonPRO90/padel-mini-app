@@ -146,6 +146,7 @@ export function Avatar({ name, size = 40, photoUrl }: { name: string; size?: num
         onError={() => setImgError(true)}
         style={{
           width: size, height: size, borderRadius: '50%', objectFit: 'cover',
+          objectPosition: 'center', display: 'block',
           border: `1px solid ${T.rule}`, flexShrink: 0, background: T.cream2,
         }}
       />

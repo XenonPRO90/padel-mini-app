@@ -86,7 +86,10 @@ export function ProfileCardModal({ profile, onClose }: { profile: PlayerProfile;
           <div style={{ fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 5, color: P.gold, textTransform: 'uppercase' }}>Padel Club</div>
 
           <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0 10px' }}>
-            <div style={{ borderRadius: '50%', padding: 4, border: `2px solid ${P.gold}` }}>
+            <div style={{
+              borderRadius: '50%', padding: 4, border: `2px solid ${P.gold}`,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 0,
+            }}>
               <Avatar name={profile.player.name} size={88} photoUrl={avatarData} />
             </div>
           </div>
