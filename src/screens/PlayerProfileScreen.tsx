@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { T } from '../lib/tokens';
-import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon } from '../lib/elegant';
+import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon, EShareIcon } from '../lib/elegant';
+import { ProfileCardModal } from './ProfileCardModal';
 import { Ring } from '../components/Ring';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
@@ -41,6 +42,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
   const mint = useMintInvite();
   const [infoOpen, setInfoOpen] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
+  const [cardOpen, setCardOpen] = useState(false);
 
   const isAdmin = !!me?.is_admin;
   const linked = !!data?.player?.telegram_id;
@@ -80,6 +82,11 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
           }}>Профиль</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {data && (
+            <button onClick={() => setCardOpen(true)} aria-label="Поделиться" style={{
+              background: 'transparent', border: 'none', padding: 4, cursor: 'pointer', color: T.gold,
+            }}><EShareIcon size={17} /></button>
+          )}
           {isAdmin && !linked && (
             <button onClick={onInvite} disabled={mint.isPending} style={{
               background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 999,
@@ -349,6 +356,9 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
 
       {shareLink && (
         <ShareTextModal text={shareLink} onClose={() => setShareLink(null)} />
+      )}
+      {cardOpen && data && (
+        <ProfileCardModal profile={data} onClose={() => setCardOpen(false)} />
       )}
     </div>
   );

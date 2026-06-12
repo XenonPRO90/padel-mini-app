@@ -1,8 +1,8 @@
 import { T } from '../lib/tokens';
-import { ETrophy, EPeopleIcon, EClockIcon, ELogo } from '../lib/elegant';
+import { ETrophy, EPeopleIcon, EClockIcon, ELogo, EMedal } from '../lib/elegant';
 import { useMe } from '../api/me';
 
-export type Tab = 'tournament' | 'players' | 'history' | 'cabinet';
+export type Tab = 'tournament' | 'players' | 'club' | 'history' | 'cabinet';
 
 interface Props { active: Tab; onChange: (t: Tab) => void }
 
@@ -12,6 +12,7 @@ export function TabBar({ active, onChange }: Props) {
   const tabs: { id: Tab; label: string; icon: (size: number, c: string) => React.ReactNode }[] = [
     { id: 'tournament', label: 'TOURNAMENT', icon: (s, c) => <ETrophy size={s} color={c} /> },
     { id: 'players',    label: 'PLAYERS',    icon: (s, c) => <EPeopleIcon size={s} color={c} /> },
+    { id: 'club',       label: 'КЛУБ',       icon: (s) => <EMedal place={1} size={s} /> },
     { id: 'history',    label: 'HISTORY',    icon: (s, c) => <EClockIcon size={s} color={c} /> },
     ...(showCabinet
       ? [{ id: 'cabinet' as Tab, label: 'КАБИНЕТ', icon: (s: number, c: string) => <ELogo size={s} color={c} /> }]

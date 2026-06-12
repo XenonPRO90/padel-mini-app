@@ -212,6 +212,21 @@ async def rackets_stats(_user=Depends(get_tg_user)):
     return {"items": await q.get_racket_stats()}
 
 
+@app.get("/api/club/leaderboard")
+async def club_leaderboard(period: str = "all", by: str = "points", _user=Depends(get_tg_user)):
+    return {"items": await q.get_club_leaderboard(period, by)}
+
+
+@app.get("/api/club/pairs")
+async def club_pairs(_user=Depends(get_tg_user)):
+    return {"items": await q.get_club_pairs()}
+
+
+@app.get("/api/club/records")
+async def club_records(_user=Depends(get_tg_user)):
+    return await q.get_club_records()
+
+
 @app.post("/api/players/{pid}/invite")
 async def player_invite(pid: int, admin=Depends(get_admin)):
     """Admin: mint a one-time deep-link to bind this player to a Telegram account."""
