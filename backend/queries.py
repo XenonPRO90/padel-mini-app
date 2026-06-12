@@ -654,6 +654,29 @@ async def _player_recent_record(db, pid: int, days: int = 30):
     return {"wins": r["w"], "losses": r["l"]}
 
 
+async def _player_court_distribution(db, pid: int):
+    """Share of matches played on each court — King of the Court (rotating) only,
+    where court number reflects skill tier. Returns [{court, games, pct}], most
+    played first, or [] if no rotating games."""
+    cur = await db.execute(
+        """SELECT m.court_num AS court, COUNT(*) AS games
+           FROM matches m
+           JOIN rounds r ON r.id=m.round_id
+           JOIN tournaments t ON t.id=r.tournament_id
+           WHERE ? IN (m.p1, m.p2, m.p3, m.p4) AND m.winner IS NOT NULL AND t.mode='rotating'
+           GROUP BY m.court_num""",
+        (pid,),
+    )
+    rows = rows_to_list(await cur.fetchall())
+    total = sum(r["games"] for r in rows)
+    if not total:
+        return []
+    out = [{"court": r["court"], "games": r["games"], "pct": round(r["games"] / total * 100)}
+           for r in rows]
+    out.sort(key=lambda x: -x["games"])
+    return out
+
+
 async def get_player_profile(pid: int):
     from .pairing import level_value
     player = await get_player(pid)
@@ -664,6 +687,7 @@ async def get_player_profile(pid: int):
         placements = await _player_placements(db, pid)
         club_rank = await _player_club_rank(db, pid)
         recent_rec = await _player_recent_record(db, pid, 30)
+        court_dist = await _player_court_distribution(db, pid)
         # resolve names + levels for partners AND opponents in one query
         ids = set(derived["partners"]) | set(derived["opponents"])
         names, levels = {}, {}
@@ -766,6 +790,7 @@ async def get_player_profile(pid: int):
         "best_partner": best_partner,
         "nemesis": nemesis,
         "favorite_opponent": favorite_opp,
+        "court_distribution": court_dist,
         "achievements": achievements,
     }
 
