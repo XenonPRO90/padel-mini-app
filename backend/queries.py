@@ -795,6 +795,145 @@ async def get_player_profile(pid: int):
     }
 
 
+# ─── Club-wide aggregates (rating / pairs / records) ──────
+
+async def get_club_leaderboard(period: str = "all", by: str = "points"):
+    """All-time or current-month club ranking. by=points|winrate (winrate needs
+    >=10 games to rank). Returns ranked players with name/level/photo."""
+    from datetime import datetime
+    async with conn() as db:
+        if period == "month":
+            cur = await db.execute(
+                """SELECT s.player_id AS pid, p.name, p.level, p.photo_url,
+                          SUM(s.points) AS pts, SUM(s.wins) AS w, SUM(s.losses) AS l,
+                          COUNT(DISTINCT s.tournament_id) AS tours
+                   FROM scores s JOIN tournaments t ON t.id=s.tournament_id
+                   JOIN players p ON p.id=s.player_id
+                   WHERE strftime('%Y-%m', t.created_at) = ?
+                   GROUP BY s.player_id""",
+                (datetime.utcnow().strftime("%Y-%m"),),
+            )
+        else:
+            cur = await db.execute(
+                """SELECT s.player_id AS pid, p.name, p.level, p.photo_url,
+                          SUM(s.points) AS pts, SUM(s.wins) AS w, SUM(s.losses) AS l,
+                          COUNT(DISTINCT s.tournament_id) AS tours
+                   FROM scores s JOIN players p ON p.id=s.player_id
+                   GROUP BY s.player_id"""
+            )
+        rows = await cur.fetchall()
+    out = []
+    for r in rows:
+        g = r["w"] + r["l"]
+        out.append({
+            "player_id": r["pid"], "name": r["name"], "level": r["level"],
+            "photo_url": r["photo_url"], "points": r["pts"], "wins": r["w"],
+            "losses": r["l"], "games": g, "tournaments": r["tours"],
+            "win_rate": round(r["w"] / g, 3) if g else 0.0,
+        })
+    if by == "winrate":
+        out = [x for x in out if x["games"] >= 10]
+        out.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+    else:
+        out.sort(key=lambda x: (-x["points"], -x["wins"]))
+    return out
+
+
+async def get_club_pairs(min_games: int = 6, limit: int = 20):
+    """Best duos club-wide by win-rate (teammates in any match), min games."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT m.p1, m.p2, m.p3, m.p4, m.winner FROM matches m WHERE m.winner IS NOT NULL"
+        )
+        rows = await cur.fetchall()
+        pairs = {}  # frozenset -> [games, wins, (a,b)]
+        for m in rows:
+            for team, won in (((m["p1"], m["p2"]), m["winner"] == 1),
+                              ((m["p3"], m["p4"]), m["winner"] == 2)):
+                k = frozenset(team)
+                pr = pairs.setdefault(k, [0, 0, team]); pr[0] += 1; pr[1] += 1 if won else 0
+        ids = {x for k in pairs for x in k}
+        names = {}
+        if ids:
+            qmarks = ",".join("?" * len(ids))
+            cur = await db.execute(f"SELECT id, name FROM players WHERE id IN ({qmarks})", list(ids))
+            names = {r["id"]: r["name"] for r in await cur.fetchall()}
+    out = [
+        {"name_a": names.get(v[2][0], "?"), "name_b": names.get(v[2][1], "?"),
+         "games": v[0], "wins": v[1], "win_rate": round(v[1] / v[0], 3)}
+        for v in pairs.values() if v[0] >= min_games
+    ]
+    out.sort(key=lambda x: (-x["win_rate"], -x["games"]))
+    return out[:limit]
+
+
+async def get_club_records():
+    """Headline club records + recent champions gallery."""
+    from collections import defaultdict
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT s.player_id AS pid, p.name, SUM(s.points) AS pts, SUM(s.wins) AS w "
+            "FROM scores s JOIN players p ON p.id=s.player_id GROUP BY s.player_id"
+        )
+        agg = rows_to_list(await cur.fetchall())
+        cur = await db.execute(
+            "SELECT s.tournament_id AS tid, s.player_id AS pid, s.points, s.wins "
+            "FROM scores s JOIN tournaments t ON t.id=s.tournament_id WHERE t.status='finished'"
+        )
+        srows = await cur.fetchall()
+        cur = await db.execute("SELECT id, name FROM players")
+        names = {r["id"]: r["name"] for r in await cur.fetchall()}
+        cur = await db.execute(
+            "SELECT m.p1, m.p2, m.p3, m.p4, m.winner FROM matches m "
+            "JOIN rounds r ON r.id=m.round_id JOIN tournaments t ON t.id=r.tournament_id "
+            "WHERE m.winner IS NOT NULL ORDER BY t.created_at, t.id, r.round_num, m.court_num"
+        )
+        mrows = await cur.fetchall()
+        cur = await db.execute(
+            "SELECT id, name, created_at FROM tournaments WHERE status='finished' "
+            "ORDER BY created_at DESC, id DESC LIMIT 12"
+        )
+        recent_t = rows_to_list(await cur.fetchall())
+
+    by_tid = defaultdict(list)
+    for r in srows:
+        by_tid[r["tid"]].append(r)
+    titles = defaultdict(int)
+    champ_ids = {}
+    for tid, rs in by_tid.items():
+        best = max(rs, key=lambda r: (r["points"], r["wins"]))
+        winners = [r["pid"] for r in rs if r["points"] == best["points"] and r["wins"] == best["wins"]]
+        champ_ids[tid] = winners
+        for w in winners:
+            titles[w] += 1
+
+    run, best_streak = defaultdict(int), defaultdict(int)
+    for m in mrows:
+        win = (m["p1"], m["p2"]) if m["winner"] == 1 else (m["p3"], m["p4"])
+        los = (m["p3"], m["p4"]) if m["winner"] == 1 else (m["p1"], m["p2"])
+        for x in win:
+            run[x] += 1; best_streak[x] = max(best_streak[x], run[x])
+        for x in los:
+            run[x] = 0
+
+    most_points = max(agg, key=lambda r: (r["pts"], r["w"]), default=None)
+    most_wins = max(agg, key=lambda r: (r["w"], r["pts"]), default=None)
+    mt = max(titles, key=lambda k: titles[k], default=None)
+    ls = max(best_streak, key=lambda k: best_streak[k], default=None)
+    champions = [
+        {"tid": t["id"], "name": t["name"], "created_at": t["created_at"],
+         "champion": " & ".join(names.get(w, "?") for w in champ_ids.get(t["id"], [])) or "—"}
+        for t in recent_t
+    ]
+    return {
+        "most_points": {"name": most_points["name"], "value": most_points["pts"]} if most_points else None,
+        "most_wins": {"name": most_wins["name"], "value": most_wins["w"]} if most_wins else None,
+        "most_titles": {"name": names.get(mt), "value": titles[mt]} if mt else None,
+        "longest_streak": {"name": names.get(ls), "value": best_streak[ls]} if ls else None,
+        "champions": champions,
+    }
+
+
 # ─── Admins ───────────────────────────────────────────────
 
 async def is_admin(tg_id: int) -> bool:

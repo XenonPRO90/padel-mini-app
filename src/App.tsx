@@ -8,6 +8,7 @@ import { LiveRoundScreen } from './screens/LiveRoundScreen';
 import { PlayerEditScreen } from './screens/PlayerEditScreen';
 import { PlayerProfileScreen } from './screens/PlayerProfileScreen';
 import { AdminRequestsScreen } from './screens/AdminRequestsScreen';
+import { ClubScreen } from './screens/ClubScreen';
 import { WizardScreen } from './screens/WizardScreen';
 import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
@@ -21,7 +22,7 @@ const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 5_000, retry: 1 } },
 });
 
-type Tab = 'tournament' | 'players' | 'history';
+type Tab = 'tournament' | 'players' | 'club' | 'history';
 
 type Screen =
   | { name: 'home' }
@@ -115,6 +116,12 @@ export default function App() {
               onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onAddPlayer={() => push({ name: 'playerEdit', player: null })}
               onOpenRequests={() => push({ name: 'adminRequests' })}
+            />
+          )}
+          {top.name === 'home' && tab === 'club' && (
+            <ClubScreen
+              onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
+              onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
             />
           )}
           {top.name === 'home' && tab === 'history' && (
