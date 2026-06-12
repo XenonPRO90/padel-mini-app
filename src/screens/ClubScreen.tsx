@@ -3,6 +3,7 @@ import { T } from '../lib/tokens';
 import { ELabel, EGoldFrame, EMedal, EPlace } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
 import { useClubLeaderboard, useClubPairs, useClubRecords } from '../api/club';
+import type { ClubBy, ClubRow } from '../api/club';
 import type { Player } from '../lib/types';
 
 type View = 'rating' | 'pairs' | 'records';
@@ -76,18 +77,36 @@ function Toggle({ options, value, onChange }: {
 
 function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
   const [period, setPeriod] = useState<'all' | 'month'>('all');
-  const [by, setBy] = useState<'points' | 'winrate'>('points');
-  const { data, isLoading } = useClubLeaderboard(period, by);
+  const [by, setBy] = useState<ClubBy>('rating');
+  const [showInfo, setShowInfo] = useState(false);
+  // composite rating is all-time; period applies only to points/winrate
+  const effPeriod = by === 'rating' ? 'all' : period;
+  const { data, isLoading } = useClubLeaderboard(effPeriod, by);
   const items = data?.items ?? [];
+
+  const mainValue = (r: ClubRow) =>
+    by === 'rating' ? (r.rating ?? 0)
+    : by === 'points' ? r.points
+    : `${Math.round(r.win_rate * 100)}%`;
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <Toggle options={[{ id: 'all', label: 'Всё время' }, { id: 'month', label: 'Месяц' }]}
-          value={period} onChange={(v) => setPeriod(v as 'all' | 'month')} />
-        <Toggle options={[{ id: 'points', label: 'Очки' }, { id: 'winrate', label: 'Винрейт' }]}
-          value={by} onChange={(v) => setBy(v as 'points' | 'winrate')} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        {by === 'rating' ? (
+          <button onClick={() => setShowInfo(true)} aria-label="Как считается рейтинг" style={{
+            width: 26, height: 26, borderRadius: 999, flexShrink: 0,
+            border: `1px solid ${T.gold}`, background: 'transparent', color: T.goldDeep,
+            fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+          }}>?</button>
+        ) : (
+          <Toggle options={[{ id: 'all', label: 'Всё время' }, { id: 'month', label: 'Месяц' }]}
+            value={period} onChange={(v) => setPeriod(v as 'all' | 'month')} />
+        )}
+        <Toggle options={[{ id: 'rating', label: 'Рейтинг' }, { id: 'points', label: 'Очки' }, { id: 'winrate', label: 'Винрейт' }]}
+          value={by} onChange={(v) => setBy(v as ClubBy)} />
       </div>
+      {showInfo && <RatingInfoModal onClose={() => setShowInfo(false)} />}
       {isLoading ? (
         <div className="skeleton" style={{ height: 240, borderRadius: 16 }} />
       ) : items.length === 0 ? (
@@ -106,17 +125,29 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
                   {i < 3 ? <EMedal place={(i + 1) as 1 | 2 | 3} size={24} /> : <EPlace n={i + 1} />}
                 </div>
                 <Avatar name={r.name} size={28} photoUrl={r.photo_url} />
-                <span style={{
-                  fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 500, color: T.ink,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>{r.name}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 500, color: T.ink,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{r.name}</div>
+                  {by === 'rating' && (
+                    <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, whiteSpace: 'nowrap' }}>
+                      {Math.round(r.win_rate * 100)}% · {r.games}и{r.champion ? ` · ${r.champion}🏆` : ''}
+                    </div>
+                  )}
+                </div>
                 <span style={{ fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 700, color: T.goldDeep, fontVariantNumeric: 'tabular-nums' }}>
-                  {by === 'points' ? r.points : `${Math.round(r.win_rate * 100)}%`}
+                  {mainValue(r)}
                 </span>
               </div>
             ))}
           </div>
         </EGoldFrame>
+      )}
+      {by === 'rating' && (
+        <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, marginTop: 8, textAlign: 'center' }}>
+          композит: качество · титулы · опыт · форма · всё время
+        </div>
       )}
       {by === 'winrate' && (
         <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, marginTop: 8, textAlign: 'center' }}>
@@ -205,6 +236,58 @@ function RecordsView({ onOpenTournament }: { onOpenTournament?: (tid: number) =>
         </div>
       </EGoldFrame>
     </>
+  );
+}
+
+function RatingInfoModal({ onClose }: { onClose: () => void }) {
+  const rows = [
+    { w: '45%', t: 'Качество', d: 'процент побед с поправкой на силу соперника — побеждать сильных ценнее.' },
+    { w: '20%', t: 'Титулы', d: 'чемпионства и подиумы в завершённых турнирах.' },
+    { w: '20%', t: 'Опыт', d: 'сколько игр сыграно — стабильность важнее одной удачной серии.' },
+    { w: '15%', t: 'Форма', d: 'результаты за последние 30 дней.' },
+  ];
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(31,42,36,0.55)' }} />
+      <div style={{
+        position: 'relative', margin: 'auto', width: '100%', maxWidth: 360,
+        background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 18,
+        padding: '22px 20px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 19, fontWeight: 700, color: T.ink }}>
+          Как считается рейтинг
+        </div>
+        <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted, marginTop: 4, marginBottom: 14 }}>
+          Единый балл 0–1000 за всё время и по всем форматам. Складывается из четырёх частей:
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {rows.map((r) => (
+            <div key={r.t} style={{ display: 'flex', gap: 10 }}>
+              <span style={{
+                flexShrink: 0, minWidth: 42, textAlign: 'center', height: 24, lineHeight: '24px',
+                borderRadius: 999, background: '#f9f1de', color: T.goldDeep,
+                fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 700,
+              }}>{r.w}</span>
+              <div>
+                <span style={{ fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, color: T.ink }}>{r.t}</span>
+                <span style={{ fontFamily: T.fontSerif, fontSize: 13, color: T.muted }}> — {r.d}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{
+          marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.paperEdge}`,
+          fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted,
+        }}>
+          У кого мало игр, рейтинг осторожнее — пара побед не выводит новичка в топ, нужна история.
+        </div>
+        <button onClick={onClose} style={{
+          marginTop: 18, width: '100%', padding: '11px 0', borderRadius: 999, cursor: 'pointer',
+          border: 'none', background: T.emerald, color: T.cream,
+          fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+        }}>Понятно</button>
+      </div>
+    </div>
   );
 }
 

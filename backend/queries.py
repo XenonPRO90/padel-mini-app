@@ -685,7 +685,6 @@ async def get_player_profile(pid: int):
     async with conn() as db:
         derived = await _player_matches_derived(db, pid)
         placements = await _player_placements(db, pid)
-        club_rank = await _player_club_rank(db, pid)
         recent_rec = await _player_recent_record(db, pid, 30)
         court_dist = await _player_court_distribution(db, pid)
         # resolve names + levels for partners AND opponents in one query
@@ -698,6 +697,12 @@ async def get_player_profile(pid: int):
             )
             for r in await cur.fetchall():
                 names[r["id"]] = r["name"]; levels[r["id"]] = r["level"]
+
+    # Club rank from the composite rating (same metric as Club → Рейтинг).
+    rating_list = await get_club_rating()
+    my_rating = next((x for x in rating_list if x["player_id"] == pid), None)
+    club_rank = {"rank": my_rating["rank"], "total": len(rating_list)} if my_rating else None
+    club_rating = my_rating["rating"] if my_rating else None
 
     # Totals from scores (authoritative, all tournaments) so games == W+L.
     base = await get_player_stats(pid)
@@ -781,6 +786,7 @@ async def get_player_profile(pid: int):
             "giant_kills": giant_kills,
             "club_rank": club_rank["rank"] if club_rank else None,
             "club_total": club_rank["total"] if club_rank else None,
+            "club_rating": club_rating,
             "recent_win_rate": recent_win_rate,
             "recent_games": rg,
             "form": derived["form"],
@@ -798,8 +804,11 @@ async def get_player_profile(pid: int):
 # ─── Club-wide aggregates (rating / pairs / records) ──────
 
 async def get_club_leaderboard(period: str = "all", by: str = "points"):
-    """All-time or current-month club ranking. by=points|winrate (winrate needs
-    >=10 games to rank). Returns ranked players with name/level/photo."""
+    """All-time or current-month club ranking. by=points|winrate|rating.
+    winrate needs >=10 games; rating is the composite (all-time, ignores period).
+    Returns ranked players with name/level/photo."""
+    if by == "rating":
+        return await get_club_rating()
     from datetime import datetime
     async with conn() as db:
         if period == "month":
@@ -836,6 +845,121 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
         out.sort(key=lambda x: (-x["win_rate"], -x["games"]))
     else:
         out.sort(key=lambda x: (-x["points"], -x["wins"]))
+    return out
+
+
+async def get_club_rating(min_games: int = 1):
+    """Composite all-time club rating (0..1000), 'Balanced' profile.
+
+        R = 1000 * (0.45*Q + 0.20*A + 0.20*V + 0.15*F)
+
+    Q quality  — opponent-adjusted, shrunk win-rate (core skill signal).
+    A titles   — achievements: champions/podiums in finished tournaments.
+    V volume    — experience: log(games), so one great tournament can't top it.
+    F form      — last-30d shrunk win-rate; neutral (0.5) if no recent games.
+
+    Each component is normalised to 0..1, then weighted. Shrinkage pulls small
+    samples toward 50% so e.g. a 7-0 newcomer doesn't outrank veterans."""
+    import math
+    from datetime import datetime, timedelta
+    from .pairing import level_value
+
+    wQ, wA, wV, wF = 0.45, 0.20, 0.20, 0.15
+    K_Q, K_F, RECENT_DAYS = 8, 4, 30
+    since = (datetime.utcnow() - timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+
+    async with conn() as db:
+        cur = await db.execute("SELECT id, name, level, photo_url FROM players")
+        players = {r["id"]: row_to_dict(r) for r in await cur.fetchall()}
+        lvl = {pid: level_value(p["level"]) for pid, p in players.items()}
+        cur = await db.execute(
+            """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, t.created_at
+               FROM matches m JOIN rounds r ON r.id=m.round_id
+               JOIN tournaments t ON t.id=r.tournament_id
+               WHERE m.winner IS NOT NULL""")
+        matches = await cur.fetchall()
+        cur = await db.execute(
+            """SELECT s.tournament_id AS tid, s.player_id AS pid, s.points, s.wins
+               FROM scores s JOIN tournaments t ON t.id=s.tournament_id
+               WHERE t.status='finished'""")
+        score_rows = await cur.fetchall()
+
+    DEF = level_value("C")
+    agg = {pid: {"games": 0, "wins": 0, "opp_sum": 0.0, "rg": 0, "rw": 0} for pid in players}
+    for m in matches:
+        cr = m["created_at"]
+        recent = bool(cr) and str(cr) >= since
+        t1, t2 = (m["p1"], m["p2"]), (m["p3"], m["p4"])
+        for team, opp, won in ((t1, t2, m["winner"] == 1), (t2, t1, m["winner"] == 2)):
+            opp_lvl = (lvl.get(opp[0], DEF) + lvl.get(opp[1], DEF)) / 2.0
+            for pid in team:
+                a = agg.get(pid)
+                if a is None:
+                    continue
+                a["games"] += 1
+                a["opp_sum"] += opp_lvl
+                if won:
+                    a["wins"] += 1
+                if recent:
+                    a["rg"] += 1
+                    if won:
+                        a["rw"] += 1
+
+    # placements → champions / podiums (dense rank by points,wins per tournament)
+    champ = {pid: 0 for pid in players}
+    pod = {pid: 0 for pid in players}
+    tours = {pid: 0 for pid in players}
+    by_tid = {}
+    for r in score_rows:
+        by_tid.setdefault(r["tid"], []).append((r["pid"], r["points"], r["wins"]))
+    for rows in by_tid.values():
+        distinct = sorted({(p, w) for (_, p, w) in rows}, reverse=True)
+        rankmap = {key: i + 1 for i, key in enumerate(distinct)}
+        for pid, p, w in rows:
+            if pid not in players:
+                continue
+            tours[pid] += 1
+            place = rankmap[(p, w)]
+            if place == 1:
+                champ[pid] += 1
+            elif place <= 3:
+                pod[pid] += 1
+
+    # normalisers
+    all_games = sum(a["games"] for a in agg.values())
+    club_opp_mean = (sum(a["opp_sum"] for a in agg.values()) / all_games) if all_games else DEF
+    max_games = max((a["games"] for a in agg.values()), default=1) or 1
+    A_raw = {pid: 3 * champ[pid] + pod[pid] for pid in players}
+    pos = sorted(v for v in A_raw.values() if v > 0)
+    A_norm = max(pos[int(0.95 * (len(pos) - 1))] if pos else 1, 1)  # p95, robust to outliers
+
+    out = []
+    for pid, p in players.items():
+        a = agg[pid]
+        g = a["games"]
+        if g < min_games:
+            continue
+        shrunk = (a["wins"] + K_Q * 0.5) / (g + K_Q)
+        mean_opp = a["opp_sum"] / g
+        opp_factor = min(1.20, max(0.85, mean_opp / club_opp_mean)) if club_opp_mean else 1.0
+        Q = min(1.0, max(0.0, shrunk * opp_factor))
+        A = min(1.0, A_raw[pid] / A_norm)
+        V = math.log(1 + g) / math.log(1 + max_games)
+        F = (a["rw"] + K_F * 0.5) / (a["rg"] + K_F) if a["rg"] > 0 else 0.5
+        rating = round(1000 * (wQ * Q + wA * A + wV * V + wF * F))
+        out.append({
+            "player_id": pid, "name": p["name"], "level": p["level"],
+            "photo_url": p["photo_url"], "rating": rating,
+            "games": g, "wins": a["wins"], "losses": g - a["wins"],
+            "win_rate": round(a["wins"] / g, 3) if g else 0.0,
+            "champion": champ[pid], "podium": pod[pid], "tournaments": tours[pid],
+            "recent_games": a["rg"],
+            "components": {"quality": round(Q, 3), "titles": round(A, 3),
+                           "volume": round(V, 3), "form": round(F, 3)},
+        })
+    out.sort(key=lambda x: (-x["rating"], -x["wins"]))
+    for i, x in enumerate(out, 1):
+        x["rank"] = i
     return out
 
 

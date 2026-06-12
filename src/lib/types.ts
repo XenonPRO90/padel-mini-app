@@ -162,6 +162,7 @@ export interface PlayerProfile {
     giant_kills: number;
     club_rank: number | null;
     club_total: number | null;
+    club_rating: number | null;
     recent_win_rate: number | null;
     recent_games: number;
     form: string[];
