@@ -10,6 +10,7 @@ import { useMe } from '../api/me';
 import { useUpdateMyRacket } from '../api/joinRequests';
 import { ShareTextModal } from '../components/ShareTextModal';
 import { useT, STR, type StrKey } from '../lib/i18n';
+import { LangToggle } from '../components/LangToggle';
 import type { ProfilePlacement, ProfilePartner, ProfileOpponent } from '../lib/types';
 
 interface Props {
@@ -76,7 +77,8 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
           }}>{t('profile.title')}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isOwn && <LangToggle />}
           {data && (
             <button onClick={() => setCardOpen(true)} aria-label={t('profile.share')} style={{
               background: 'transparent', border: 'none', padding: 4, cursor: 'pointer', color: T.gold,

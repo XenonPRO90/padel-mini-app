@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { T } from '../lib/tokens';
 import { ELabel, EGoldFrame, EMedal, EPlace } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
-import { LangToggle } from '../components/LangToggle';
 import { useT } from '../lib/i18n';
 import { useClubLeaderboard, useClubPairs, useClubRecords } from '../api/club';
 import type { ClubBy, ClubRow } from '../api/club';
@@ -21,11 +20,7 @@ export function ClubScreen({ onOpenPlayer, onOpenTournament }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '10px 16px 10px', borderBottom: `1px solid ${T.paperEdge}`, background: T.cream }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ width: 64 }} />
-          <ELabel>· {t('club.title')} ·</ELabel>
-          <LangToggle />
-        </div>
+        <ELabel style={{ textAlign: 'center', display: 'block', marginBottom: 8 }}>· {t('club.title')} ·</ELabel>
         <Segmented value={view} onChange={setView} />
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 40px' }}>
