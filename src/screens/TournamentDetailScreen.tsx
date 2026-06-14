@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useMe } from '../api/me';
 import { T } from '../lib/tokens';
 import { ELabel, EMedal, EPlace, EGoldFrame, EOrnRule } from '../lib/elegant';
 import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
@@ -93,6 +95,8 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
           </div>
         </div>
 
+        {t.status === 'finished' && <SendResultsButton tid={tid} />}
+
         <ELabel style={{ marginBottom: 8, textAlign: 'center' }}>Final Standings</ELabel>
         <EGoldFrame>
           <div style={{ padding: '4px 0' }}>
@@ -182,4 +186,72 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
       </div>
     </div>
   );
+}
+
+// Phase 4 — admin sends personal result cards to linked players' DMs.
+function SendResultsButton({ tid }: { tid: number }) {
+  const { data: me } = useMe();
+  const [step, setStep] = useState<'idle' | 'confirm' | 'sending' | 'done'>('idle');
+  const [info, setInfo] = useState<{ linked: number; total: number } | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  if (!me?.is_admin) return null;
+
+  const openConfirm = async () => {
+    try {
+      const d = await api<{ linked_count: number; total_count: number }>(`/api/tournaments/${tid}/cards`);
+      setInfo({ linked: d.linked_count, total: d.total_count });
+      setStep('confirm');
+    } catch (e) {
+      setResult('Ошибка: ' + (e as Error).message);
+      setStep('done');
+    }
+  };
+  const send = async () => {
+    setStep('sending');
+    try {
+      const r = await api<{ sent: number; failed: { name: string; reason: string }[] }>(
+        `/api/tournaments/${tid}/cards/send`, { method: 'POST' });
+      setResult(`Отправлено: ${r.sent}` + (r.failed.length ? ` · не доставлено: ${r.failed.length}` : ''));
+    } catch (e) {
+      setResult('Ошибка: ' + (e as Error).message);
+    }
+    setStep('done');
+  };
+
+  const wrap: React.CSSProperties = {
+    margin: '0 0 18px', padding: '12px 14px', borderRadius: 14,
+    background: T.paper, border: `1px solid ${T.paperEdge}`, textAlign: 'center',
+  };
+  const btn = (label: string, onClick: () => void, primary = true): React.ReactNode => (
+    <button onClick={onClick} style={{
+      padding: '10px 18px', borderRadius: 999, cursor: 'pointer', border: 'none',
+      background: primary ? T.emerald : 'transparent',
+      color: primary ? T.cream : T.muted,
+      fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+    }}>{label}</button>
+  );
+
+  if (step === 'done') {
+    return <div style={wrap}>
+      <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 8 }}>{result}</div>
+      {btn('Ок', () => { setStep('idle'); setResult(null); }, false)}
+    </div>;
+  }
+  if (step === 'sending') {
+    return <div style={wrap}><div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', color: T.muted }}>Отправляю карточки…</div></div>;
+  }
+  if (step === 'confirm') {
+    return <div style={wrap}>
+      <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 10 }}>
+        Отправить {info?.linked ?? 0} карточек привязанным игрокам{info ? ` (из ${info.total})` : ''}?
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+        {btn('Отправить', send)}
+        {btn('Отмена', () => setStep('idle'), false)}
+      </div>
+    </div>;
+  }
+  return <div style={{ textAlign: 'center', marginBottom: 18 }}>
+    {btn('📤 Отправить результаты игрокам', openConfirm)}
+  </div>;
 }

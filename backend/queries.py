@@ -2094,3 +2094,56 @@ async def _share_text_standings(t: dict) -> str:
             f"{prefix} {r['name']} — {r['points']} pts  (W{r['wins']} L{r['losses']})"
         )
     return "\n".join(lines)
+
+
+# ─── Phase 4 — post-tournament cards (data) ──────────────────────────────
+
+async def get_tournament_cards(tid: int):
+    """Per-player card payload for a finished tournament: dense place, medal,
+    partner (fixed mode), W/L line, recipient identity. Used by the send flow."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, name, mode, created_at, status FROM tournaments WHERE id=?", (tid,))
+        t = row_to_dict(await cur.fetchone())
+        if not t:
+            return None
+        cur = await db.execute(
+            """SELECT s.player_id AS pid, s.points, s.wins, s.losses,
+                      p.name, p.telegram_id, p.photo_url
+               FROM scores s JOIN players p ON p.id=s.player_id
+               WHERE s.tournament_id=?""", (tid,))
+        rows = rows_to_list(await cur.fetchall())
+        cur = await db.execute(
+            "SELECT player_id, position FROM tournament_players WHERE tournament_id=?", (tid,))
+        pos = {r["player_id"]: r["position"] for r in await cur.fetchall()}
+
+    names = {r["pid"]: r["name"] for r in rows}
+    by_pos = {p: pid for pid, p in pos.items()}
+    distinct = sorted({(r["points"], r["wins"]) for r in rows}, reverse=True)
+    rank = {k: i + 1 for i, k in enumerate(distinct)}
+
+    cr = str(t["created_at"])
+    date = f"{cr[8:10]}.{cr[5:7]}" if len(cr) >= 10 else cr  # dd.mm
+
+    cards = []
+    for r in rows:
+        place = rank[(r["points"], r["wins"])]
+        partner = None
+        if t["mode"] == "fixed":
+            mp = pos.get(r["pid"])
+            if mp:
+                pp = mp + 1 if mp % 2 == 1 else mp - 1
+                partner = names.get(by_pos.get(pp))
+        initials = "".join(w[0] for w in r["name"].split()[:2]).upper() or "?"
+        cards.append({
+            "player_id": r["pid"], "name": r["name"], "telegram_id": r["telegram_id"],
+            "photo_url": r["photo_url"], "initials": initials,
+            "place": place, "medal": place if place in (1, 2, 3) else None,
+            "partner": partner,
+            "line": f"Побед {r['wins']} · Поражений {r['losses']}",
+            "tournament": t["name"], "date": date,
+        })
+    cards.sort(key=lambda c: c["place"])
+    linked = [c for c in cards if c["telegram_id"]]
+    return {"tournament": t, "cards": cards,
+            "linked_count": len(linked), "total_count": len(cards)}

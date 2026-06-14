@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from .auth import get_tg_user
 from . import queries as q
+from . import cards as cards_mod
 
 
 async def get_admin(user=Depends(get_tg_user)):
@@ -247,6 +248,44 @@ async def club_pairs(_user=Depends(get_tg_user)):
 @app.get("/api/club/records")
 async def club_records(_user=Depends(get_tg_user)):
     return await q.get_club_records()
+
+
+@app.get("/api/tournaments/{tid}/cards")
+async def tournament_cards(tid: int, _admin=Depends(get_admin)):
+    """Phase 4: preview — how many cards would be sent (linked vs total)."""
+    data = await q.get_tournament_cards(tid)
+    if not data:
+        raise HTTPException(404, "Турнир не найден")
+    if data["tournament"]["status"] != "finished":
+        raise HTTPException(400, "Турнир не завершён")
+    return {
+        "linked_count": data["linked_count"], "total_count": data["total_count"],
+        "items": [{"player_id": c["player_id"], "name": c["name"],
+                   "place": c["place"], "linked": bool(c["telegram_id"])}
+                  for c in data["cards"]],
+    }
+
+
+@app.post("/api/tournaments/{tid}/cards/send")
+async def tournament_cards_send(tid: int, _admin=Depends(get_admin)):
+    """Phase 4: render + DM a personal card to every LINKED player. Report back."""
+    data = await q.get_tournament_cards(tid)
+    if not data:
+        raise HTTPException(404, "Турнир не найден")
+    if data["tournament"]["status"] != "finished":
+        raise HTTPException(400, "Турнир не завершён")
+    linked = [c for c in data["cards"] if c["telegram_id"]]
+
+    async def one(c):
+        c["avatar"] = await asyncio.to_thread(cards_mod.fetch_avatar_datauri, c.get("photo_url"))
+        ok, reason = await cards_mod.render_and_send(c)
+        return {"name": c["name"], "ok": ok, "reason": reason}
+
+    results = await asyncio.gather(*[one(c) for c in linked])
+    sent = sum(1 for r in results if r["ok"])
+    failed = [{"name": r["name"], "reason": r["reason"]} for r in results if not r["ok"]]
+    return {"sent": sent, "failed": failed,
+            "linked_count": len(linked), "total_count": len(data["cards"])}
 
 
 @app.post("/api/players/{pid}/invite")
