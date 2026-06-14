@@ -331,10 +331,6 @@ function fmtDate(iso: string): string {
   } catch { return iso.slice(0, 10); }
 }
 
-function monthName(m: number): string {
-  return ['', 'January','February','March','April','May','June','July','August','September','October','November','December'][m] ?? '';
-}
-
 function Skeletons() {
   return (
     <>
