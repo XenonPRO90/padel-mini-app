@@ -18,7 +18,6 @@ interface Props {
 }
 
 export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFinished }: Props) {
-  const t = useT();
   const { data, isLoading, error, refetch } = useQuery<ActiveTournamentResponse>({
     queryKey: ['active-tournament'],
     queryFn: () => api('/api/tournaments/active'),
@@ -161,6 +160,7 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
 }
 
 function HomeEmpty({ onCreate, isAdmin }: { onCreate?: () => void; isAdmin?: boolean }) {
+  const t = useT();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <EHero title="PADEL CLUB" kicker="elegance in motion" compact />
