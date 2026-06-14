@@ -9,6 +9,8 @@ import { usePlayerProfile, useMintInvite } from '../api/players';
 import { useMe } from '../api/me';
 import { useUpdateMyRacket } from '../api/joinRequests';
 import { ShareTextModal } from '../components/ShareTextModal';
+import { useT, STR, type StrKey } from '../lib/i18n';
+import { LangToggle } from '../components/LangToggle';
 import type { ProfilePlacement, ProfilePartner, ProfileOpponent } from '../lib/types';
 
 interface Props {
@@ -23,20 +25,14 @@ const ddmm = (s: string) => {
   return m && m.length === 3 ? `${m[2]}.${m[1]}` : '';
 };
 
-// Legend shown when tapping the "?" next to «Статистика».
-const STAT_HELP = [
-  { k: 'Турниров', v: 'сколько турниров сыграно' },
-  { k: 'Игр сыграно', v: 'сколько матчей (игр на корте) сыграно' },
-  { k: 'Винрейт', v: '% выигранных матчей: победы ÷ все матчи' },
-  { k: '% призовых', v: 'доля турниров, где попал в топ-3' },
-  { k: 'Чемпион', v: 'сколько раз занял 1-е место в турнире' },
-  { k: 'Подиум', v: 'сколько раз попал в топ-3 (1–3 место)' },
-  { k: 'Лучшая серия', v: 'самая длинная серия побед подряд' },
-  { k: 'Гроза старших', v: 'победы над теми, кто на 2+ ступени выше по уровню (и сколько было таких матчей)' },
-  { k: 'Очков за карьеру', v: 'сумма очков по всем турнирам' },
-];
+// Legend (shown on "?") — ids match backend achievement ids → localized labels.
+const STAT_HELP_IDS = [
+  'tournaments', 'games', 'win_rate', 'podium_rate', 'champion',
+  'podium', 'streak_best', 'giant_kills', 'total_points',
+] as const;
 
 export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: Props) {
+  const t = useT();
   const { data, isLoading } = usePlayerProfile(pid);
   const { data: me } = useMe();
   const mint = useMintInvite();
@@ -56,11 +52,11 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
       const { deep_link } = await mint.mutateAsync(pid);
       const tg = window.Telegram?.WebApp;
       const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(deep_link)
-        + '&text=' + encodeURIComponent('Открой свой профиль в Padel Club');
+        + '&text=' + encodeURIComponent(t('profile.inviteText'));
       if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
       else setShareLink(deep_link);
     } catch (e) {
-      alert((e as Error).message || 'Не удалось создать приглашение');
+      alert((e as Error).message || t('profile.inviteFail'));
     }
   };
 
@@ -74,16 +70,17 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
         <button onClick={onBack} style={{
           background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
           color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
-        }}>← Back</button>
+        }}>← {t('common.back')}</button>
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
             color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
-          }}>Профиль</div>
+          }}>{t('profile.title')}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isOwn && <LangToggle />}
           {data && (
-            <button onClick={() => setCardOpen(true)} aria-label="Поделиться" style={{
+            <button onClick={() => setCardOpen(true)} aria-label={t('profile.share')} style={{
               background: 'transparent', border: 'none', padding: 4, cursor: 'pointer', color: T.gold,
             }}><EShareIcon size={17} /></button>
           )}
@@ -92,7 +89,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 999,
               padding: '4px 10px', cursor: 'pointer', color: T.gold,
               fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
-            }}>{mint.isPending ? '…' : 'Пригласить'}</button>
+            }}>{mint.isPending ? '…' : t('profile.invite')}</button>
           )}
           {isAdmin && (
             <button onClick={onEdit} aria-label="Edit" style={{
@@ -122,7 +119,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                 }}>{Math.round(data.stats.win_rate * 100)}%</span>
                 <span style={{
                   fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted,
-                }}>побед в матчах</span>
+                }}>{t('profile.winsInMatches')}</span>
               </div>
 
               {/* Form (last 5) + 30-day dynamics */}
@@ -147,7 +144,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                     const col = diff > 0 ? T.win : diff < 0 ? T.burgundy : T.muted;
                     return (
                       <span style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}>
-                        30 дней: <b style={{ color: col, fontStyle: 'normal' }}>{rec}% {arrow}</b>
+                        {t('profile.days30')}: <b style={{ color: col, fontStyle: 'normal' }}>{rec}% {arrow}</b>
                       </span>
                     );
                   })()}
@@ -166,14 +163,14 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
                     color: T.goldDeep, border: `1px solid ${T.gold}`, borderRadius: 999,
                     padding: '2px 8px',
-                  }}>#{data.stats.club_rank} в клубе{data.stats.club_rating != null ? ` · ${data.stats.club_rating}` : ''}</span>
+                  }}>{t('profile.inClub', { n: data.stats.club_rank })}{data.stats.club_rating != null ? ` · ${data.stats.club_rating}` : ''}</span>
                 )}
                 {linked && (
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
                     color: T.emerald, border: `1px solid ${T.emerald}`, borderRadius: 999,
                     padding: '2px 8px',
-                  }}>✓ в приложении{data.player.username ? ` · @${data.player.username}` : ''}</span>
+                  }}>{t('profile.inApp')}{data.player.username ? ` · @${data.player.username}` : ''}</span>
                 )}
               </div>
 
@@ -183,7 +180,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   <input
                     value={racketVal}
                     onChange={(e) => setRacket(e.target.value)}
-                    placeholder="Твоя ракетка (напр. Babolat Air)"
+                    placeholder={t('profile.racketPh')}
                     maxLength={40}
                     style={{
                       flex: 1, boxSizing: 'border-box', padding: '8px 12px', borderRadius: 999,
@@ -213,8 +210,8 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 2,
             }}>
-              <ELabel>Статистика</ELabel>
-              <button onClick={() => setInfoOpen((v) => !v)} aria-label="Что это" style={{
+              <ELabel>{t('profile.stats')}</ELabel>
+              <button onClick={() => setInfoOpen((v) => !v)} aria-label="?" style={{
                 width: 18, height: 18, borderRadius: 999, cursor: 'pointer',
                 border: `1px solid ${infoOpen ? T.gold : T.rule}`,
                 background: infoOpen ? T.gold : 'transparent',
@@ -227,13 +224,13 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               <div style={{ marginBottom: 12 }}>
                 <EGoldFrame>
                   <div style={{ padding: '10px 14px' }}>
-                    {STAT_HELP.map((h, i) => (
-                      <div key={h.k} style={{
+                    {STAT_HELP_IDS.map((id, i) => (
+                      <div key={id} style={{
                         padding: '7px 0',
-                        borderBottom: i === STAT_HELP.length - 1 ? 'none' : `1px dotted ${T.rule}`,
+                        borderBottom: i === STAT_HELP_IDS.length - 1 ? 'none' : `1px dotted ${T.rule}`,
                       }}>
-                        <span style={{ fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, color: T.ink }}>{h.k}</span>
-                        <span style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}> — {h.v}</span>
+                        <span style={{ fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, color: T.ink }}>{t(`ach.${id}` as StrKey)}</span>
+                        <span style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}> — {t(`help.${id}` as StrKey)}</span>
                       </div>
                     ))}
                   </div>
@@ -243,7 +240,14 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18,
             }}>
-              {data.achievements.map((a) => (
+              {data.achievements.map((a) => {
+                const label = (`ach.${a.id}` in STR) ? t(`ach.${a.id}` as StrKey) : a.label;
+                const sub = a.id === 'giant_kills'
+                  ? (data.stats.giant_matches > 0
+                      ? t('ach.giantSub', { n: data.stats.giant_matches })
+                      : t('ach.giantNone'))
+                  : null;
+                return (
                 <div key={a.id} style={{
                   background: T.paper, border: `1px solid ${T.paperEdge}`,
                   borderRadius: 14, padding: '12px 8px', textAlign: 'center',
@@ -256,21 +260,22 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   <div style={{
                     marginTop: 4, fontFamily: T.fontSerif, fontSize: 11,
                     fontStyle: 'italic', color: T.muted, lineHeight: 1.2,
-                  }}>{a.label}</div>
-                  {a.sub && (
+                  }}>{label}</div>
+                  {sub && (
                     <div style={{
                       marginTop: 2, fontFamily: T.fontSerif, fontSize: 9.5,
                       fontStyle: 'italic', color: T.muted, opacity: 0.8, lineHeight: 1.15,
-                    }}>{a.sub}</div>
+                    }}>{sub}</div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Best partner */}
             {data.best_partner && (
               <div style={{ marginBottom: 18 }}>
-                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Лучший партнёр</ELabel>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('profile.bestPartner')}</ELabel>
                 <EGoldFrame>
                   <PartnerRow p={data.best_partner} highlight />
                 </EGoldFrame>
@@ -280,15 +285,15 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             {/* Head-to-head: nemesis & favourite opponent */}
             {(data.nemesis || data.favorite_opponent) && (
               <div style={{ marginBottom: 18 }}>
-                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Личные счёты</ELabel>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('profile.h2h')}</ELabel>
                 <EGoldFrame>
                   <div style={{ padding: '2px 0' }}>
                     {data.nemesis && (
-                      <H2HRow icon="🔥" label="Немезида" o={data.nemesis}
+                      <H2HRow icon="🔥" label={t('profile.nemesis')} o={data.nemesis}
                         last={!data.favorite_opponent} />
                     )}
                     {data.favorite_opponent && (
-                      <H2HRow icon="😎" label="Любимый соперник" o={data.favorite_opponent} last />
+                      <H2HRow icon="😎" label={t('profile.favOpp')} o={data.favorite_opponent} last />
                     )}
                   </div>
                 </EGoldFrame>
@@ -298,7 +303,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             {/* Court distribution — King of the Court only */}
             {data.court_distribution.length > 0 && (
               <div style={{ marginBottom: 18 }}>
-                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Корты · King of the Court</ELabel>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('profile.courts')}</ELabel>
                 <EGoldFrame>
                   <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {data.court_distribution.map((c) => (
@@ -306,7 +311,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                         <span style={{
                           fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
                           color: T.ink, width: 58, flexShrink: 0,
-                        }}>Корт {c.court}</span>
+                        }}>{t('profile.court', { n: c.court })}</span>
                         <div style={{ flex: 1, height: 8, background: T.paperEdge, borderRadius: 999, overflow: 'hidden' }}>
                           <div style={{ width: `${c.pct}%`, height: '100%', background: T.emerald }} />
                         </div>
@@ -324,7 +329,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             {/* Recent tournaments */}
             {data.recent.length > 0 && (
               <div style={{ marginBottom: 18 }}>
-                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Последние турниры</ELabel>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('profile.recentTournaments')}</ELabel>
                 <EGoldFrame>
                   <div style={{ padding: '2px 0' }}>
                     {data.recent.map((r, i) => (
@@ -339,7 +344,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             {/* Top partners */}
             {data.partners.length > 0 && (
               <div>
-                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>Частые партнёры</ELabel>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('profile.frequentPartners')}</ELabel>
                 <EGoldFrame>
                   <div style={{ padding: '2px 0' }}>
                     {data.partners.map((p, i) => (
@@ -354,7 +359,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               <div style={{
                 textAlign: 'center', color: T.muted, fontFamily: T.fontSerif,
                 fontStyle: 'italic', fontSize: 14, padding: 24,
-              }}>Пока нет сыгранных турниров</div>
+              }}>{t('profile.noTournaments')}</div>
             )}
           </>
         )}
@@ -400,6 +405,7 @@ function RecentRow({ r, last, onClick }: { r: ProfilePlacement; last: boolean; o
 }
 
 function PartnerRow({ p, last, highlight }: { p: ProfilePartner; last?: boolean; highlight?: boolean }) {
+  const t = useT();
   const wr = p.games ? Math.round((p.wins / p.games) * 100) : 0;
   return (
     <div style={{
@@ -413,7 +419,7 @@ function PartnerRow({ p, last, highlight }: { p: ProfilePartner; last?: boolean;
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{p.name}</div>
       <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}>
-        {p.games} игр · {wr}%
+        {t('profile.gamesWr', { games: p.games, wr })}
       </div>
     </div>
   );

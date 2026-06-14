@@ -95,17 +95,27 @@ def _page(inner):
 {inner}</div></div></body></html>'''
 
 
+CARD_L = {
+    "ru": {"champion": "Чемпион", "place": "{n} место", "with": "в паре с",
+           "line": "Побед {w} · Поражений {l}"},
+    "en": {"champion": "Champion", "place": "{n} place", "with": "with",
+           "line": "Wins {w} · Losses {l}"},
+}
+
+
 def build_card_html(c: dict) -> str:
     """c: {name, initials, avatar (datauri|None), place, medal(1/2/3|None),
-           partner(str|None), line, tournament, date}"""
+           partner(str|None), wins, losses, lang, tournament, date}"""
+    L = CARD_L.get(c.get("lang", "ru"), CARD_L["ru"])
     place = c["place"]
-    title = "Чемпион" if place == 1 else f"{place} место"
+    title = L["champion"] if place == 1 else L["place"].format(n=place)
     title_color = GOLDDEEP if place == 1 else (MUTED if place in (2, 3) else GOLD)
     sub = f'{c["tournament"]} · {c["date"]}'
+    line = c.get("line") or L["line"].format(w=c.get("wins", 0), l=c.get("losses", 0))
     partner_line = ""
     if c.get("partner"):
         partner_line = (f'<div style="font-family:{SERIF};font-style:italic;font-size:24px;'
-                        f'color:{MUTED};margin-top:8px">в паре с <span style="color:{INK}">{c["partner"]}</span></div>')
+                        f'color:{MUTED};margin-top:8px">{L["with"]} <span style="color:{INK}">{c["partner"]}</span></div>')
     inner = (
         f'<div style="display:flex;justify-content:center;margin-bottom:8px">{_elogo(84)}</div>'
         f'<div style="font-family:{DISP};font-size:18px;letter-spacing:9px;color:{GOLD};text-transform:uppercase;margin-bottom:6px">Padel Club</div>'
@@ -114,7 +124,7 @@ def build_card_html(c: dict) -> str:
         f'<div style="font-family:{DISP};font-weight:700;font-size:60px;color:{INK};line-height:1.05;margin-top:8px">{c["name"]}</div>'
         f'<div style="font-family:{SERIF};font-style:italic;font-size:26px;color:{MUTED};margin-top:12px">{sub}</div>'
         f'{partner_line}'
-        f'<div style="font-family:{DISP};font-weight:600;font-size:30px;color:{GOLDDEEP};margin-top:26px">{c["line"]}</div>'
+        f'<div style="font-family:{DISP};font-weight:600;font-size:30px;color:{GOLDDEEP};margin-top:26px">{line}</div>'
         f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;font-family:{DISP};font-size:14px;letter-spacing:5px;color:{MUTED};text-transform:uppercase">Padel Club · King of the Court</div>'
     )
     return _page(inner)
@@ -157,13 +167,18 @@ async def render_png(html: str) -> bytes:
 
 def caption_for(c: dict) -> str:
     t, d, place = c["tournament"], c["date"], c["place"]
+    en = c.get("lang", "ru") == "en"
     if place == 1:
-        return f"🏆 Поздравляем с 1-м местом на {t} · {d}! 🎾"
+        return (f"🏆 Congrats on 1st place at {t} · {d}! 🎾" if en
+                else f"🏆 Поздравляем с 1-м местом на {t} · {d}! 🎾")
     if place == 2:
-        return f"🥈 Серебро на {t} · {d} — отлично сыграно!"
+        return (f"🥈 Silver at {t} · {d} — great play!" if en
+                else f"🥈 Серебро на {t} · {d} — отлично сыграно!")
     if place == 3:
-        return f"🥉 Бронза на {t} · {d} — отлично сыграно!"
-    return f"Твой итог на {t} · {d} — {place} место. Спасибо за игру! 🎾"
+        return (f"🥉 Bronze at {t} · {d} — great play!" if en
+                else f"🥉 Бронза на {t} · {d} — отлично сыграно!")
+    return (f"Your result at {t} · {d} — place {place}. Thanks for playing! 🎾" if en
+            else f"Твой итог на {t} · {d} — {place} место. Спасибо за игру! 🎾")
 
 
 async def send_photo(chat_id: int, png: bytes, caption: str):

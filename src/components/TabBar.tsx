@@ -1,6 +1,7 @@
 import { T } from '../lib/tokens';
 import { ETrophy, EPeopleIcon, EClockIcon, ELogo, EMedal } from '../lib/elegant';
 import { useMe } from '../api/me';
+import { useT } from '../lib/i18n';
 
 export type Tab = 'tournament' | 'players' | 'club' | 'history' | 'cabinet';
 
@@ -8,16 +9,17 @@ interface Props { active: Tab; onChange: (t: Tab) => void }
 
 export function TabBar({ active, onChange }: Props) {
   const { data: me } = useMe();
+  const t = useT();
   // Brand-new users (not admin, not linked) only see the welcome/join screen.
   if (me && !me.is_admin && !me.player) return null;
   const showCabinet = !!me?.player;  // linked participants get a personal cabinet tab
   const tabs: { id: Tab; label: string; icon: (size: number, c: string) => React.ReactNode }[] = [
-    { id: 'tournament', label: 'TOURNAMENT', icon: (s, c) => <ETrophy size={s} color={c} /> },
-    { id: 'players',    label: 'PLAYERS',    icon: (s, c) => <EPeopleIcon size={s} color={c} /> },
-    { id: 'club',       label: 'КЛУБ',       icon: (s) => <EMedal place={1} size={s} /> },
-    { id: 'history',    label: 'HISTORY',    icon: (s, c) => <EClockIcon size={s} color={c} /> },
+    { id: 'tournament', label: t('tab.tournament'), icon: (s, c) => <ETrophy size={s} color={c} /> },
+    { id: 'players',    label: t('tab.players'),    icon: (s, c) => <EPeopleIcon size={s} color={c} /> },
+    { id: 'club',       label: t('tab.club'),       icon: (s) => <EMedal place={1} size={s} /> },
+    { id: 'history',    label: t('tab.history'),    icon: (s, c) => <EClockIcon size={s} color={c} /> },
     ...(showCabinet
-      ? [{ id: 'cabinet' as Tab, label: 'КАБИНЕТ', icon: (s: number, c: string) => <ELogo size={s} color={c} /> }]
+      ? [{ id: 'cabinet' as Tab, label: t('tab.cabinet'), icon: (s: number, c: string) => <ELogo size={s} color={c} /> }]
       : []),
   ];
   return (
@@ -38,7 +40,7 @@ export function TabBar({ active, onChange }: Props) {
             {t.icon(22, c)}
             <span style={{
               fontFamily: T.fontDisplay, fontSize: 9, fontWeight: 600,
-              letterSpacing: '0.18em', color: c,
+              letterSpacing: '0.18em', color: c, textTransform: 'uppercase',
             }}>{t.label}</span>
           </button>
         );

@@ -6,6 +6,7 @@ import { LevelBadge } from '../components/Badges';
 import { ELabel, EMedal, EPlace, EBtn, EGoldFrame, EOrnRule } from '../lib/elegant';
 import { MonthLeaderboardPoster } from './MonthLeaderboardPoster';
 import { ShareTextModal } from '../components/ShareTextModal';
+import { useT, useLang, monthNameL } from '../lib/i18n';
 import type { HistoryItem, MonthlyLeaderboardResponse } from '../lib/types';
 
 interface HistoryScreenProps {
@@ -15,6 +16,7 @@ interface HistoryScreenProps {
 type Tab = 'tournaments' | 'month';
 
 export function HistoryScreen({ onOpenTournament }: HistoryScreenProps = {}) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>('tournaments');
   // Month state — defaults to current month. Arrow keys step through.
   const now = new Date();
@@ -28,7 +30,7 @@ export function HistoryScreen({ onOpenTournament }: HistoryScreenProps = {}) {
         padding: '10px 18px 12px', background: T.cream,
         borderBottom: `1px solid ${T.paperEdge}`,
       }}>
-        <ELabel>· History</ELabel>
+        <ELabel>· {t('tab.history')}</ELabel>
         <SegmentedToggle value={tab} onChange={setTab} />
       </div>
 
@@ -41,9 +43,10 @@ export function HistoryScreen({ onOpenTournament }: HistoryScreenProps = {}) {
 
 // ───────── Segmented toggle ─────────
 function SegmentedToggle({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
+  const t = useT();
   const opts: { id: Tab; label: string }[] = [
-    { id: 'tournaments', label: 'Tournaments' },
-    { id: 'month',       label: 'Month leaders' },
+    { id: 'tournaments', label: t('history.tournaments') },
+    { id: 'month',       label: t('history.monthLeaders') },
   ];
   return (
     <div style={{
@@ -72,6 +75,7 @@ function SegmentedToggle({ value, onChange }: { value: Tab; onChange: (t: Tab) =
 
 // ───────── Tournaments list (existing flow) ─────────
 function TournamentsList({ onOpenTournament }: { onOpenTournament?: (tid: number) => void }) {
+  const t = useT();
   const { data, isLoading, error, refetch } = useQuery<{ items: HistoryItem[] }>({
     queryKey: ['history'],
     queryFn: () => api('/api/tournaments/history'),
@@ -86,12 +90,12 @@ function TournamentsList({ onOpenTournament }: { onOpenTournament?: (tid: number
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div style={{ textAlign: 'center', marginBottom: 4 }}>
-        <ELabel>{items.length} played</ELabel>
+        <ELabel>{t('history.played', { n: items.length })}</ELabel>
       </div>
       {isLoading ? (
         <Skeletons />
       ) : items.length === 0 ? (
-        <Empty text="No finished tournaments yet" />
+        <Empty text={t('history.noFinished')} />
       ) : (
         items.map((it) => (
           <div
@@ -142,6 +146,8 @@ function TournamentsList({ onOpenTournament }: { onOpenTournament?: (tid: number
 function MonthLeaderboard({
   ym, onChange,
 }: { ym: { year: number; month: number }; onChange: (v: { year: number; month: number }) => void }) {
+  const t = useT();
+  const lang = useLang();
   const { data, isLoading, error, refetch } = useQuery<MonthlyLeaderboardResponse>({
     queryKey: ['monthly', ym.year, ym.month],
     queryFn: () => api(`/api/leaderboard/monthly?year=${ym.year}&month=${ym.month}`),
@@ -169,14 +175,14 @@ function MonthLeaderboard({
     }
   }
 
-  const monthLabel = `${monthName(ym.month).toUpperCase()} ${ym.year}`;
+  const monthLabel = `${monthNameL(lang, ym.month).toUpperCase()} ${ym.year}`;
 
   // Top-20 standings as forwardable text (medals for podium, places below).
   const buildShareText = (): string => {
     const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
     const lines = [
-      `🏆 *PADEL CLUB · Лидеры месяца*`,
-      `${monthLabel} · ${data?.tournaments_count ?? 0} турниров`,
+      `🏆 *PADEL CLUB · ${t('history.monthLeaders')}*`,
+      `${monthLabel} · ${data?.tournaments_count ?? 0} ${t('history.nTournaments')}`,
       '',
     ];
     for (const { place, row } of ranked.slice(0, 20)) {
@@ -217,11 +223,11 @@ function MonthLeaderboard({
           color: T.gold, fontFamily: T.fontDisplay, fontSize: 18, padding: '4px 8px',
         }}>‹</button>
         <div style={{ textAlign: 'center' }}>
-          <ELabel>Leaders</ELabel>
+          <ELabel>{t('history.leaders')}</ELabel>
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
             letterSpacing: 2, color: T.ink, marginTop: 2,
-          }}>{monthName(ym.month)} {ym.year}</div>
+          }}>{monthNameL(lang, ym.month)} {ym.year}</div>
         </div>
         <button onClick={() => step(1)} style={{
           background: 'transparent', border: 'none', cursor: 'pointer',
@@ -235,7 +241,7 @@ function MonthLeaderboard({
       {isLoading ? (
         <Skeletons />
       ) : !data || data.items.length === 0 ? (
-        <Empty text={`No tournaments in ${monthName(ym.month)}`} />
+        <Empty text={t('history.noMonth')} />
       ) : (
         <>
           <div style={{
@@ -350,6 +356,7 @@ function Empty({ text }: { text: string }) {
 }
 
 function CenterError({ onRetry }: { onRetry: () => void }) {
+  const t = useT();
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
@@ -358,8 +365,8 @@ function CenterError({ onRetry }: { onRetry: () => void }) {
       <div style={{
         fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600,
         color: T.burgundy, letterSpacing: 2,
-      }}>Could not load</div>
-      <EBtn kind="primary" onClick={onRetry}>Retry</EBtn>
+      }}>{t('common.couldNotLoad')}</div>
+      <EBtn kind="primary" onClick={onRetry}>{t('common.retry')}</EBtn>
     </div>
   );
 }

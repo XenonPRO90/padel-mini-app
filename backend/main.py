@@ -502,6 +502,12 @@ async def me(user=Depends(get_tg_user)):
     if player and user.get("photo_url") and player.get("photo_url") != user["photo_url"]:
         await q.set_player_photo(player["id"], user["photo_url"])
         player["photo_url"] = user["photo_url"]
+    # Store UI language (for localized post-tournament cards) when it changes.
+    if player and user.get("language_code"):
+        want = "en" if str(user["language_code"]).lower().startswith("en") else "ru"
+        if player.get("lang") != want:
+            await q.set_player_lang(player["id"], want)
+            player["lang"] = want
     join_status = None if player else await q.get_join_status(user["id"])
     pending = await q.count_pending_join_requests() if is_adm else 0
     return {

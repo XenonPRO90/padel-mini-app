@@ -3,12 +3,14 @@ import { T } from '../lib/tokens';
 import { EBtn } from '../lib/elegant';
 import { useMe } from '../api/me';
 import { useSubmitJoinRequest } from '../api/joinRequests';
+import { useT } from '../lib/i18n';
 
 const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C-', 'D'];
 
 // Self-contained: shows nothing for admins or already-linked users.
 // Non-linked → "подать заявку" (or "на рассмотрении" if pending).
 export function JoinBanner() {
+  const t = useT();
   const { data: me } = useMe();
   const [open, setOpen] = useState(false);
 
@@ -18,8 +20,8 @@ export function JoinBanner() {
     return (
       <div style={bannerStyle}>
         <div>
-          <div style={titleStyle}>Заявка на рассмотрении</div>
-          <div style={subStyle}>Организатор скоро её подтвердит — тогда откроется твой кабинет.</div>
+          <div style={titleStyle}>{t('join.pendingTitle')}</div>
+          <div style={subStyle}>{t('join.pendingSub')}</div>
         </div>
       </div>
     );
@@ -29,10 +31,10 @@ export function JoinBanner() {
     <>
       <div style={bannerStyle}>
         <div style={{ flex: 1 }}>
-          <div style={titleStyle}>Хочешь в клуб?</div>
-          <div style={subStyle}>Подай заявку — после подтверждения появится личный кабинет со статистикой.</div>
+          <div style={titleStyle}>{t('join.wantTitle')}</div>
+          <div style={subStyle}>{t('join.wantSub')}</div>
         </div>
-        <EBtn kind="primary" onClick={() => setOpen(true)}>Подать заявку</EBtn>
+        <EBtn kind="primary" onClick={() => setOpen(true)}>{t('welcome.apply')}</EBtn>
       </div>
       {open && <JoinModal defaultName={me.user.first_name || ''} onClose={() => setOpen(false)} />}
     </>
@@ -40,17 +42,18 @@ export function JoinBanner() {
 }
 
 function JoinModal({ defaultName, onClose }: { defaultName: string; onClose: () => void }) {
+  const t = useT();
   const [name, setName] = useState(defaultName);
   const [level, setLevel] = useState('C');
   const submit = useSubmitJoinRequest();
 
   const onSend = async () => {
-    if (!name.trim()) { alert('Укажи имя'); return; }
+    if (!name.trim()) { alert(t('form.enterName')); return; }
     try {
       await submit.mutateAsync({ name: name.trim(), level });
       onClose();
     } catch (e) {
-      alert((e as Error).message || 'Не удалось отправить заявку');
+      alert((e as Error).message || t('form.submitFail'));
     }
   };
 
@@ -66,17 +69,17 @@ function JoinModal({ defaultName, onClose }: { defaultName: string; onClose: () 
         <div style={{
           fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600, color: T.ink,
           letterSpacing: 1, marginBottom: 14, textAlign: 'center',
-        }}>Заявка на вступление</div>
+        }}>{t('join.formTitle')}</div>
 
-        <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6 }}>ИМЯ</div>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Как тебя зовут"
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6, textTransform: 'uppercase' }}>{t('form.name')}</div>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('form.namePh')}
           style={{
             width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12,
             border: `1px solid ${T.paperEdge}`, background: T.cream, fontFamily: T.fontDisplay,
             fontSize: 16, color: T.ink, marginBottom: 14,
           }} />
 
-        <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6 }}>УРОВЕНЬ</div>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6, textTransform: 'uppercase' }}>{t('form.level')}</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 18 }}>
           {LEVELS.map((l) => (
             <button key={l} onClick={() => setLevel(l)} style={{
@@ -90,7 +93,7 @@ function JoinModal({ defaultName, onClose }: { defaultName: string; onClose: () 
         </div>
 
         <EBtn kind="primary" style={{ width: '100%' }} disabled={submit.isPending} onClick={onSend}>
-          {submit.isPending ? 'Отправка…' : 'Отправить заявку'}
+          {submit.isPending ? t('form.submitting') : t('form.submit')}
         </EBtn>
       </div>
     </div>
