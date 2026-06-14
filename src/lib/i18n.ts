@@ -1,0 +1,149 @@
+// Lightweight i18n (EN/RU). Module-level store + useSyncExternalStore so any
+// component re-renders on language change. Default: Telegram language_code,
+// overridable via a manual toggle, persisted in localStorage.
+import { useSyncExternalStore } from 'react';
+
+export type Lang = 'en' | 'ru';
+
+function detectInitial(): Lang {
+  try {
+    const saved = localStorage.getItem('lang');
+    if (saved === 'en' || saved === 'ru') return saved;
+  } catch { /* noop */ }
+  const lc = (window as unknown as {
+    Telegram?: { WebApp?: { initDataUnsafe?: { user?: { language_code?: string } } } };
+  }).Telegram?.WebApp?.initDataUnsafe?.user?.language_code || '';
+  return lc.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
+
+let _lang: Lang = detectInitial();
+const listeners = new Set<() => void>();
+
+export function getLang(): Lang { return _lang; }
+export function setLang(l: Lang) {
+  if (l === _lang) return;
+  _lang = l;
+  try { localStorage.setItem('lang', l); } catch { /* noop */ }
+  listeners.forEach((f) => f());
+}
+function subscribe(f: () => void) { listeners.add(f); return () => { listeners.delete(f); }; }
+
+export function useLang(): Lang {
+  return useSyncExternalStore(subscribe, getLang, getLang);
+}
+
+type Entry = { en: string; ru: string };
+
+export const STR = {
+  // tabs / nav
+  'tab.tournament': { ru: 'Турнир', en: 'Tournament' },
+  'tab.players': { ru: 'Игроки', en: 'Players' },
+  'tab.club': { ru: 'Клуб', en: 'Club' },
+  'tab.history': { ru: 'История', en: 'History' },
+  'tab.cabinet': { ru: 'Кабинет', en: 'Profile' },
+  'common.back': { ru: 'Назад', en: 'Back' },
+  'common.ok': { ru: 'OK', en: 'OK' },
+  'common.gotit': { ru: 'Понятно', en: 'Got it' },
+  'common.nodata': { ru: 'Пока нет данных', en: 'No data yet' },
+
+  // Club
+  'club.title': { ru: 'Клуб', en: 'Club' },
+  'club.rating': { ru: 'Рейтинг', en: 'Rating' },
+  'club.pairs': { ru: 'Дуэты', en: 'Duos' },
+  'club.records': { ru: 'Рекорды', en: 'Records' },
+  'club.allTime': { ru: 'Всё время', en: 'All time' },
+  'club.month': { ru: 'Месяц', en: 'Month' },
+  'club.byPoints': { ru: 'Очки', en: 'Points' },
+  'club.byWinrate': { ru: 'Винрейт', en: 'Win rate' },
+  'club.byRating': { ru: 'Рейтинг', en: 'Rating' },
+  'club.ratingFooter': { ru: 'композит: качество · титулы · опыт · форма · всё время',
+    en: 'composite: quality · titles · experience · form · all-time' },
+  'club.winrateNote': { ru: 'в рейтинге по винрейту — от 10 игр', en: 'win-rate ranking — 10+ games' },
+  'club.pairsEmpty': { ru: 'Пока мало совместных игр', en: 'Not enough games together yet' },
+  'club.recordsTitle': { ru: 'Рекорды клуба', en: 'Club records' },
+  'club.recMostTitles': { ru: 'Больше титулов', en: 'Most titles' },
+  'club.recLongestStreak': { ru: 'Самая длинная серия', en: 'Longest streak' },
+  'club.recMostPoints': { ru: 'Больше всего очков', en: 'Most points' },
+  'club.recMostWins': { ru: 'Больше всего побед', en: 'Most wins' },
+  'club.hallOfFame': { ru: 'Зал славы · чемпионы', en: 'Hall of fame · champions' },
+  'club.games': { ru: '{n}и', en: '{n}g' },
+
+  // Rating explainer modal
+  'rating.title': { ru: 'Как считается рейтинг', en: 'How the rating works' },
+  'rating.intro': { ru: 'Единый балл 0–1000 за всё время и по всем форматам. Складывается из четырёх частей:',
+    en: 'A single 0–1000 score across all time and formats. Four parts:' },
+  'rating.qualityT': { ru: 'Качество', en: 'Quality' },
+  'rating.qualityD': { ru: 'процент побед с поправкой на силу соперника — побеждать сильных ценнее.',
+    en: 'win rate adjusted for opponent strength — beating stronger players counts more.' },
+  'rating.titlesT': { ru: 'Титулы', en: 'Titles' },
+  'rating.titlesD': { ru: 'чемпионства и подиумы в завершённых турнирах.',
+    en: 'championships and podiums in finished tournaments.' },
+  'rating.expT': { ru: 'Опыт', en: 'Experience' },
+  'rating.expD': { ru: 'сколько игр сыграно — стабильность важнее одной удачной серии.',
+    en: 'games played — consistency over a single lucky run.' },
+  'rating.formT': { ru: 'Форма', en: 'Form' },
+  'rating.formD': { ru: 'результаты за последние 30 дней.', en: 'results over the last 30 days.' },
+  'rating.note': { ru: 'У кого мало игр, рейтинг осторожнее — пара побед не выводит новичка в топ, нужна история.',
+    en: 'With few games the rating stays cautious — a couple of wins won’t push a newcomer to the top.' },
+
+  // Profile
+  'profile.title': { ru: 'Профиль', en: 'Profile' },
+  'profile.share': { ru: 'Поделиться', en: 'Share' },
+  'profile.invite': { ru: 'Пригласить', en: 'Invite' },
+  'profile.winsInMatches': { ru: 'побед в матчах', en: 'match win rate' },
+  'profile.days30': { ru: '30 дней', en: '30 days' },
+  'profile.inClub': { ru: '#{n} в клубе', en: '#{n} in club' },
+  'profile.inApp': { ru: '✓ в приложении', en: '✓ in app' },
+  'profile.racketPh': { ru: 'Твоя ракетка (напр. Babolat Air)', en: 'Your racket (e.g. Babolat Air)' },
+  'profile.stats': { ru: 'Статистика', en: 'Stats' },
+  'profile.bestPartner': { ru: 'Лучший партнёр', en: 'Best partner' },
+  'profile.h2h': { ru: 'Личные счёты', en: 'Head-to-head' },
+  'profile.nemesis': { ru: 'Немезида', en: 'Nemesis' },
+  'profile.favOpp': { ru: 'Любимый соперник', en: 'Favourite opponent' },
+  'profile.courts': { ru: 'Корты · King of the Court', en: 'Courts · King of the Court' },
+  'profile.court': { ru: 'Корт {n}', en: 'Court {n}' },
+  'profile.recentTournaments': { ru: 'Последние турниры', en: 'Recent tournaments' },
+  'profile.frequentPartners': { ru: 'Частые партнёры', en: 'Frequent partners' },
+  'profile.noTournaments': { ru: 'Пока нет сыгранных турниров', en: 'No tournaments played yet' },
+  'profile.gamesWr': { ru: '{games} игр · {wr}%', en: '{games} games · {wr}%' },
+  'profile.inviteText': { ru: 'Открой свой профиль в Padel Club', en: 'Open your profile in Padel Club' },
+  'profile.inviteFail': { ru: 'Не удалось создать приглашение', en: 'Could not create invite' },
+
+  // achievement labels (by backend id)
+  'ach.champion': { ru: 'Чемпион', en: 'Champion' },
+  'ach.podium': { ru: 'Подиум', en: 'Podium' },
+  'ach.tournaments': { ru: 'Турниров', en: 'Tournaments' },
+  'ach.games': { ru: 'Игр сыграно', en: 'Games played' },
+  'ach.win_rate': { ru: 'Винрейт', en: 'Win rate' },
+  'ach.podium_rate': { ru: '% призовых', en: 'Podium %' },
+  'ach.streak_best': { ru: 'Лучшая серия', en: 'Best streak' },
+  'ach.giant_kills': { ru: 'Гроза старших', en: 'Giant-killer' },
+  'ach.total_points': { ru: 'Очков за карьеру', en: 'Career points' },
+  'ach.giantSub': { ru: 'из {n} со старшими', en: 'of {n} vs stronger' },
+  'ach.giantNone': { ru: 'не играл со старшими', en: 'none vs stronger' },
+
+  // stat help (legend)
+  'help.tournaments': { ru: 'сколько турниров сыграно', en: 'tournaments played' },
+  'help.games': { ru: 'сколько матчей (игр на корте) сыграно', en: 'matches (court games) played' },
+  'help.win_rate': { ru: '% выигранных матчей: победы ÷ все матчи', en: '% of matches won: wins ÷ all matches' },
+  'help.podium_rate': { ru: 'доля турниров, где попал в топ-3', en: 'share of tournaments finishing top-3' },
+  'help.champion': { ru: 'сколько раз занял 1-е место в турнире', en: 'times finished 1st in a tournament' },
+  'help.podium': { ru: 'сколько раз попал в топ-3 (1–3 место)', en: 'times finished top-3 (1st–3rd)' },
+  'help.streak_best': { ru: 'самая длинная серия побед подряд', en: 'longest run of consecutive wins' },
+  'help.giant_kills': { ru: 'победы над теми, кто на 2+ ступени выше по уровню (и сколько было таких матчей)',
+    en: 'wins vs players 2+ levels above you (and how many such matches)' },
+  'help.total_points': { ru: 'сумма очков по всем турнирам', en: 'total points across all tournaments' },
+} satisfies Record<string, Entry>;
+
+export type StrKey = keyof typeof STR;
+
+export function tr(lang: Lang, key: StrKey, vars?: Record<string, string | number>): string {
+  let s: string = STR[key]?.[lang] ?? String(key);
+  if (vars) for (const k in vars) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), String(vars[k]));
+  return s;
+}
+
+export function useT() {
+  const lang = useLang();
+  return (key: StrKey, vars?: Record<string, string | number>) => tr(lang, key, vars);
+}
