@@ -133,7 +133,101 @@ export const STR = {
   'help.giant_kills': { ru: 'победы над теми, кто на 2+ ступени выше по уровню (и сколько было таких матчей)',
     en: 'wins vs players 2+ levels above you (and how many such matches)' },
   'help.total_points': { ru: 'сумма очков по всем турнирам', en: 'total points across all tournaments' },
+
+  // common (slice 2)
+  'common.retry': { ru: 'Повторить', en: 'Retry' },
+  'common.couldNotLoad': { ru: 'Не удалось загрузить', en: 'Could not load' },
+  'common.cancel': { ru: 'Отмена', en: 'Cancel' },
+  'common.error': { ru: 'Ошибка', en: 'Error' },
+  'common.send': { ru: 'Отправить', en: 'Send' },
+  'form.name': { ru: 'Имя', en: 'Name' },
+  'form.level': { ru: 'Уровень', en: 'Level' },
+  'form.namePh': { ru: 'Как тебя зовут', en: 'Your name' },
+  'form.enterName': { ru: 'Укажи имя', en: 'Enter your name' },
+  'form.submit': { ru: 'Отправить заявку', en: 'Submit application' },
+  'form.submitting': { ru: 'Отправка…', en: 'Submitting…' },
+  'form.submitFail': { ru: 'Не удалось отправить заявку', en: 'Could not submit' },
+
+  // Welcome
+  'welcome.tagline': { ru: 'Клуб любительского падела. Турниры каждую неделю, личная статистика и рейтинг игроков.',
+    en: 'Amateur padel club. Weekly tournaments, personal stats and player rating.' },
+  'welcome.f1t': { ru: 'Интересные форматы', en: 'Fun formats' },
+  'welcome.f2t': { ru: 'Личный кабинет', en: 'Personal profile' },
+  'welcome.f2x': { ru: 'статистика, места, серии и достижения', en: 'stats, places, streaks and achievements' },
+  'welcome.f3t': { ru: 'Рейтинг клуба', en: 'Club rating' },
+  'welcome.f3x': { ru: 'следи за топом игроков и лучшими дуэтами', en: 'follow the top players and best duos' },
+  'welcome.pending': { ru: '⏳ Заявка на рассмотрении — организатор скоро подтвердит, и откроется твой кабинет.',
+    en: '⏳ Application under review — the organizer will confirm soon and your profile will open.' },
+  'welcome.apply': { ru: 'Подать заявку', en: 'Apply to join' },
+
+  // Join banner
+  'join.pendingTitle': { ru: 'Заявка на рассмотрении', en: 'Application under review' },
+  'join.pendingSub': { ru: 'Организатор скоро её подтвердит — тогда откроется твой кабинет.',
+    en: 'The organizer will confirm it soon — then your profile opens.' },
+  'join.wantTitle': { ru: 'Хочешь в клуб?', en: 'Want to join the club?' },
+  'join.wantSub': { ru: 'Подай заявку — после подтверждения появится личный кабинет со статистикой.',
+    en: 'Apply — once approved you get a personal profile with stats.' },
+  'join.formTitle': { ru: 'Заявка на вступление', en: 'Join request' },
+
+  // Player home
+  'home.hi': { ru: 'Привет, {name} 👋', en: 'Hi, {name} 👋' },
+  'home.winsShort': { ru: '{wr}% побед', en: '{wr}% wins' },
+  'home.live': { ru: '· Идёт турнир · смотреть', en: '· Tournament live · view' },
+  'home.round': { ru: 'Раунд {n} / {total}', en: 'Round {n} / {total}' },
+  'home.myCabinet': { ru: 'Мой кабинет', en: 'My profile' },
+  'home.myCabinetSub': { ru: 'статистика и достижения', en: 'stats and achievements' },
+  'home.clubRating': { ru: 'Рейтинг клуба', en: 'Club rating' },
+  'home.clubRatingSub': { ru: 'топ, дуэты, рекорды', en: 'top, duos, records' },
+  'home.noActive': { ru: 'Сейчас активных турниров нет — заглядывай в кабинет и рейтинг.',
+    en: 'No active tournaments right now — check your profile and the rating.' },
+  'home.organizersCreate': { ru: 'Турниры создают организаторы', en: 'Tournaments are created by organizers' },
+  'home.startTournament': { ru: 'Начать турнир', en: 'Start new tournament' },
+
+  // History
+  'history.tournaments': { ru: 'Турниры', en: 'Tournaments' },
+  'history.monthLeaders': { ru: 'Лидеры месяца', en: 'Month leaders' },
+  'history.noFinished': { ru: 'Пока нет завершённых турниров', en: 'No finished tournaments yet' },
+  'history.leaders': { ru: 'Лидеры', en: 'Leaders' },
+  'history.noMonth': { ru: 'В этом месяце турниров не было', en: 'No tournaments this month' },
+  'history.played': { ru: '{n} сыграно', en: '{n} played' },
+  'history.nTournaments': { ru: 'турниров', en: 'tournaments' },
+
+  // Players
+  'players.eyebrow': { ru: '· Игроки · клуб', en: '· Players · the library' },
+  'players.guests': { ru: 'игроков', en: 'guests' },
+  'players.add': { ru: 'Добавить', en: 'Add' },
+  'players.searchPh': { ru: 'Поиск по имени…', en: 'Search by name…' },
+  'players.noMatches': { ru: 'Ничего не найдено', en: 'No matches' },
+
+  // Admin requests
+  'admin.requests': { ru: 'Заявки', en: 'Requests' },
+  'admin.noRequests': { ru: 'Новых заявок нет', en: 'No new requests' },
+  'admin.pending': { ru: 'На рассмотрении · {n}', en: 'Pending · {n}' },
+  'admin.approve': { ru: 'Принять', en: 'Approve' },
+  'admin.approveFail': { ru: 'Не удалось одобрить', en: 'Could not approve' },
+
+  // Tournament detail
+  'td.finalStandings': { ru: 'Итоги', en: 'Final standings' },
+  'td.roundsPlayed': { ru: 'Сыгранные раунды', en: 'Rounds played' },
+  'td.round': { ru: 'Раунд', en: 'Round' },
+  'td.pts': { ru: 'очк', en: 'pts' },
+  'td.sendResults': { ru: '📤 Отправить результаты игрокам', en: '📤 Send results to players' },
+  'td.sendConfirm': { ru: 'Отправить {n} карточек привязанным игрокам (из {total})?',
+    en: 'Send {n} cards to linked players (of {total})?' },
+  'td.sending': { ru: 'Отправляю карточки…', en: 'Sending cards…' },
+  'td.sent': { ru: 'Отправлено: {n}', en: 'Sent: {n}' },
+  'td.failed': { ru: ' · не доставлено: {k}', en: ' · not delivered: {k}' },
 } satisfies Record<string, Entry>;
+
+const MONTHS: Record<Lang, string[]> = {
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+       'September', 'October', 'November', 'December'],
+  ru: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август',
+       'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+};
+export function monthNameL(lang: Lang, m1to12: number): string {
+  return MONTHS[lang]?.[m1to12 - 1] ?? String(m1to12);
+}
 
 export type StrKey = keyof typeof STR;
 

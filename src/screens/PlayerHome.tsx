@@ -5,6 +5,7 @@ import { usePlayerProfile } from '../api/players';
 import { T } from '../lib/tokens';
 import { EHero, EDivider, EGoldFrame, ELabel } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
+import { useT } from '../lib/i18n';
 import type { ActiveTournamentResponse } from '../lib/types';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 
 // Personalized home for a linked, non-admin participant.
 export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props) {
+  const tx = useT();
   const { data: me } = useMe();
   const pid = me?.player?.id;
   const { data: profile } = usePlayerProfile(pid ?? 0);
@@ -41,10 +43,10 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 600, color: T.ink,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>Привет, {me.player.name.split(/\s+/)[0]} 👋</div>
+          }}>{tx('home.hi', { name: me.player.name.split(/\s+/)[0] })}</div>
           {s && (
             <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted, marginTop: 2 }}>
-              {s.club_rank ? `#${s.club_rank} в клубе · ` : ''}{Math.round(s.win_rate * 100)}% побед
+              {s.club_rank ? `${tx('profile.inClub', { n: s.club_rank })} · ` : ''}{tx('home.winsShort', { wr: Math.round(s.win_rate * 100) })}
             </div>
           )}
         </div>
@@ -69,12 +71,12 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props
         <EGoldFrame style={{ marginTop: 18 }}>
           <div onClick={onOpenLiveRound} style={{ padding: '14px 16px', cursor: 'pointer' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <ELabel color={T.emerald}>· Идёт турнир · смотреть</ELabel>
+              <ELabel color={T.emerald}>{tx('home.live')}</ELabel>
               <span style={{ color: T.gold }}>›</span>
             </div>
             <div style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600, color: T.ink }}>{t.name}</div>
             <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted, marginTop: 2 }}>
-              Раунд {round.round_num} / {totalRounds}
+              {tx('home.round', { n: round.round_num, total: totalRounds })}
             </div>
           </div>
         </EGoldFrame>
@@ -82,15 +84,15 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props
 
       {/* Shortcuts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
-        <Shortcut label="Мой кабинет" sub="статистика и достижения" onClick={onOpenProfile} />
-        <Shortcut label="Рейтинг клуба" sub="топ, дуэты, рекорды" onClick={onOpenClub} />
+        <Shortcut label={tx('home.myCabinet')} sub={tx('home.myCabinetSub')} onClick={onOpenProfile} />
+        <Shortcut label={tx('home.clubRating')} sub={tx('home.clubRatingSub')} onClick={onOpenClub} />
       </div>
 
       {!t && (
         <div style={{
           textAlign: 'center', fontFamily: T.fontSerif, fontStyle: 'italic',
           fontSize: 13, color: T.muted, marginTop: 22,
-        }}>Сейчас активных турниров нет — заглядывай в кабинет и рейтинг.</div>
+        }}>{tx('home.noActive')}</div>
       )}
     </div>
   );

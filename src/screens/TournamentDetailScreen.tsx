@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useMe } from '../api/me';
+import { useT } from '../lib/i18n';
 import { T } from '../lib/tokens';
 import { ELabel, EMedal, EPlace, EGoldFrame, EOrnRule } from '../lib/elegant';
 import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
@@ -20,6 +21,7 @@ interface Resp {
 }
 
 export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
+  const tx = useT();
   const { data, isLoading } = useQuery<Resp>({
     queryKey: ['tournament', tid],
     queryFn: () => api(`/api/tournaments/${tid}`),
@@ -73,12 +75,12 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
         <button onClick={onBack} style={{
           background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
           color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
-        }}>← History</button>
+        }}>← {tx('tab.history')}</button>
         <div style={{ flex: 1, textAlign: 'center' }}>
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
             color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
-          }}>Tournament</div>
+          }}>{tx('tab.tournament')}</div>
         </div>
         <div style={{ width: 60 }} />
       </div>
@@ -97,7 +99,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
 
         {t.status === 'finished' && <SendResultsButton tid={tid} />}
 
-        <ELabel style={{ marginBottom: 8, textAlign: 'center' }}>Final Standings</ELabel>
+        <ELabel style={{ marginBottom: 8, textAlign: 'center' }}>{tx('td.finalStandings')}</ELabel>
         <EGoldFrame>
           <div style={{ padding: '4px 0' }}>
             {ranked.map(({ place, row }, i) => {
@@ -137,7 +139,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
                           <span style={{
                             fontFamily: T.fontSerif, fontSize: 11,
                             fontStyle: 'italic', color: T.muted,
-                          }}>pts</span>
+                          }}>{tx('td.pts')}</span>
                         </div>
                         <div style={{ width: 1, height: 14, background: T.paperEdge }} />
                       </>
@@ -154,7 +156,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
           </div>
         </EGoldFrame>
 
-        <ELabel style={{ margin: '20px 0 8px', textAlign: 'center' }}>Rounds Played</ELabel>
+        <ELabel style={{ margin: '20px 0 8px', textAlign: 'center' }}>{tx('td.roundsPlayed')}</ELabel>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rounds.map((r) => (
             <div
@@ -169,8 +171,8 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{
-                  fontFamily: T.fontDisplay, fontSize: 11, letterSpacing: 2, color: T.gold,
-                }}>ROUND</span>
+                  fontFamily: T.fontDisplay, fontSize: 11, letterSpacing: 2, color: T.gold, textTransform: 'uppercase',
+                }}>{tx('td.round')}</span>
                 <span style={{
                   fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 600,
                   color: T.ink, fontVariantNumeric: 'tabular-nums',
@@ -190,6 +192,7 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
 
 // Phase 4 — admin sends personal result cards to linked players' DMs.
 function SendResultsButton({ tid }: { tid: number }) {
+  const t = useT();
   const { data: me } = useMe();
   const [step, setStep] = useState<'idle' | 'confirm' | 'sending' | 'done'>('idle');
   const [info, setInfo] = useState<{ linked: number; total: number } | null>(null);
@@ -202,7 +205,7 @@ function SendResultsButton({ tid }: { tid: number }) {
       setInfo({ linked: d.linked_count, total: d.total_count });
       setStep('confirm');
     } catch (e) {
-      setResult('Ошибка: ' + (e as Error).message);
+      setResult(t('common.error') + ': ' + (e as Error).message);
       setStep('done');
     }
   };
@@ -211,9 +214,9 @@ function SendResultsButton({ tid }: { tid: number }) {
     try {
       const r = await api<{ sent: number; failed: { name: string; reason: string }[] }>(
         `/api/tournaments/${tid}/cards/send`, { method: 'POST' });
-      setResult(`Отправлено: ${r.sent}` + (r.failed.length ? ` · не доставлено: ${r.failed.length}` : ''));
+      setResult(t('td.sent', { n: r.sent }) + (r.failed.length ? t('td.failed', { k: r.failed.length }) : ''));
     } catch (e) {
-      setResult('Ошибка: ' + (e as Error).message);
+      setResult(t('common.error') + ': ' + (e as Error).message);
     }
     setStep('done');
   };
@@ -234,24 +237,24 @@ function SendResultsButton({ tid }: { tid: number }) {
   if (step === 'done') {
     return <div style={wrap}>
       <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 8 }}>{result}</div>
-      {btn('Ок', () => { setStep('idle'); setResult(null); }, false)}
+      {btn(t('common.ok'), () => { setStep('idle'); setResult(null); }, false)}
     </div>;
   }
   if (step === 'sending') {
-    return <div style={wrap}><div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', color: T.muted }}>Отправляю карточки…</div></div>;
+    return <div style={wrap}><div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', color: T.muted }}>{t('td.sending')}</div></div>;
   }
   if (step === 'confirm') {
     return <div style={wrap}>
       <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 10 }}>
-        Отправить {info?.linked ?? 0} карточек привязанным игрокам{info ? ` (из ${info.total})` : ''}?
+        {t('td.sendConfirm', { n: info?.linked ?? 0, total: info?.total ?? 0 })}
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        {btn('Отправить', send)}
-        {btn('Отмена', () => setStep('idle'), false)}
+        {btn(t('common.send'), send)}
+        {btn(t('common.cancel'), () => setStep('idle'), false)}
       </div>
     </div>;
   }
   return <div style={{ textAlign: 'center', marginBottom: 18 }}>
-    {btn('📤 Отправить результаты игрокам', openConfirm)}
+    {btn(t('td.sendResults'), openConfirm)}
   </div>;
 }

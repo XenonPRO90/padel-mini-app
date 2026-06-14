@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useMe } from '../api/me';
+import { useT } from '../lib/i18n';
 import { T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { ELabel, EGoldFrame, EBtn } from '../lib/elegant';
@@ -14,6 +15,7 @@ interface PlayersScreenProps {
 }
 
 export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: PlayersScreenProps = {}) {
+  const t = useT();
   const [q, setQ] = useState('');
   const { data: me } = useMe();
   const isAdmin = !!me?.is_admin;
@@ -36,13 +38,13 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
         borderBottom: `1px solid ${T.paperEdge}`, background: T.cream,
       }}>
         <div>
-          <ELabel>· Players · the library</ELabel>
+          <ELabel>{t('players.eyebrow')}</ELabel>
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 600,
             color: T.ink, marginTop: 2, fontVariantNumeric: 'tabular-nums',
           }}>{items.length} <span style={{
             fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 14, color: T.muted,
-          }}>guests</span></div>
+          }}>{t('players.guests')}</span></div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {isAdmin && onOpenRequests && (
@@ -52,7 +54,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
             fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, letterSpacing: 1,
             position: 'relative',
           }}>
-            Заявки{pending > 0 ? ` · ${pending}` : ''}
+            {t('admin.requests')}{pending > 0 ? ` · ${pending}` : ''}
           </button>
         )}
         {isAdmin && onAddPlayer && (
@@ -65,7 +67,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
             textTransform: 'uppercase',
           }}>
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-            Add
+            {t('players.add')}
           </button>
         )}
         </div>
@@ -81,7 +83,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder="Search by name…"
+            placeholder={t('players.searchPh')}
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
               color: T.ink, fontSize: 15,
@@ -99,7 +101,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
             padding: '60px 0', textAlign: 'center',
             fontFamily: T.fontSerif, fontStyle: 'italic',
             color: T.muted, fontSize: 14,
-          }}>No matches</div>
+          }}>{t('players.noMatches')}</div>
         ) : (
           <EGoldFrame>
             <div style={{ padding: '4px 0' }}>
@@ -186,6 +188,7 @@ function Skeletons() {
 }
 
 function CenterError({ onRetry }: { onRetry: () => void }) {
+  const t = useT();
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
@@ -194,8 +197,8 @@ function CenterError({ onRetry }: { onRetry: () => void }) {
       <div style={{
         fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 600,
         color: T.burgundy, letterSpacing: 2,
-      }}>Could not load</div>
-      <EBtn kind="primary" onClick={onRetry}>Retry</EBtn>
+      }}>{t('common.couldNotLoad')}</div>
+      <EBtn kind="primary" onClick={onRetry}>{t('common.retry')}</EBtn>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Ring } from '../components/Ring';
 import { LeaderboardRow } from '../components/Leaderboard';
 import { MainCTA } from '../components/MainCTA';
 import { ELabel, EHero, EDivider, EBtn, EGoldFrame, ELogo, EBallIcon } from '../lib/elegant';
+import { useT } from '../lib/i18n';
 import type { ActiveTournamentResponse } from '../lib/types';
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFinished }: Props) {
+  const t = useT();
   const { data, isLoading, error, refetch } = useQuery<ActiveTournamentResponse>({
     queryKey: ['active-tournament'],
     queryFn: () => api('/api/tournaments/active'),
@@ -192,12 +194,12 @@ function HomeEmpty({ onCreate, isAdmin }: { onCreate?: () => void; isAdmin?: boo
         borderTop: `1px solid ${T.paperEdge}`, background: T.cream,
       }}>
         {isAdmin ? (
-          <MainCTA label="Start new tournament" onClick={onCreate} />
+          <MainCTA label={t('home.startTournament')} onClick={onCreate} />
         ) : (
           <div style={{
             textAlign: 'center', color: T.muted, fontFamily: T.fontSerif,
             fontStyle: 'italic', fontSize: 13, padding: 8,
-          }}>Турниры создают организаторы</div>
+          }}>{t('home.organizersCreate')}</div>
         )}
       </div>
     </div>

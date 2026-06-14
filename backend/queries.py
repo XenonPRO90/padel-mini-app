@@ -2109,7 +2109,7 @@ async def get_tournament_cards(tid: int):
             return None
         cur = await db.execute(
             """SELECT s.player_id AS pid, s.points, s.wins, s.losses,
-                      p.name, p.telegram_id, p.photo_url
+                      p.name, p.telegram_id, p.photo_url, p.lang
                FROM scores s JOIN players p ON p.id=s.player_id
                WHERE s.tournament_id=?""", (tid,))
         rows = rows_to_list(await cur.fetchall())
@@ -2139,11 +2139,19 @@ async def get_tournament_cards(tid: int):
             "player_id": r["pid"], "name": r["name"], "telegram_id": r["telegram_id"],
             "photo_url": r["photo_url"], "initials": initials,
             "place": place, "medal": place if place in (1, 2, 3) else None,
-            "partner": partner,
-            "line": f"Побед {r['wins']} · Поражений {r['losses']}",
+            "partner": partner, "wins": r["wins"], "losses": r["losses"],
+            "lang": "en" if (r["lang"] or "ru") == "en" else "ru",
             "tournament": t["name"], "date": date,
         })
     cards.sort(key=lambda c: c["place"])
     linked = [c for c in cards if c["telegram_id"]]
     return {"tournament": t, "cards": cards,
             "linked_count": len(linked), "total_count": len(cards)}
+
+
+async def set_player_lang(pid: int, lang: str):
+    """Store the player's UI language (from Telegram language_code) for card localization."""
+    lang = "en" if str(lang).lower().startswith("en") else "ru"
+    async with conn() as db:
+        await db.execute("UPDATE players SET lang=? WHERE id=?", (lang, pid))
+        await db.commit()

@@ -3,12 +3,14 @@ import { ELabel, EGoldFrame } from '../lib/elegant';
 import { LevelBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
 import { useJoinRequests, useReviewJoinRequest } from '../api/joinRequests';
+import { useT } from '../lib/i18n';
 
 interface Props {
   onBack: () => void;
 }
 
 export function AdminRequestsScreen({ onBack }: Props) {
+  const t = useT();
   const { data, isLoading } = useJoinRequests('pending');
   const review = useReviewJoinRequest();
   const items = data?.items ?? [];
@@ -22,12 +24,12 @@ export function AdminRequestsScreen({ onBack }: Props) {
         <button onClick={onBack} style={{
           background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
           color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
-        }}>← Back</button>
+        }}>← {t('common.back')}</button>
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 600,
             color: T.ink, letterSpacing: 3, textTransform: 'uppercase',
-          }}>Заявки</div>
+          }}>{t('admin.requests')}</div>
         </div>
         <div style={{ width: 60 }} />
       </div>
@@ -39,10 +41,10 @@ export function AdminRequestsScreen({ onBack }: Props) {
           <div style={{
             textAlign: 'center', color: T.muted, fontFamily: T.fontSerif,
             fontStyle: 'italic', fontSize: 14, padding: 32,
-          }}>Новых заявок нет</div>
+          }}>{t('admin.noRequests')}</div>
         ) : (
           <>
-            <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>На рассмотрении · {items.length}</ELabel>
+            <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('admin.pending', { n: items.length })}</ELabel>
             <EGoldFrame>
               <div style={{ padding: '2px 0', opacity: review.isPending ? 0.6 : 1 }}>
                 {items.map((r, i) => (
@@ -76,13 +78,13 @@ export function AdminRequestsScreen({ onBack }: Props) {
                     <button
                       disabled={review.isPending}
                       onClick={() => review.mutate({ id: r.id, action: 'approve' }, {
-                        onError: (e) => alert((e as Error).message || 'Не удалось одобрить'),
+                        onError: (e) => alert((e as Error).message || t('admin.approveFail')),
                       })}
                       style={{
                         background: T.emerald, border: 'none', borderRadius: 999,
                         color: T.cream, padding: '6px 12px', cursor: 'pointer',
                         fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
-                      }}>Принять</button>
+                      }}>{t('admin.approve')}</button>
                   </div>
                 ))}
               </div>

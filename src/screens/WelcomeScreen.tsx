@@ -3,12 +3,15 @@ import { T } from '../lib/tokens';
 import { ELogo, EDivider, EBtn, EBallIcon } from '../lib/elegant';
 import { useMe } from '../api/me';
 import { useSubmitJoinRequest } from '../api/joinRequests';
+import { useT } from '../lib/i18n';
+import { LangToggle } from '../components/LangToggle';
 
 const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C-', 'D'];
 
 // First screen for a brand-new user (not linked, not admin): explains the club
 // and lets them apply right here. No browsing the club until accepted.
 export function WelcomeScreen() {
+  const t = useT();
   const { data: me } = useMe();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState(me?.user.first_name || '');
@@ -17,18 +20,21 @@ export function WelcomeScreen() {
   const pending = me?.join_status === 'pending';
 
   const onSend = async () => {
-    if (!name.trim()) { alert('Укажи имя'); return; }
+    if (!name.trim()) { alert(t('form.enterName')); return; }
     try {
       await submit.mutateAsync({ name: name.trim(), level });
     } catch (e) {
-      alert((e as Error).message || 'Не удалось отправить заявку');
+      alert((e as Error).message || t('form.submitFail'));
     }
   };
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 14px 0' }}>
+        <LangToggle />
+      </div>
       <div style={{
-        flex: 1, padding: '32px 24px 24px', display: 'flex', flexDirection: 'column',
+        flex: 1, padding: '12px 24px 24px', display: 'flex', flexDirection: 'column',
         alignItems: 'center', textAlign: 'center',
       }}>
         <ELogo size={84} />
@@ -41,13 +47,13 @@ export function WelcomeScreen() {
           marginTop: 12, fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 15,
           color: T.muted, lineHeight: 1.5, maxWidth: 300,
         }}>
-          Клуб любительского падела. Турниры каждую неделю, личная статистика и рейтинг игроков.
+          {t('welcome.tagline')}
         </div>
 
         <div style={{ width: '100%', maxWidth: 340, marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Feature icon="🏆" title="Интересные форматы" text="King of the Court · Team Americano · Mini Tournament" />
-          <Feature icon="📊" title="Личный кабинет" text="статистика, места, серии и достижения" />
-          <Feature icon="🥇" title="Рейтинг клуба" text="следи за топом игроков и лучшими дуэтами" />
+          <Feature icon="🏆" title={t('welcome.f1t')} text="King of the Court · Team Americano · Mini Tournament" />
+          <Feature icon="📊" title={t('welcome.f2t')} text={t('welcome.f2x')} />
+          <Feature icon="🥇" title={t('welcome.f3t')} text={t('welcome.f3x')} />
         </div>
 
         <div style={{ marginTop: 26, opacity: 0.5 }}><EBallIcon size={20} /></div>
@@ -61,21 +67,21 @@ export function WelcomeScreen() {
           <div style={{
             textAlign: 'center', fontFamily: T.fontSerif, fontStyle: 'italic',
             fontSize: 14, color: T.muted, padding: '8px 0',
-          }}>⏳ Заявка на рассмотрении — организатор скоро подтвердит, и откроется твой кабинет.</div>
+          }}>{t('welcome.pending')}</div>
         ) : !showForm ? (
           <EBtn kind="primary" style={{ width: '100%' }} onClick={() => setShowForm(true)}>
-            Подать заявку
+            {t('welcome.apply')}
           </EBtn>
         ) : (
           <div>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6 }}>ИМЯ</div>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Как тебя зовут"
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6, textTransform: 'uppercase' }}>{t('form.name')}</div>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('form.namePh')}
               style={{
                 width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 12,
                 border: `1px solid ${T.paperEdge}`, background: T.paper,
                 fontFamily: T.fontDisplay, fontSize: 16, color: T.ink, marginBottom: 12,
               }} />
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6 }}>УРОВЕНЬ</div>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6, textTransform: 'uppercase' }}>{t('form.level')}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {LEVELS.map((l) => (
                 <button key={l} onClick={() => setLevel(l)} style={{
@@ -88,7 +94,7 @@ export function WelcomeScreen() {
               ))}
             </div>
             <EBtn kind="primary" style={{ width: '100%' }} disabled={submit.isPending} onClick={onSend}>
-              {submit.isPending ? 'Отправка…' : 'Отправить заявку'}
+              {submit.isPending ? t('form.submitting') : t('form.submit')}
             </EBtn>
           </div>
         )}
