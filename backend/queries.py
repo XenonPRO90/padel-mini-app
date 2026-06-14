@@ -744,11 +744,17 @@ async def get_player_profile(pid: int):
     if favorite_opp and favorite_opp["wins"] <= favorite_opp["losses"]:
         favorite_opp = None
 
-    # Giant-killer: wins where any opponent is rated above you.
-    my_lvl = level_value(player["level"])
+    # Giant-killer: wins where an opponent is >=2 ladder steps above you.
+    # Uniform ladder (C-strong sits between C- and C), so e.g. C- beating C
+    # (2 steps via C-strong) or C-strong beating C+ counts; half-steps don't.
+    GK_LADDER = {"D": 1, "C-": 2, "C- strong": 3, "C-strong": 3, "C": 4,
+                 "C+": 5, "B": 6, "B+": 7, "A": 8, "A+": 9}
+    def gk_step(lvl):
+        return GK_LADDER.get(lvl, 4)  # default ~C
+    my_step = gk_step(player["level"])
     giant_kills = sum(
         1 for pair in derived["won_opp_pairs"]
-        if max((level_value(levels.get(o, "C")) for o in pair), default=0) > my_lvl
+        if max((gk_step(levels.get(o, "C")) for o in pair), default=0) - my_step >= 2
     )
 
     # Form / dynamics: last-30d win-rate vs lifetime.
