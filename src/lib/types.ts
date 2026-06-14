@@ -127,6 +127,7 @@ export interface ProfileAchievement {
   label: string;
   value: number;
   unit: string;
+  sub?: string;
 }
 
 export interface ProfileOpponent {
@@ -160,6 +161,7 @@ export interface PlayerProfile {
     podium_rate: number;
     avg_finish: number | null;
     giant_kills: number;
+    giant_matches: number;
     club_rank: number | null;
     club_total: number | null;
     club_rating: number | null;
