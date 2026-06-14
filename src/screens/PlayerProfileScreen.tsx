@@ -257,6 +257,12 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                     marginTop: 4, fontFamily: T.fontSerif, fontSize: 11,
                     fontStyle: 'italic', color: T.muted, lineHeight: 1.2,
                   }}>{a.label}</div>
+                  {a.sub && (
+                    <div style={{
+                      marginTop: 2, fontFamily: T.fontSerif, fontSize: 9.5,
+                      fontStyle: 'italic', color: T.muted, opacity: 0.8, lineHeight: 1.15,
+                    }}>{a.sub}</div>
+                  )}
                 </div>
               ))}
             </div>

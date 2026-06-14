@@ -551,6 +551,7 @@ async def _player_matches_derived(db, pid: int):
     partners = {}     # mate_id -> [games, wins]
     opponents = {}    # opp_id -> [meetings, player_wins_vs]
     won_opp_pairs = []  # opponent id-pairs for matches the player won (giant-killer)
+    opp_pairs = []      # (opponent id-pair, won) for EVERY match (vs-stronger stats)
     for m in await cur.fetchall():
         if pid in (m["p1"], m["p2"]):
             mate = m["p2"] if m["p1"] == pid else m["p1"]
@@ -566,6 +567,7 @@ async def _player_matches_derived(db, pid: int):
             op = opponents.setdefault(o, [0, 0]); op[0] += 1; op[1] += 1 if won else 0
         if won:
             won_opp_pairs.append(opps)
+        opp_pairs.append((opps, won))
 
     longest = cur_run = 0
     for w in seq:
@@ -582,7 +584,7 @@ async def _player_matches_derived(db, pid: int):
     return {
         "games": len(seq), "streak_best": longest, "streak_cur": current,
         "partners": partners, "opponents": opponents,
-        "won_opp_pairs": won_opp_pairs, "form": form,
+        "won_opp_pairs": won_opp_pairs, "opp_pairs": opp_pairs, "form": form,
     }
 
 
@@ -752,10 +754,10 @@ async def get_player_profile(pid: int):
     def gk_step(lvl):
         return GK_LADDER.get(lvl, 4)  # default ~C
     my_step = gk_step(player["level"])
-    giant_kills = sum(
-        1 for pair in derived["won_opp_pairs"]
-        if max((gk_step(levels.get(o, "C")) for o in pair), default=0) - my_step >= 2
-    )
+    def vs_stronger(opps):
+        return max((gk_step(levels.get(o, "C")) for o in opps), default=0) - my_step >= 2
+    giant_matches = sum(1 for opps, _won in derived["opp_pairs"] if vs_stronger(opps))
+    giant_kills = sum(1 for opps, won in derived["opp_pairs"] if won and vs_stronger(opps))
 
     # Form / dynamics: last-30d win-rate vs lifetime.
     rg = recent_rec["wins"] + recent_rec["losses"]
@@ -769,7 +771,8 @@ async def get_player_profile(pid: int):
         {"id": "win_rate", "label": "Винрейт", "value": round(win_rate * 100), "unit": "%"},
         {"id": "podium_rate", "label": "% призовых", "value": podium_rate, "unit": "%"},
         {"id": "streak_best", "label": "Лучшая серия", "value": derived["streak_best"], "unit": ""},
-        {"id": "giant_kills", "label": "Гроза старших", "value": giant_kills, "unit": ""},
+        {"id": "giant_kills", "label": "Гроза старших", "value": giant_kills, "unit": "",
+         "sub": (f"из {giant_matches} со старшими" if giant_matches else "не играл со старшими")},
         {"id": "total_points", "label": "Очков за карьеру", "value": total_points, "unit": ""},
     ]
 
@@ -790,6 +793,7 @@ async def get_player_profile(pid: int):
             "podium_rate": podium_rate,
             "avg_finish": avg_finish,
             "giant_kills": giant_kills,
+            "giant_matches": giant_matches,
             "club_rank": club_rank["rank"] if club_rank else None,
             "club_total": club_rank["total"] if club_rank else None,
             "club_rating": club_rating,
