@@ -83,6 +83,18 @@ export default function App() {
     }
   }, []);
 
+  // Telegram keeps the Mini App webview alive between opens, so React Query's
+  // window-focus refetch doesn't always fire → stale stats (e.g. form/win-rate
+  // not updating after a tournament). Force a refetch whenever the app returns
+  // to the foreground.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') qc.invalidateQueries();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   // Telegram BackButton wiring: show on inner screens, fire pop on tap
   useEffect(() => {
     const back = window.Telegram?.WebApp?.BackButton;
