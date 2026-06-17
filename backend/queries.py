@@ -150,8 +150,14 @@ async def get_pair_leaderboard(tid: int):
     for both — we take them from the first player of each pair.
     Sorted by points DESC, wins DESC."""
     async with conn() as db:
+        cur = await db.execute("SELECT status FROM tournaments WHERE id=?", (tid,))
+        trow = await cur.fetchone()
+        finished = bool(trow) and trow["status"] == "finished"
+        # In a finished tournament every ranked pair has a scores row; teams left
+        # unranked (e.g. skipped 7–8 place) have none → hide them from the board.
+        unranked_filter = "AND s.player_id IS NOT NULL" if finished else ""
         cur = await db.execute(
-            """SELECT
+            f"""SELECT
                p1.name AS name_a,
                p2.name AS name_b,
                COALESCE(s.points, 0) AS points,
@@ -168,6 +174,7 @@ async def get_pair_leaderboard(tid: int):
                  AND s.player_id = tp1.player_id
                WHERE tp1.tournament_id = ?
                  AND tp1.position % 2 = 1
+                 {unranked_filter}
                ORDER BY points DESC, wins DESC""",
             (tid,),
         )
@@ -1957,20 +1964,8 @@ async def _groups8_finish(db, tid: int):
             w, l = finals[court]
             place_of_team[frozenset(w)] = winp
             place_of_team[frozenset(l)] = losep
-        elif court == 4:
-            # 7-8 match was skipped: rank the placement-semi losers (round 4,
-            # courts 3 & 4) into 7th/8th without a decider.
-            cur = await db.execute(
-                """SELECT m.court_num, m.p1, m.p2, m.p3, m.p4, m.winner
-                   FROM matches m JOIN rounds r ON r.id=m.round_id
-                   WHERE r.tournament_id=? AND r.round_num=4 AND m.court_num IN (3,4)""",
-                (tid,),
-            )
-            sem = {m["court_num"]: _winner_loser(m) for m in await cur.fetchall()}
-            if 3 in sem:
-                place_of_team[frozenset(sem[3][1])] = 7
-            if 4 in sem:
-                place_of_team[frozenset(sem[4][1])] = 8
+        # court 4 (7-8) skipped → those two teams stay unranked (no scores row,
+        # so they won't appear in the final leaderboard).
 
     # Per-player wins/losses across every round.
     cur = await db.execute(
@@ -2131,6 +2126,21 @@ async def create_tournament(
         courts_out = []
         for ci in range(num_courts):
             chunk = sorted_players[ci*4:ci*4+4]
+            if len(chunk) < 4:
+                break
+            courts_out.append({
+                "court_num": ci + 1,
+                "team1": [chunk[0], chunk[1]],
+                "team2": [chunk[2], chunk[3]],
+            })
+    elif initial_order == "keep":
+        # "By Entry": court members AND pairs strictly by entry order
+        # (court1 = entries 1-4 as 1+2 vs 3+4, etc.). Balancing kicks in only
+        # from round 2 onward via the KotC movement.
+        sorted_players = sorted(tp, key=lambda x: (x["current_court"] or 999, x["position"]))
+        courts_out = []
+        for ci in range(num_courts):
+            chunk = sorted_players[ci * 4:ci * 4 + 4]
             if len(chunk) < 4:
                 break
             courts_out.append({
