@@ -25,6 +25,7 @@ interface State {
   court_points: Record<number, number>;
   court_labels: Record<number, string>;  // court_num -> display label (e.g. real court number)
   player_ids: number[];
+  skip_7_8: boolean;  // groups8: don't play the 7th-8th place match
 }
 
 
@@ -43,6 +44,7 @@ export function WizardScreen({ onClose }: Props) {
     start_round: 4,
     court_points: { 1: 3, 2: 2, 3: 1, 4: 1 },
     court_labels: {},
+    skip_7_8: false,
     player_ids: [],
   });
 
@@ -134,6 +136,9 @@ export function WizardScreen({ onClose }: Props) {
           courts={derivedCourts}
           labels={s.court_labels}
           onChange={(v) => update('court_labels', v)}
+          showSkip={s.mode === 'groups8'}
+          skip={s.skip_7_8}
+          onToggleSkip={(v) => update('skip_7_8', v)}
         />}
         {step === 9 && <StepConfirm s={s} cp={ensureCourtPoints(s.num_courts)} />}
         {step === 9 && (s.mode === 'fixed' || s.mode === 'americano' || s.mode === 'groups8') && s.player_ids.length > 0 && (
@@ -409,12 +414,33 @@ function StepNum({ title, caption, value, onChange, min, max }: {
 
 // Labels-only step for derived modes (Mini Tournament / Americano): set the real
 // court numbers shown on the board. Points are not used in these modes.
-function StepCourtLabels({ courts, labels, onChange }: {
+function StepCourtLabels({ courts, labels, onChange, showSkip, skip, onToggleSkip }: {
   courts: number; labels: Record<number, string>; onChange: (v: Record<number, string>) => void;
+  showSkip?: boolean; skip?: boolean; onToggleSkip?: (v: boolean) => void;
 }) {
   return (
     <>
       <StepTitle title="Court numbers" subtitle="Real court numbers on the board (e.g. 5–8)" />
+      {showSkip && (
+        <button onClick={() => onToggleSkip?.(!skip)} style={{
+          display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+          padding: '14px 16px', marginBottom: 12, cursor: 'pointer',
+          background: T.paper, border: `1px solid ${skip ? T.emerald : T.paperEdge}`, borderRadius: 14,
+        }}>
+          <span style={{
+            width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+            border: `1px solid ${skip ? T.emerald : T.rule}`,
+            background: skip ? T.emerald : 'transparent', color: T.cream,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
+          }}>{skip ? '✓' : ''}</span>
+          <div>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, color: T.ink }}>Не играть за 7–8 место</div>
+            <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted }}>
+              если корт освобождается раньше — матч за 7–8 место не проводится
+            </div>
+          </div>
+        </button>
+      )}
       {Array.from({ length: courts }).map((_, i) => {
         const cn = i + 1;
         return (

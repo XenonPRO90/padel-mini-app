@@ -1930,7 +1930,10 @@ async def _groups8_finals(db, tid: int) -> list[dict]:
     _court(out, 1, w1, w2)   # 1st place
     _court(out, 2, l1, l2)   # 3rd place
     _court(out, 3, w3, w4)   # 5th place
-    _court(out, 4, l3, l4)   # 7th place
+    cur = await db.execute("SELECT skip_7_8 FROM tournaments WHERE id=?", (tid,))
+    skip = bool((await cur.fetchone())["skip_7_8"])
+    if not skip:
+        _court(out, 4, l3, l4)   # 7th place (skipped when one court is short on time)
     return out
 
 
@@ -1947,9 +1950,24 @@ async def _groups8_finish(db, tid: int):
     place_of_team = {}  # frozenset(team) -> place 1..8
     court_to_places = {1: (1, 2), 2: (3, 4), 3: (5, 6), 4: (7, 8)}
     for court, (winp, losep) in court_to_places.items():
-        w, l = finals[court]
-        place_of_team[frozenset(w)] = winp
-        place_of_team[frozenset(l)] = losep
+        if court in finals:
+            w, l = finals[court]
+            place_of_team[frozenset(w)] = winp
+            place_of_team[frozenset(l)] = losep
+        elif court == 4:
+            # 7-8 match was skipped: rank the placement-semi losers (round 4,
+            # courts 3 & 4) into 7th/8th without a decider.
+            cur = await db.execute(
+                """SELECT m.court_num, m.p1, m.p2, m.p3, m.p4, m.winner
+                   FROM matches m JOIN rounds r ON r.id=m.round_id
+                   WHERE r.tournament_id=? AND r.round_num=4 AND m.court_num IN (3,4)""",
+                (tid,),
+            )
+            sem = {m["court_num"]: _winner_loser(m) for m in await cur.fetchall()}
+            if 3 in sem:
+                place_of_team[frozenset(sem[3][1])] = 7
+            if 4 in sem:
+                place_of_team[frozenset(sem[4][1])] = 8
 
     # Per-player wins/losses across every round.
     cur = await db.execute(
@@ -1990,6 +2008,7 @@ async def create_tournament(
     court_points: dict[int, int],
     player_ids: list[int],
     court_labels: dict[int, str] | None = None,
+    skip_7_8: bool = False,
 ) -> dict:
     """Create a new tournament with players, generate round 1, and activate it.
 
@@ -2049,9 +2068,10 @@ async def create_tournament(
         await db.execute("BEGIN")
         try:
             cur = await db.execute(
-                """INSERT INTO tournaments(name, num_courts, mode, initial_order, initial_points, start_round, status, current_round)
-                   VALUES(?,?,?,?,?,?,'active',1)""",
-                (name.strip(), num_courts, mode, initial_order, initial_points, start_round),
+                """INSERT INTO tournaments(name, num_courts, mode, initial_order, initial_points, start_round, status, current_round, skip_7_8)
+                   VALUES(?,?,?,?,?,?,'active',1,?)""",
+                (name.strip(), num_courts, mode, initial_order, initial_points, start_round,
+                 1 if skip_7_8 else 0),
             )
             tid = cur.lastrowid
 

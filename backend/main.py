@@ -435,6 +435,7 @@ class TournamentCreateBody(BaseModel):
     court_points: dict[int, int]  # {court_num: points}
     player_ids: list[int]
     court_labels: dict[int, str] | None = None  # {court_num: display label}
+    skip_7_8: bool = False  # groups8: don't play the 7th-8th place match
 
 
 @app.post("/api/tournaments")
@@ -450,6 +451,7 @@ async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_admin
             court_points=body.court_points,
             player_ids=body.player_ids,
             court_labels=body.court_labels,
+            skip_7_8=body.skip_7_8,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
