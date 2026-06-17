@@ -1538,28 +1538,35 @@ async def eliminate_and_advance(tid: int, eliminate_ids: list[int]):
 
         # remaining players (not already eliminated, not being eliminated now)
         cur = await db.execute(
-            "SELECT player_id, position FROM tournament_players WHERE tournament_id=? AND eliminated=0",
+            "SELECT player_id, position, current_court FROM tournament_players WHERE tournament_id=? AND eliminated=0",
             (tid,),
         )
-        pos = {r["player_id"]: r["position"] for r in await cur.fetchall()}
+        prow = {r["player_id"]: r for r in await cur.fetchall()}
+        pos = {pid: r["position"] for pid, r in prow.items()}
+        cc = {pid: (r["current_court"] or 999) for pid, r in prow.items()}
         remaining = [pid for pid in pos if pid not in elim]
         if len(remaining) < 4 or len(remaining) % 4 != 0:
             raise ValueError(
                 f"После выбывания должно остаться кратно 4 игрока (сейчас {len(remaining)})")
         new_num = len(remaining) // 4
+        rn = round_obj["round_num"]
 
-        # current standings for re-seed (points desc, wins desc, then position)
-        cur = await db.execute(
-            "SELECT player_id, points, wins FROM scores WHERE tournament_id=?", (tid,))
-        sc = {r["player_id"]: (r["points"], r["wins"]) for r in await cur.fetchall()}
-        remaining.sort(key=lambda pid: (-sc.get(pid, (0, 0))[0], -sc.get(pid, (0, 0))[1], pos[pid]))
+        # Re-seed preserving the KotC court hierarchy (NOT by total points):
+        # keep court order, winners of a court before its losers, so e.g. courts
+        # 1–2 stay intact and survivors of the dropped bottom courts merge into
+        # the new bottom court. won = won the just-finished round.
+        won = set()
+        for m in matches:
+            w = (m["p1"], m["p2"]) if m["winner"] == 1 else (m["p3"], m["p4"])
+            won.update(w)
+        remaining.sort(key=lambda pid: (cc[pid], 0 if pid in won else 1, pos[pid]))
 
-        # mark eliminated
+        # mark eliminated (with the round, so undo can reverse it)
         for pid in elim:
             await db.execute(
-                "UPDATE tournament_players SET eliminated=1 WHERE tournament_id=? AND player_id=?",
-                (tid, pid))
-        # re-seed remaining onto new courts (top standings → court 1, etc.)
+                "UPDATE tournament_players SET eliminated=1, eliminated_round=? WHERE tournament_id=? AND player_id=?",
+                (rn, tid, pid))
+        # re-seed remaining onto new courts (top of hierarchy → court 1, etc.)
         for i, pid in enumerate(remaining):
             await db.execute(
                 "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
@@ -1656,6 +1663,26 @@ async def undo_last_round(tid: int):
                         "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
                         (m["court_num"], tid, pid),
                     )
+
+            # If the undone round followed an elimination (players left after the
+            # now-active round), reverse it: bring them back and restore courts.
+            cur = await db.execute(
+                "SELECT COUNT(*) AS c FROM tournament_players WHERE tournament_id=? AND eliminated_round=?",
+                (tid, prev_num),
+            )
+            if (await cur.fetchone())["c"]:
+                await db.execute(
+                    "UPDATE tournament_players SET eliminated=0, eliminated_round=NULL "
+                    "WHERE tournament_id=? AND eliminated_round=?",
+                    (tid, prev_num),
+                )
+                cur = await db.execute(
+                    "SELECT COUNT(*) AS c FROM tournament_players WHERE tournament_id=? AND eliminated=0",
+                    (tid,),
+                )
+                active = (await cur.fetchone())["c"]
+                await db.execute(
+                    "UPDATE tournaments SET num_courts=? WHERE id=?", (max(1, active // 4), tid))
 
             await _recompute_pair_history(db, tid)
             await _recompute_scores(db, tid)
