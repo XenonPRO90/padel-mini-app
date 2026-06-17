@@ -1551,15 +1551,18 @@ async def eliminate_and_advance(tid: int, eliminate_ids: list[int]):
         new_num = len(remaining) // 4
         rn = round_obj["round_num"]
 
-        # Re-seed preserving the KotC court hierarchy (NOT by total points):
-        # keep court order, winners of a court before its losers, so e.g. courts
-        # 1–2 stay intact and survivors of the dropped bottom courts merge into
-        # the new bottom court. won = won the just-finished round.
-        won = set()
-        for m in matches:
-            w = (m["p1"], m["p2"]) if m["winner"] == 1 else (m["p3"], m["p4"])
-            won.update(w)
-        remaining.sort(key=lambda pid: (cc[pid], 0 if pid in won else 1, pos[pid]))
+        # Re-seed by the normal KotC ladder: winners move UP a court, losers move
+        # DOWN — then drop the eliminated. So court-1 losers go down, bottom-court
+        # survivors merge up, and the freed bottom court collapses. (Earlier this
+        # kept everyone on their court, which is what Liza saw as "broken".)
+        from .pairing import move_players_after_round
+        match_dicts = [{
+            "court_num": m["court_num"], "winner": m["winner"],
+            "team1": [{"player_id": m["p1"]}, {"player_id": m["p2"]}],
+            "team2": [{"player_id": m["p3"]}, {"player_id": m["p4"]}],
+        } for m in matches]
+        moved = move_players_after_round(match_dicts, t["num_courts"])
+        remaining.sort(key=lambda pid: (moved.get(pid, cc[pid]), pos[pid]))
 
         # mark eliminated (with the round, so undo can reverse it)
         for pid in elim:
