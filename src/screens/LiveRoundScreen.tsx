@@ -24,9 +24,10 @@ function tgConfirm(message: string): Promise<boolean> {
 interface Props {
   onBack: () => void;
   onShareSchedule?: () => void;
+  onFinished?: (tid: number) => void;
 }
 
-export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
+export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) {
   const { data, isLoading } = useQuery<ActiveTournamentResponse>({
     queryKey: ['active-tournament'],
     queryFn: () => api('/api/tournaments/active'),
@@ -183,7 +184,11 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
                 : 'Next round'
               }
               disabled={!allDone || nextRound.isPending}
-              onClick={() => allDone && nextRound.mutate(t.id)}
+              onClick={() => allDone && nextRound.mutate(t.id, {
+                onSuccess: (res) => {
+                  if ((res as { finished?: boolean })?.finished) onFinished?.(t.id);
+                },
+              })}
             />
             {allDone && t.mode === 'rotating' && !isLastRound && t.num_courts > 1 && (
               <button onClick={() => setElimOpen(true)} style={{

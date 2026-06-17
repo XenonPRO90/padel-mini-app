@@ -149,6 +149,7 @@ export default function App() {
             <LiveRoundScreen
               onBack={pop}
               onShareSchedule={() => push({ name: 'schedulePoster' })}
+              onFinished={(tid) => setStack([{ name: 'home' }, { name: 'celebration', tid }])}
             />
           )}
           {top.name === 'wizard' && (
