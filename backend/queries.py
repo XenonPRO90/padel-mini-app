@@ -1445,6 +1445,7 @@ async def advance_to_next_round(tid: int):
 
     # Re-fetch tournament state with new round_num committed
     tp = await get_tournament_players(tid)
+    tp = [p for p in tp if not p.get("eliminated")]  # eliminated players sit out future rounds
     pair_hist = await get_pair_history(tid)
     last_partners = await get_previous_round_partners(tid)
 
@@ -1502,6 +1503,101 @@ async def advance_to_next_round(tid: int):
         await db.commit()
 
     return {"ok": True, "new_round_num": new_round_num}
+
+
+async def eliminate_and_advance(tid: int, eliminate_ids: list[int]):
+    """KotC "вылет": mark the given players as eliminated, re-seed the remaining
+    players by current standing onto a reduced court count, and create the next
+    round. Used when a court frees up (e.g. one court only for 90 min) and the
+    lowest-court losers drop out for the remaining rounds."""
+    from .pairing import assign_courts
+
+    elim = set(int(x) for x in (eliminate_ids or []))
+    async with conn() as db:
+        cur = await db.execute("SELECT * FROM tournaments WHERE id=?", (tid,))
+        t = row_to_dict(await cur.fetchone())
+        if not t:
+            raise ValueError("Турнир не найден")
+        if t["mode"] != "rotating":
+            raise ValueError("Выбывание доступно только в King of the Court")
+
+        cur = await db.execute(
+            "SELECT * FROM rounds WHERE tournament_id=? AND status='active' ORDER BY round_num DESC LIMIT 1",
+            (tid,),
+        )
+        round_obj = row_to_dict(await cur.fetchone())
+        if not round_obj:
+            raise ValueError("Нет активного раунда")
+        cur = await db.execute(
+            "SELECT * FROM matches WHERE round_id=?", (round_obj["id"],))
+        matches = rows_to_list(await cur.fetchall())
+        if any(m["winner"] is None for m in matches):
+            raise ValueError("Сначала внесите все результаты раунда")
+        if not elim:
+            raise ValueError("Не выбран никто на выбывание")
+
+        # remaining players (not already eliminated, not being eliminated now)
+        cur = await db.execute(
+            "SELECT player_id, position FROM tournament_players WHERE tournament_id=? AND eliminated=0",
+            (tid,),
+        )
+        pos = {r["player_id"]: r["position"] for r in await cur.fetchall()}
+        remaining = [pid for pid in pos if pid not in elim]
+        if len(remaining) < 4 or len(remaining) % 4 != 0:
+            raise ValueError(
+                f"После выбывания должно остаться кратно 4 игрока (сейчас {len(remaining)})")
+        new_num = len(remaining) // 4
+
+        # current standings for re-seed (points desc, wins desc, then position)
+        cur = await db.execute(
+            "SELECT player_id, points, wins FROM scores WHERE tournament_id=?", (tid,))
+        sc = {r["player_id"]: (r["points"], r["wins"]) for r in await cur.fetchall()}
+        remaining.sort(key=lambda pid: (-sc.get(pid, (0, 0))[0], -sc.get(pid, (0, 0))[1], pos[pid]))
+
+        # mark eliminated
+        for pid in elim:
+            await db.execute(
+                "UPDATE tournament_players SET eliminated=1 WHERE tournament_id=? AND player_id=?",
+                (tid, pid))
+        # re-seed remaining onto new courts (top standings → court 1, etc.)
+        for i, pid in enumerate(remaining):
+            await db.execute(
+                "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
+                (i // 4 + 1, tid, pid))
+        await db.execute("UPDATE tournaments SET num_courts=? WHERE id=?", (new_num, tid))
+        await db.execute("UPDATE rounds SET status='done' WHERE id=?", (round_obj["id"],))
+        new_round_num = round_obj["round_num"] + 1
+        await db.execute("UPDATE tournaments SET current_round=? WHERE id=?", (new_round_num, tid))
+        await db.commit()
+
+    tp = [p for p in await get_tournament_players(tid) if not p.get("eliminated")]
+    pair_hist = await get_pair_history(tid)
+    last_partners = await get_previous_round_partners(tid)
+    courts_out = assign_courts(tp, new_num, pair_hist, last_partners)
+
+    async with conn() as db:
+        cur = await db.execute(
+            "INSERT INTO rounds(tournament_id, round_num) VALUES(?,?)", (tid, new_round_num))
+        new_round_id = cur.lastrowid
+        for c in courts_out:
+            t1, t2 = c["team1"], c["team2"]
+            await db.execute(
+                "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
+                (new_round_id, c["court_num"],
+                 t1[0]["player_id"], t1[1]["player_id"], t2[0]["player_id"], t2[1]["player_id"]))
+            pa, pb = sorted([t1[0]["player_id"], t1[1]["player_id"]])
+            pc, pd = sorted([t2[0]["player_id"], t2[1]["player_id"]])
+            for (a, b) in ((pa, pb), (pc, pd)):
+                await db.execute(
+                    """INSERT INTO pair_history(tournament_id, player_a, player_b, last_round, count)
+                       VALUES(?,?,?,?,1)
+                       ON CONFLICT(tournament_id, player_a, player_b)
+                       DO UPDATE SET last_round=excluded.last_round, count=count+1""",
+                    (tid, a, b, new_round_num))
+        await db.commit()
+
+    return {"ok": True, "new_round_num": new_round_num,
+            "eliminated": len(elim), "num_courts": new_num}
 
 
 async def undo_last_round(tid: int):

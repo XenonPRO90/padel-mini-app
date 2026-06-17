@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useNextRound, useUndoLastRound } from '../api/mutations';
+import { useNextRound, useUndoLastRound, useEliminate } from '../api/mutations';
 import { useMe } from '../api/me';
 import { T } from '../lib/tokens';
 import { CourtCard } from '../components/CourtCard';
@@ -9,7 +9,7 @@ import { MainCTA } from '../components/MainCTA';
 import { CourtSheet } from './CourtSheet';
 import { RosterSheet } from './RosterSheet';
 import { ELabel, EShareIcon, EPeopleIcon } from '../lib/elegant';
-import { groups8CourtTag, type ActiveTournamentResponse, type Match } from '../lib/types';
+import { groups8CourtTag, type ActiveTournamentResponse, type Match, type MatchPlayer } from '../lib/types';
 
 // Telegram's WebApp.showConfirm (window.confirm is unreliable in the in-app
 // WebView); falls back to window.confirm outside Telegram.
@@ -33,6 +33,7 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
   });
   const [openMatch, setOpenMatch] = useState<Match | null>(null);
   const [rosterOpen, setRosterOpen] = useState(false);
+  const [elimOpen, setElimOpen] = useState(false);
   const nextRound = useNextRound();
   const undoRound = useUndoLastRound();
   const { data: me } = useMe();
@@ -184,6 +185,14 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
               disabled={!allDone || nextRound.isPending}
               onClick={() => allDone && nextRound.mutate(t.id)}
             />
+            {allDone && t.mode === 'rotating' && !isLastRound && t.num_courts > 1 && (
+              <button onClick={() => setElimOpen(true)} style={{
+                width: '100%', marginTop: 8, padding: '11px',
+                background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 12,
+                cursor: 'pointer', color: T.goldDeep,
+                fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+              }}>🚪 Выбывание · убрать игроков и сократить корты</button>
+            )}
             {canUndo && (
               <button onClick={onUndo} disabled={undoRound.isPending} style={{
                 width: '100%', marginTop: 8, padding: '8px',
@@ -207,6 +216,110 @@ export function LiveRoundScreen({ onBack, onShareSchedule }: Props) {
           onClose={() => setRosterOpen(false)}
         />
       )}
+      {elimOpen && (
+        <EliminationModal tid={t.id} matches={round.matches} onClose={() => setElimOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+// KotC elimination: pick losing pairs (bottom courts pre-selected) to drop out;
+// the remaining players continue on fewer courts. Remaining must stay a multiple of 4.
+function EliminationModal({ tid, matches, onClose }: {
+  tid: number; matches: Match[]; onClose: () => void;
+}) {
+  const elim = useEliminate();
+  const rows = [...matches]
+    .sort((a, b) => b.court_num - a.court_num)  // bottom courts first
+    .map((m) => {
+      const losers = m.winner === 1 ? m.team2 : m.winner === 2 ? m.team1 : [];
+      return { court: m.court_num, label: m.court_label || String(m.court_num), losers };
+    })
+    .filter((r) => r.losers.length === 2);
+  // Pre-select losing pairs of the two lowest courts (Liza's typical cut).
+  const initial = new Set<number>();
+  rows.slice(0, 2).forEach((r) => r.losers.forEach((p) => initial.add(p.player_id)));
+  const [sel, setSel] = useState<Set<number>>(initial);
+
+  const totalPlayers = matches.length * 4;
+  const remaining = totalPlayers - sel.size;
+  const valid = sel.size > 0 && remaining >= 4 && remaining % 4 === 0;
+
+  const togglePair = (ps: MatchPlayer[]) => {
+    setSel((prev) => {
+      const next = new Set(prev);
+      const allIn = ps.every((p) => next.has(p.player_id));
+      ps.forEach((p) => (allIn ? next.delete(p.player_id) : next.add(p.player_id)));
+      return next;
+    });
+  };
+
+  const confirm = () => {
+    if (!valid || elim.isPending) return;
+    elim.mutate({ tid, player_ids: [...sel] }, {
+      onSuccess: onClose,
+      onError: (e) => alert((e as Error).message || 'Не удалось'),
+    });
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(31,42,36,0.55)' }} />
+      <div style={{
+        position: 'relative', margin: 'auto', width: '100%', maxWidth: 400,
+        maxHeight: '86vh', overflowY: 'auto',
+        background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 18, padding: '20px 18px',
+      }}>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 700, color: T.ink }}>Выбывание</div>
+        <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13, color: T.muted, marginTop: 4, marginBottom: 14 }}>
+          Отметь, кто завершает турнир. Оставшиеся продолжат на меньшем числе кортов (нужно кратно 4).
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rows.map((r) => {
+            const on = r.losers.every((p) => sel.has(p.player_id));
+            return (
+              <button key={r.court} onClick={() => togglePair(r.losers)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
+                padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                border: `1px solid ${on ? T.burgundy : T.paperEdge}`,
+                background: on ? '#f7ecec' : T.paper,
+              }}>
+                <span style={{
+                  width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                  border: `1px solid ${on ? T.burgundy : T.rule}`,
+                  background: on ? T.burgundy : 'transparent', color: T.cream,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
+                }}>{on ? '✓' : ''}</span>
+                <div>
+                  <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 1, color: T.gold }}>КОРТ {r.label} · проигравшие</div>
+                  <div style={{ fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, color: T.ink }}>
+                    {r.losers.map((p) => p.name).join(' & ')}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{
+          marginTop: 14, fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
+          color: valid ? T.muted : T.burgundy, textAlign: 'center',
+        }}>
+          Выбывает: {sel.size} · останется: {remaining}{remaining % 4 !== 0 ? ' (не кратно 4!)' : ` (${remaining / 4} корта)`}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <button onClick={confirm} disabled={!valid || elim.isPending} style={{
+            flex: 1, padding: '12px', borderRadius: 999, border: 'none',
+            cursor: valid ? 'pointer' : 'default',
+            background: valid ? T.emerald : T.paperEdge, color: T.cream,
+            fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600,
+          }}>{elim.isPending ? 'Применяю…' : 'Подтвердить и след. раунд'}</button>
+          <button onClick={onClose} style={{
+            padding: '12px 16px', borderRadius: 999, border: `1px solid ${T.paperEdge}`,
+            background: 'transparent', color: T.muted, cursor: 'pointer',
+            fontFamily: T.fontDisplay, fontSize: 14,
+          }}>Отмена</button>
+        </div>
+      </div>
     </div>
   );
 }
