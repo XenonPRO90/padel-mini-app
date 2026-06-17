@@ -5,6 +5,7 @@ import { usePlayerProfile } from '../api/players';
 import { T } from '../lib/tokens';
 import { EHero, EDivider, EGoldFrame, ELabel } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
+import { CasualPendingBanner } from '../components/CasualPendingBanner';
 import { useT } from '../lib/i18n';
 import type { ActiveTournamentResponse } from '../lib/types';
 
@@ -12,10 +13,11 @@ interface Props {
   onOpenProfile: () => void;
   onOpenClub: () => void;
   onOpenLiveRound: () => void;
+  onOrganizeCasual?: () => void;
 }
 
 // Personalized home for a linked, non-admin participant.
-export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props) {
+export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound, onOrganizeCasual }: Props) {
   const tx = useT();
   const { data: me } = useMe();
   const pid = me?.player?.id;
@@ -35,6 +37,8 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props
     <div style={{ height: '100%', overflowY: 'auto', padding: '6px 16px 24px' }}>
       <EHero title="PADEL CLUB" compact />
       <EDivider />
+
+      <div style={{ marginTop: 14 }}><CasualPendingBanner /></div>
 
       {/* Greeting */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
@@ -87,6 +91,14 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound }: Props
         <Shortcut label={tx('home.myCabinet')} sub={tx('home.myCabinetSub')} onClick={onOpenProfile} />
         <Shortcut label={tx('home.clubRating')} sub={tx('home.clubRatingSub')} onClick={onOpenClub} />
       </div>
+
+      {onOrganizeCasual && (
+        <button onClick={onOrganizeCasual} style={{
+          width: '100%', marginTop: 12, padding: '13px', borderRadius: 14, cursor: 'pointer',
+          background: T.emerald, color: T.cream, border: 'none',
+          fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, letterSpacing: 0.5,
+        }}>🎾 {tx('casual.organize')}</button>
+      )}
 
       {!t && (
         <div style={{

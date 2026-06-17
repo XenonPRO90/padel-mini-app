@@ -144,6 +144,77 @@ async def players_list(_user=Depends(get_tg_user)):
     return {"items": await q.get_all_players()}
 
 
+@app.get("/api/players/linked")
+async def players_linked(_user=Depends(get_tg_user)):
+    """Linked players only — used to pick participants for a casual game."""
+    return {"items": await q.get_linked_players()}
+
+
+# ─── Casual (friendly) games ──────────────────────────────
+
+class CasualGameIn(BaseModel):
+    p1: int
+    p2: int
+    p3: int
+    p4: int
+    score1: int
+    score2: int
+
+
+class CasualCreateBody(BaseModel):
+    games: list[CasualGameIn]
+    court_label: str | None = None
+    note: str | None = None
+
+
+class CasualConfirmBody(BaseModel):
+    ok: bool
+
+
+async def _require_player(user):
+    if user.get("_dev_mode"):
+        raise HTTPException(400, "Доступно только привязанным игрокам")
+    player = await q.get_player_by_tg(user["id"])
+    if not player:
+        raise HTTPException(400, "Доступно только привязанным игрокам")
+    return player
+
+
+@app.post("/api/casual")
+async def casual_create(body: CasualCreateBody, user=Depends(get_tg_user)):
+    player = await _require_player(user)
+    try:
+        return await q.create_casual_session(
+            player["id"], [g.dict() for g in body.games], body.court_label, body.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/casual/{sid}/confirm")
+async def casual_confirm(sid: int, body: CasualConfirmBody, user=Depends(get_tg_user)):
+    player = await _require_player(user)
+    try:
+        return await q.confirm_casual(sid, player["id"], body.ok)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/casual/pending")
+async def casual_pending(user=Depends(get_tg_user)):
+    if user.get("_dev_mode"):
+        return {"items": []}
+    player = await q.get_player_by_tg(user["id"])
+    return {"items": await q.get_casual_pending_for(player["id"]) if player else []}
+
+
+@app.get("/api/casual/my")
+async def casual_my(user=Depends(get_tg_user)):
+    if user.get("_dev_mode"):
+        return {"items": []}
+    player = await q.get_player_by_tg(user["id"])
+    return {"items": await q.get_casual_my(player["id"]) if player else []}
+
+
 @app.get("/api/players/{pid}")
 async def player_detail(pid: int, _user=Depends(get_tg_user)):
     p = await q.get_player(pid)

@@ -12,6 +12,7 @@ import { ClubScreen } from './screens/ClubScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { PlayerHome } from './screens/PlayerHome';
 import { WizardScreen } from './screens/WizardScreen';
+import { CasualCreateScreen } from './screens/CasualCreateScreen';
 import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
 import { CelebrationScreen } from './screens/CelebrationScreen';
@@ -37,6 +38,7 @@ type Screen =
   | { name: 'tournamentDetail'; tid: number }
   | { name: 'roundDetail'; tid: number; roundNum: number; mode?: string }
   | { name: 'celebration'; tid: number }
+  | { name: 'casualCreate' }
   | { name: 'schedulePoster' };
 
 declare global {
@@ -125,6 +127,7 @@ export default function App() {
               onTournamentFinished={(tid) => setStack([{ name: 'home' }, { name: 'celebration', tid }])}
               onOpenMyProfile={(p) => push({ name: 'playerProfile', player: p })}
               onOpenClub={() => setTab('club')}
+              onOrganizeCasual={() => push({ name: 'casualCreate' })}
             />
           )}
           {top.name === 'home' && tab === 'players' && (
@@ -154,6 +157,9 @@ export default function App() {
           )}
           {top.name === 'wizard' && (
             <WizardScreen onClose={pop} />
+          )}
+          {top.name === 'casualCreate' && (
+            <CasualCreateScreen onBack={pop} />
           )}
           {top.name === 'playerEdit' && (
             <PlayerEditScreen player={top.player} onClose={pop} />
@@ -207,12 +213,13 @@ export default function App() {
 // Role-aware first screen (the 'tournament' tab). Inside the provider so it can
 // read /api/me: admins → management home, linked players → personal dashboard,
 // brand-new users → welcome + join.
-function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub }: {
+function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub, onOrganizeCasual }: {
   onOpenLiveRound: () => void;
   onCreateTournament: () => void;
   onTournamentFinished: (tid: number) => void;
   onOpenMyProfile: (p: Player) => void;
   onOpenClub: () => void;
+  onOrganizeCasual: () => void;
 }) {
   const { data: me, isLoading } = useMe();
   if (isLoading) return null;
@@ -222,6 +229,7 @@ function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished,
         onOpenProfile={() => onOpenMyProfile(me.player!)}
         onOpenClub={onOpenClub}
         onOpenLiveRound={onOpenLiveRound}
+        onOrganizeCasual={onOrganizeCasual}
       />
     );
   }
@@ -233,6 +241,7 @@ function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished,
       onOpenLiveRound={onOpenLiveRound}
       onCreateTournament={onCreateTournament}
       onTournamentFinished={onTournamentFinished}
+      onOrganizeCasual={onOrganizeCasual}
     />
   );
 }

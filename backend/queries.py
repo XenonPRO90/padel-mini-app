@@ -336,6 +336,16 @@ async def get_all_players():
         return rows_to_list(await cur.fetchall())
 
 
+async def get_linked_players():
+    """Only players linked to Telegram — selectable for casual games."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, name, level, side, photo_url FROM players "
+            "WHERE telegram_id IS NOT NULL ORDER BY name"
+        )
+        return rows_to_list(await cur.fetchall())
+
+
 async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
@@ -890,7 +900,7 @@ async def get_club_rating(min_games: int = 1):
         players = {r["id"]: row_to_dict(r) for r in await cur.fetchall()}
         lvl = {pid: level_value(p["level"]) for pid, p in players.items()}
         cur = await db.execute(
-            """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, t.created_at
+            """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, t.created_at, t.mode
                FROM matches m JOIN rounds r ON r.id=m.round_id
                JOIN tournaments t ON t.id=r.tournament_id
                WHERE m.winner IS NOT NULL""")
@@ -902,10 +912,13 @@ async def get_club_rating(min_games: int = 1):
         score_rows = await cur.fetchall()
 
     DEF = level_value("C")
-    agg = {pid: {"games": 0, "wins": 0, "opp_sum": 0.0, "rg": 0, "rw": 0} for pid in players}
+    # raw games/wins → display; wg/ww/opp_sum/rg/rw weighted (casual counts less).
+    agg = {pid: {"games": 0, "wins": 0, "wg": 0.0, "ww": 0.0, "opp_sum": 0.0,
+                 "rg": 0.0, "rw": 0.0} for pid in players}
     for m in matches:
         cr = m["created_at"]
         recent = bool(cr) and str(cr) >= since
+        w = CASUAL_RATING_WEIGHT if m["mode"] == "casual" else 1.0
         t1, t2 = (m["p1"], m["p2"]), (m["p3"], m["p4"])
         for team, opp, won in ((t1, t2, m["winner"] == 1), (t2, t1, m["winner"] == 2)):
             opp_lvl = (lvl.get(opp[0], DEF) + lvl.get(opp[1], DEF)) / 2.0
@@ -914,13 +927,15 @@ async def get_club_rating(min_games: int = 1):
                 if a is None:
                     continue
                 a["games"] += 1
-                a["opp_sum"] += opp_lvl
+                a["wg"] += w
+                a["opp_sum"] += opp_lvl * w
                 if won:
                     a["wins"] += 1
+                    a["ww"] += w
                 if recent:
-                    a["rg"] += 1
+                    a["rg"] += w
                     if won:
-                        a["rw"] += 1
+                        a["rw"] += w
 
     # placements → champions / podiums (dense rank by points,wins per tournament)
     champ = {pid: 0 for pid in players}
@@ -942,10 +957,10 @@ async def get_club_rating(min_games: int = 1):
             elif place <= 3:
                 pod[pid] += 1
 
-    # normalisers
-    all_games = sum(a["games"] for a in agg.values())
-    club_opp_mean = (sum(a["opp_sum"] for a in agg.values()) / all_games) if all_games else DEF
-    max_games = max((a["games"] for a in agg.values()), default=1) or 1
+    # normalisers (weighted)
+    all_wg = sum(a["wg"] for a in agg.values())
+    club_opp_mean = (sum(a["opp_sum"] for a in agg.values()) / all_wg) if all_wg else DEF
+    max_wg = max((a["wg"] for a in agg.values()), default=1) or 1
     A_raw = {pid: 3 * champ[pid] + pod[pid] for pid in players}
     pos = sorted(v for v in A_raw.values() if v > 0)
     A_norm = max(pos[int(0.95 * (len(pos) - 1))] if pos else 1, 1)  # p95, robust to outliers
@@ -953,15 +968,16 @@ async def get_club_rating(min_games: int = 1):
     out = []
     for pid, p in players.items():
         a = agg[pid]
-        g = a["games"]
+        g = a["games"]          # raw count (display + eligibility)
+        gw = a["wg"]            # weighted (rating math)
         if g < min_games:
             continue
-        shrunk = (a["wins"] + K_Q * 0.5) / (g + K_Q)
-        mean_opp = a["opp_sum"] / g
+        shrunk = (a["ww"] + K_Q * 0.5) / (gw + K_Q) if gw else 0.5
+        mean_opp = a["opp_sum"] / gw if gw else DEF
         opp_factor = min(1.20, max(0.85, mean_opp / club_opp_mean)) if club_opp_mean else 1.0
         Q = min(1.0, max(0.0, shrunk * opp_factor))
         A = min(1.0, A_raw[pid] / A_norm)
-        V = math.log(1 + g) / math.log(1 + max_games)
+        V = math.log(1 + gw) / math.log(1 + max_wg)
         F = (a["rw"] + K_F * 0.5) / (a["rg"] + K_F) if a["rg"] > 0 else 0.5
         rating = round(1000 * (wQ * Q + wA * A + wV * V + wF * F))
         out.append({
@@ -970,7 +986,7 @@ async def get_club_rating(min_games: int = 1):
             "games": g, "wins": a["wins"], "losses": g - a["wins"],
             "win_rate": round(a["wins"] / g, 3) if g else 0.0,
             "champion": champ[pid], "podium": pod[pid], "tournaments": tours[pid],
-            "recent_games": a["rg"],
+            "recent_games": round(a["rg"]),
             "components": {"quality": round(Q, 3), "titles": round(A, 3),
                            "volume": round(V, 3), "form": round(F, 3)},
         })
@@ -2337,3 +2353,165 @@ async def set_player_lang(pid: int, lang: str):
     async with conn() as db:
         await db.execute("UPDATE players SET lang=? WHERE id=?", (lang, pid))
         await db.commit()
+
+
+# ─── Casual (friendly) games ──────────────────────────────
+# Participants organise a session of games (≤4 players, rotating pairs, any
+# number of games). All players must be linked. Opponents validate (no admin).
+# On full confirmation, each game becomes a `matches` row in a hidden 'casual'
+# container so it counts in match-derived stats; rating weights them lower.
+
+CASUAL_RATING_WEIGHT = 0.5  # casual games count half toward the composite rating
+
+
+async def _get_casual_container(db) -> int:
+    cur = await db.execute("SELECT id FROM tournaments WHERE mode='casual' LIMIT 1")
+    row = await cur.fetchone()
+    if row:
+        return row["id"]
+    cur = await db.execute(
+        "INSERT INTO tournaments(name, num_courts, mode, initial_order, initial_points, "
+        "start_round, status, current_round) "
+        "VALUES('Casual games', 1, 'casual', 'keep', 0, 1, 'casual', 0)")
+    return cur.lastrowid
+
+
+async def _materialize_casual(db, sid: int):
+    container = await _get_casual_container(db)
+    cur = await db.execute(
+        "INSERT INTO rounds(tournament_id, round_num) "
+        "VALUES(?, (SELECT COALESCE(MAX(round_num),0)+1 FROM rounds WHERE tournament_id=?))",
+        (container, container))
+    rid = cur.lastrowid
+    cur = await db.execute("SELECT * FROM casual_games WHERE session_id=?", (sid,))
+    for g in await cur.fetchall():
+        winner = 1 if g["score1"] > g["score2"] else 2
+        c = await db.execute(
+            "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4, winner, score1, score2) "
+            "VALUES(?,1,?,?,?,?,?,?,?)",
+            (rid, g["p1"], g["p2"], g["p3"], g["p4"], winner, g["score1"], g["score2"]))
+        await db.execute("UPDATE casual_games SET match_id=? WHERE id=?", (c.lastrowid, g["id"]))
+    await _recompute_scores(db, container)
+
+
+async def _maybe_approve_casual(db, sid: int) -> bool:
+    cur = await db.execute("SELECT confirmed FROM casual_confirm WHERE session_id=?", (sid,))
+    confs = [r["confirmed"] for r in await cur.fetchall()]
+    if any(c == -1 for c in confs):
+        await db.execute("UPDATE casual_sessions SET status='disputed' WHERE id=?", (sid,))
+        await db.commit()
+        return False
+    if confs and all(c == 1 for c in confs):
+        await _materialize_casual(db, sid)
+        await db.execute("UPDATE casual_sessions SET status='approved' WHERE id=?", (sid,))
+        await db.commit()
+        return True
+    return False
+
+
+async def create_casual_session(created_by: int, games: list, court_label=None, note=None):
+    from datetime import datetime
+    if not games:
+        raise ValueError("Добавьте хотя бы один гейм")
+    parts = set()
+    for g in games:
+        ids = [g["p1"], g["p2"], g["p3"], g["p4"]]
+        if len(set(ids)) != 4:
+            raise ValueError("В гейме все 4 игрока должны быть разными")
+        if int(g["score1"]) == int(g["score2"]):
+            raise ValueError("Счёт не может быть ничейным")
+        parts.update(ids)
+    if len(parts) > 4:
+        raise ValueError("Максимум 4 игрока на сессию")
+    if created_by not in parts:
+        raise ValueError("Автор должен сам играть в сессии")
+    async with conn() as db:
+        qm = ",".join("?" * len(parts))
+        cur = await db.execute(f"SELECT id, telegram_id FROM players WHERE id IN ({qm})", list(parts))
+        prows = {r["id"]: r for r in await cur.fetchall()}
+        for pid in parts:
+            if pid not in prows or not prows[pid]["telegram_id"]:
+                raise ValueError("Все игроки должны быть зарегистрированы и привязаны к Telegram")
+        cur = await db.execute(
+            "INSERT INTO casual_sessions(created_by, played_at, court_label, note) VALUES(?,?,?,?)",
+            (created_by, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), court_label, note))
+        sid = cur.lastrowid
+        for g in games:
+            await db.execute(
+                "INSERT INTO casual_games(session_id,p1,p2,p3,p4,score1,score2) VALUES(?,?,?,?,?,?,?)",
+                (sid, g["p1"], g["p2"], g["p3"], g["p4"], int(g["score1"]), int(g["score2"])))
+        for pid in parts:
+            await db.execute(
+                "INSERT INTO casual_confirm(session_id, player_id, confirmed) VALUES(?,?,?)",
+                (sid, pid, 1 if pid == created_by else 0))
+        await db.commit()
+        await _maybe_approve_casual(db, sid)  # in case author is the only participant (n/a) 
+    return {"ok": True, "session_id": sid}
+
+
+async def confirm_casual(session_id: int, player_id: int, ok: bool):
+    async with conn() as db:
+        cur = await db.execute("SELECT status FROM casual_sessions WHERE id=?", (session_id,))
+        s = await cur.fetchone()
+        if not s:
+            raise ValueError("Сессия не найдена")
+        if s["status"] != "pending":
+            raise ValueError("Сессия уже обработана")
+        cur = await db.execute(
+            "SELECT 1 FROM casual_confirm WHERE session_id=? AND player_id=?", (session_id, player_id))
+        if not await cur.fetchone():
+            raise ValueError("Вы не участник этой игры")
+        await db.execute(
+            "UPDATE casual_confirm SET confirmed=? WHERE session_id=? AND player_id=?",
+            (1 if ok else -1, session_id, player_id))
+        await db.commit()
+        await _maybe_approve_casual(db, session_id)
+    return {"ok": True}
+
+
+async def _casual_games_with_names(db, sid: int):
+    cur = await db.execute(
+        """SELECT g.p1,g.p2,g.p3,g.p4,g.score1,g.score2,
+                  a.name n1, b.name n2, c.name n3, d.name n4
+           FROM casual_games g
+           JOIN players a ON a.id=g.p1 JOIN players b ON b.id=g.p2
+           JOIN players c ON c.id=g.p3 JOIN players d ON d.id=g.p4
+           WHERE g.session_id=? ORDER BY g.id""", (sid,))
+    out = []
+    for g in await cur.fetchall():
+        out.append({"team1": [g["n1"], g["n2"]], "team2": [g["n3"], g["n4"]],
+                    "score1": g["score1"], "score2": g["score2"]})
+    return out
+
+
+async def get_casual_pending_for(player_id: int):
+    """Sessions awaiting this player's confirmation."""
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT s.id, s.created_by, s.played_at, s.court_label, p.name AS author
+               FROM casual_sessions s
+               JOIN casual_confirm c ON c.session_id=s.id AND c.player_id=? AND c.confirmed=0
+               JOIN players p ON p.id=s.created_by
+               WHERE s.status='pending' ORDER BY s.created_at DESC""", (player_id,))
+        sessions = rows_to_list(await cur.fetchall())
+        for s in sessions:
+            s["games"] = await _casual_games_with_names(db, s["id"])
+        return sessions
+
+
+async def get_casual_my(player_id: int, limit: int = 10):
+    """Recent sessions created by this player + their status/confirm progress."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, played_at, court_label, status FROM casual_sessions "
+            "WHERE created_by=? ORDER BY created_at DESC LIMIT ?", (player_id, limit))
+        sessions = rows_to_list(await cur.fetchall())
+        for s in sessions:
+            cur = await db.execute(
+                "SELECT COUNT(*) AS total, SUM(CASE WHEN confirmed=1 THEN 1 ELSE 0 END) AS ok "
+                "FROM casual_confirm WHERE session_id=?", (s["id"],))
+            r = await cur.fetchone()
+            s["confirmed"] = r["ok"] or 0
+            s["participants"] = r["total"] or 0
+            s["games"] = await _casual_games_with_names(db, s["id"])
+        return sessions

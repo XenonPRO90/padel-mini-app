@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useNextRound, useFinishTournament } from '../api/mutations';
 import { useMe } from '../api/me';
 import { JoinBanner } from './JoinBanner';
+import { CasualPendingBanner } from '../components/CasualPendingBanner';
 import { T } from '../lib/tokens';
 import { Ring } from '../components/Ring';
 import { LeaderboardRow } from '../components/Leaderboard';
@@ -15,9 +16,10 @@ interface Props {
   onOpenLiveRound?: () => void;
   onCreateTournament?: () => void;
   onTournamentFinished?: (tid: number) => void;
+  onOrganizeCasual?: () => void;
 }
 
-export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFinished }: Props) {
+export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOrganizeCasual }: Props) {
   const { data, isLoading, error, refetch } = useQuery<ActiveTournamentResponse>({
     queryKey: ['active-tournament'],
     queryFn: () => api('/api/tournaments/active'),
@@ -31,7 +33,7 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
   if (isLoading) return <HomeSkeleton />;
   if (error) return <HomeError onRetry={() => refetch()} />;
 
-  if (!data?.tournament) return <HomeEmpty onCreate={onCreateTournament} isAdmin={isAdmin} />;
+  if (!data?.tournament) return <HomeEmpty onCreate={onCreateTournament} isAdmin={isAdmin} onOrganizeCasual={onOrganizeCasual} />;
 
   const { tournament: t, round, leaderboard, pair_leaderboard } = data;
   const total = round?.matches_total ?? 0;
@@ -159,13 +161,21 @@ export function HomeScreen({ onOpenLiveRound, onCreateTournament, onTournamentFi
   );
 }
 
-function HomeEmpty({ onCreate, isAdmin }: { onCreate?: () => void; isAdmin?: boolean }) {
+function HomeEmpty({ onCreate, isAdmin, onOrganizeCasual }: { onCreate?: () => void; isAdmin?: boolean; onOrganizeCasual?: () => void }) {
   const t = useT();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <EHero title="PADEL CLUB" kicker="elegance in motion" compact />
-      <div style={{ flex: 1, padding: '12px 22px 18px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, padding: '12px 22px 18px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         <JoinBanner />
+        <CasualPendingBanner />
+        {onOrganizeCasual && (
+          <button onClick={onOrganizeCasual} style={{
+            width: '100%', marginBottom: 12, padding: '12px', borderRadius: 14, cursor: 'pointer',
+            background: 'transparent', color: T.goldDeep, border: `1px solid ${T.gold}`,
+            fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 600, letterSpacing: 0.5,
+          }}>🎾 {t('casual.organize')}</button>
+        )}
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: 14,
