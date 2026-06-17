@@ -51,7 +51,10 @@ export function WizardScreen({ onClose }: Props) {
   // Americano & groups8 need only name / mode / order / players / confirm —
   // points and court count are derived, so those steps are skipped.
   const derivedMode = s.mode === 'americano' || s.mode === 'groups8';
-  const STEPS = derivedMode ? [1, 3, 4, 8, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  // Derived modes still play on courts (groups8: 4; americano: players/4) — let
+  // the organizer set the real court numbers via a labels-only step (10).
+  const STEPS = derivedMode ? [1, 3, 4, 8, 10, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const derivedCourts = s.mode === 'groups8' ? 4 : Math.max(1, Math.floor(s.player_ids.length / 4));
   const stepIdx = Math.max(0, STEPS.indexOf(step));
   const isLastStep = step === STEPS[STEPS.length - 1];
 
@@ -76,9 +79,9 @@ export function WizardScreen({ onClose }: Props) {
       // Only send labels for the courts that exist, trimmed; backend drops
       // labels equal to the court number.
       const labels: Record<number, string> = {};
-      for (let i = 1; i <= s.num_courts; i++) {
-        const v = (s.court_labels[i] ?? '').trim();
-        if (v) labels[i] = v;
+      for (const [k, val] of Object.entries(s.court_labels)) {
+        const v = (val ?? '').trim();
+        if (v) labels[Number(k)] = v;
       }
       await create.mutateAsync({ ...s, court_points: cp, court_labels: labels });
       onClose();
@@ -126,6 +129,11 @@ export function WizardScreen({ onClose }: Props) {
           mode={s.mode}
           selected={s.player_ids}
           onChange={(v) => update('player_ids', v)}
+        />}
+        {step === 10 && <StepCourtLabels
+          courts={derivedCourts}
+          labels={s.court_labels}
+          onChange={(v) => update('court_labels', v)}
         />}
         {step === 9 && <StepConfirm s={s} cp={ensureCourtPoints(s.num_courts)} />}
         {step === 9 && (s.mode === 'fixed' || s.mode === 'americano' || s.mode === 'groups8') && s.player_ids.length > 0 && (
@@ -395,6 +403,49 @@ function StepNum({ title, caption, value, onChange, min, max }: {
           >+</button>
         </div>
       </div>
+    </>
+  );
+}
+
+// Labels-only step for derived modes (Mini Tournament / Americano): set the real
+// court numbers shown on the board. Points are not used in these modes.
+function StepCourtLabels({ courts, labels, onChange }: {
+  courts: number; labels: Record<number, string>; onChange: (v: Record<number, string>) => void;
+}) {
+  return (
+    <>
+      <StepTitle title="Court numbers" subtitle="Real court numbers on the board (e.g. 5–8)" />
+      {Array.from({ length: courts }).map((_, i) => {
+        const cn = i + 1;
+        return (
+          <div key={cn} style={{
+            display: 'grid', gridTemplateColumns: '54px 1fr', alignItems: 'center', gap: 12,
+            padding: '14px 16px', marginBottom: 8,
+            background: T.paper, border: `1px solid ${T.paperEdge}`, borderRadius: 14,
+          }}>
+            <div style={{
+              background: T.emerald, color: T.cream, borderRadius: 10,
+              padding: '8px 0', textAlign: 'center',
+            }}>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 9, letterSpacing: 2 }}>КОРТ</div>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 600, lineHeight: 1 }}>
+                {(labels[cn] ?? '').trim() || cn}
+              </div>
+            </div>
+            <input
+              value={labels[cn] ?? ''}
+              onChange={(e) => onChange({ ...labels, [cn]: e.target.value })}
+              placeholder={`№ на табло (${cn})`}
+              maxLength={6}
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10,
+                border: `1px solid ${T.paperEdge}`, background: T.cream,
+                fontFamily: T.fontDisplay, fontSize: 15, color: T.ink,
+              }}
+            />
+          </div>
+        );
+      })}
     </>
   );
 }

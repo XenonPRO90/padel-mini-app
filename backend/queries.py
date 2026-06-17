@@ -1921,15 +1921,20 @@ async def create_tournament(
                     (tid, pid, pos, court),
                 )
 
-            # court points (+ optional display labels)
+            # court points (+ optional display labels). Iterate over the actual
+            # courts (1..num_courts) so labels are stored even for derived modes
+            # (groups8/americano) where court_points is empty.
             labels = court_labels or {}
-            for cn, pts in court_points.items():
+            for cn in range(1, num_courts + 1):
+                pts = court_points.get(cn, 0)
                 raw = labels.get(cn) if isinstance(labels, dict) else None
                 label = (str(raw).strip() or None) if raw is not None else None
                 # Don't store a label that's just the court's own number — the UI
                 # falls back to court_num anyway, keeps data clean.
                 if label == str(cn):
                     label = None
+                if pts == 0 and label is None:
+                    continue  # nothing to store for this court
                 await db.execute(
                     "INSERT INTO court_points(tournament_id, court_num, points, label) VALUES(?,?,?,?)",
                     (tid, cn, pts, label),
