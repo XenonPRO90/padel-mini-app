@@ -1899,7 +1899,17 @@ async def create_tournament(
     # Apply ordering
     ordered = list(player_ids)
     if initial_order == "random":
-        random.shuffle(ordered)
+        if mode == "rotating":
+            # KotC — individual seeding, shuffle players.
+            random.shuffle(ordered)
+        else:
+            # Fixed-pair modes (fixed/americano/groups8): pairs are adjacent
+            # positions and are FIXED. Shuffle whole pairs (keep partners
+            # together) so they're randomly spread across groups/courts.
+            pairs = [ordered[i:i + 2] for i in range(0, len(ordered) - len(ordered) % 2, 2)]
+            random.shuffle(pairs)
+            rest = ordered[len(pairs) * 2:]  # odd leftover (not expected here)
+            ordered = [p for pr in pairs for p in pr] + rest
 
     async with conn() as db:
         await db.execute("BEGIN")
