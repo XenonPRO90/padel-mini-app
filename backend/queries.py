@@ -150,8 +150,14 @@ async def get_pair_leaderboard(tid: int):
     for both — we take them from the first player of each pair.
     Sorted by points DESC, wins DESC."""
     async with conn() as db:
+        cur = await db.execute("SELECT status FROM tournaments WHERE id=?", (tid,))
+        trow = await cur.fetchone()
+        finished = bool(trow) and trow["status"] == "finished"
+        # In a finished tournament every ranked pair has a scores row; teams left
+        # unranked (e.g. skipped 7–8 place) have none → hide them from the board.
+        unranked_filter = "AND s.player_id IS NOT NULL" if finished else ""
         cur = await db.execute(
-            """SELECT
+            f"""SELECT
                p1.name AS name_a,
                p2.name AS name_b,
                COALESCE(s.points, 0) AS points,
@@ -168,6 +174,7 @@ async def get_pair_leaderboard(tid: int):
                  AND s.player_id = tp1.player_id
                WHERE tp1.tournament_id = ?
                  AND tp1.position % 2 = 1
+                 {unranked_filter}
                ORDER BY points DESC, wins DESC""",
             (tid,),
         )
@@ -1445,6 +1452,7 @@ async def advance_to_next_round(tid: int):
 
     # Re-fetch tournament state with new round_num committed
     tp = await get_tournament_players(tid)
+    tp = [p for p in tp if not p.get("eliminated")]  # eliminated players sit out future rounds
     pair_hist = await get_pair_history(tid)
     last_partners = await get_previous_round_partners(tid)
 
@@ -1504,6 +1512,111 @@ async def advance_to_next_round(tid: int):
     return {"ok": True, "new_round_num": new_round_num}
 
 
+async def eliminate_and_advance(tid: int, eliminate_ids: list[int]):
+    """KotC "вылет": mark the given players as eliminated, re-seed the remaining
+    players by current standing onto a reduced court count, and create the next
+    round. Used when a court frees up (e.g. one court only for 90 min) and the
+    lowest-court losers drop out for the remaining rounds."""
+    from .pairing import assign_courts
+
+    elim = set(int(x) for x in (eliminate_ids or []))
+    async with conn() as db:
+        cur = await db.execute("SELECT * FROM tournaments WHERE id=?", (tid,))
+        t = row_to_dict(await cur.fetchone())
+        if not t:
+            raise ValueError("Турнир не найден")
+        if t["mode"] != "rotating":
+            raise ValueError("Выбывание доступно только в King of the Court")
+
+        cur = await db.execute(
+            "SELECT * FROM rounds WHERE tournament_id=? AND status='active' ORDER BY round_num DESC LIMIT 1",
+            (tid,),
+        )
+        round_obj = row_to_dict(await cur.fetchone())
+        if not round_obj:
+            raise ValueError("Нет активного раунда")
+        cur = await db.execute(
+            "SELECT * FROM matches WHERE round_id=?", (round_obj["id"],))
+        matches = rows_to_list(await cur.fetchall())
+        if any(m["winner"] is None for m in matches):
+            raise ValueError("Сначала внесите все результаты раунда")
+        if not elim:
+            raise ValueError("Не выбран никто на выбывание")
+
+        # remaining players (not already eliminated, not being eliminated now)
+        cur = await db.execute(
+            "SELECT player_id, position, current_court FROM tournament_players WHERE tournament_id=? AND eliminated=0",
+            (tid,),
+        )
+        prow = {r["player_id"]: r for r in await cur.fetchall()}
+        pos = {pid: r["position"] for pid, r in prow.items()}
+        cc = {pid: (r["current_court"] or 999) for pid, r in prow.items()}
+        remaining = [pid for pid in pos if pid not in elim]
+        if len(remaining) < 4 or len(remaining) % 4 != 0:
+            raise ValueError(
+                f"После выбывания должно остаться кратно 4 игрока (сейчас {len(remaining)})")
+        new_num = len(remaining) // 4
+        rn = round_obj["round_num"]
+
+        # Re-seed by the normal KotC ladder: winners move UP a court, losers move
+        # DOWN — then drop the eliminated. So court-1 losers go down, bottom-court
+        # survivors merge up, and the freed bottom court collapses. (Earlier this
+        # kept everyone on their court, which is what Liza saw as "broken".)
+        from .pairing import move_players_after_round
+        match_dicts = [{
+            "court_num": m["court_num"], "winner": m["winner"],
+            "team1": [{"player_id": m["p1"]}, {"player_id": m["p2"]}],
+            "team2": [{"player_id": m["p3"]}, {"player_id": m["p4"]}],
+        } for m in matches]
+        moved = move_players_after_round(match_dicts, t["num_courts"])
+        remaining.sort(key=lambda pid: (moved.get(pid, cc[pid]), pos[pid]))
+
+        # mark eliminated (with the round, so undo can reverse it)
+        for pid in elim:
+            await db.execute(
+                "UPDATE tournament_players SET eliminated=1, eliminated_round=? WHERE tournament_id=? AND player_id=?",
+                (rn, tid, pid))
+        # re-seed remaining onto new courts (top of hierarchy → court 1, etc.)
+        for i, pid in enumerate(remaining):
+            await db.execute(
+                "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
+                (i // 4 + 1, tid, pid))
+        await db.execute("UPDATE tournaments SET num_courts=? WHERE id=?", (new_num, tid))
+        await db.execute("UPDATE rounds SET status='done' WHERE id=?", (round_obj["id"],))
+        new_round_num = round_obj["round_num"] + 1
+        await db.execute("UPDATE tournaments SET current_round=? WHERE id=?", (new_round_num, tid))
+        await db.commit()
+
+    tp = [p for p in await get_tournament_players(tid) if not p.get("eliminated")]
+    pair_hist = await get_pair_history(tid)
+    last_partners = await get_previous_round_partners(tid)
+    courts_out = assign_courts(tp, new_num, pair_hist, last_partners)
+
+    async with conn() as db:
+        cur = await db.execute(
+            "INSERT INTO rounds(tournament_id, round_num) VALUES(?,?)", (tid, new_round_num))
+        new_round_id = cur.lastrowid
+        for c in courts_out:
+            t1, t2 = c["team1"], c["team2"]
+            await db.execute(
+                "INSERT INTO matches(round_id, court_num, p1, p2, p3, p4) VALUES(?,?,?,?,?,?)",
+                (new_round_id, c["court_num"],
+                 t1[0]["player_id"], t1[1]["player_id"], t2[0]["player_id"], t2[1]["player_id"]))
+            pa, pb = sorted([t1[0]["player_id"], t1[1]["player_id"]])
+            pc, pd = sorted([t2[0]["player_id"], t2[1]["player_id"]])
+            for (a, b) in ((pa, pb), (pc, pd)):
+                await db.execute(
+                    """INSERT INTO pair_history(tournament_id, player_a, player_b, last_round, count)
+                       VALUES(?,?,?,?,1)
+                       ON CONFLICT(tournament_id, player_a, player_b)
+                       DO UPDATE SET last_round=excluded.last_round, count=count+1""",
+                    (tid, a, b, new_round_num))
+        await db.commit()
+
+    return {"ok": True, "new_round_num": new_round_num,
+            "eliminated": len(elim), "num_courts": new_num}
+
+
 async def undo_last_round(tid: int):
     """Roll the tournament back to the previous round. Deletes the latest round
     (its matches + pair_history contributions) and re-activates the one before
@@ -1560,6 +1673,26 @@ async def undo_last_round(tid: int):
                         "UPDATE tournament_players SET current_court=? WHERE tournament_id=? AND player_id=?",
                         (m["court_num"], tid, pid),
                     )
+
+            # If the undone round followed an elimination (players left after the
+            # now-active round), reverse it: bring them back and restore courts.
+            cur = await db.execute(
+                "SELECT COUNT(*) AS c FROM tournament_players WHERE tournament_id=? AND eliminated_round=?",
+                (tid, prev_num),
+            )
+            if (await cur.fetchone())["c"]:
+                await db.execute(
+                    "UPDATE tournament_players SET eliminated=0, eliminated_round=NULL "
+                    "WHERE tournament_id=? AND eliminated_round=?",
+                    (tid, prev_num),
+                )
+                cur = await db.execute(
+                    "SELECT COUNT(*) AS c FROM tournament_players WHERE tournament_id=? AND eliminated=0",
+                    (tid,),
+                )
+                active = (await cur.fetchone())["c"]
+                await db.execute(
+                    "UPDATE tournaments SET num_courts=? WHERE id=?", (max(1, active // 4), tid))
 
             await _recompute_pair_history(db, tid)
             await _recompute_scores(db, tid)
@@ -1736,7 +1869,8 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
     ties), then game difference, then games for, then entry order."""
     pairs = _groups8_pairs(ordered_player_ids)
     A, B = pairs[0:4], pairs[4:8]
-    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i, "beat": set()}
+    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i,
+                            "beat": set(), "vs": {}}
              for i, p in enumerate(pairs)}
     cur = await db.execute(
         """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, m.score1, m.score2
@@ -1749,8 +1883,10 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
         s1, s2 = (m["score1"] or 0), (m["score2"] or 0)
         if k1 in stats:
             stats[k1]["gf"] += s1; stats[k1]["ga"] += s2
+            v = stats[k1]["vs"].setdefault(k2, [0, 0]); v[0] += s1; v[1] += s2
         if k2 in stats:
             stats[k2]["gf"] += s2; stats[k2]["ga"] += s1
+            v = stats[k2]["vs"].setdefault(k1, [0, 0]); v[0] += s2; v[1] += s1
         if m["winner"] == 1 and k1 in stats:
             stats[k1]["wins"] += 1
             stats[k1]["beat"].add(k2)
@@ -1761,10 +1897,18 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
     def rank(group):
         items = [stats[frozenset(p)] for p in group]
         for s in items:
-            # head-to-head wins counted only among teams tied on overall wins
+            # Among teams tied on overall wins, build a mini-table: head-to-head
+            # wins, then game difference computed ONLY in matches between the
+            # tied teams (not overall) — overall diff/gf are later fallbacks.
             tied = [o for o in items if o is not s and o["wins"] == s["wins"]]
             s["h2h"] = sum(1 for o in tied if frozenset(o["team"]) in s["beat"])
-        items.sort(key=lambda s: (-s["wins"], -s["h2h"], -(s["gf"] - s["ga"]), -s["gf"], s["order"]))
+            hgf = sum(s["vs"].get(frozenset(o["team"]), [0, 0])[0] for o in tied)
+            hga = sum(s["vs"].get(frozenset(o["team"]), [0, 0])[1] for o in tied)
+            s["h2h_diff"] = hgf - hga
+            s["h2h_gf"] = hgf
+        items.sort(key=lambda s: (
+            -s["wins"], -s["h2h"], -s["h2h_diff"], -s["h2h_gf"],
+            -(s["gf"] - s["ga"]), -s["gf"], s["order"]))
         return [s["team"] for s in items]
 
     return rank(A), rank(B)
@@ -1796,7 +1940,10 @@ async def _groups8_finals(db, tid: int) -> list[dict]:
     _court(out, 1, w1, w2)   # 1st place
     _court(out, 2, l1, l2)   # 3rd place
     _court(out, 3, w3, w4)   # 5th place
-    _court(out, 4, l3, l4)   # 7th place
+    cur = await db.execute("SELECT skip_7_8 FROM tournaments WHERE id=?", (tid,))
+    skip = bool((await cur.fetchone())["skip_7_8"])
+    if not skip:
+        _court(out, 4, l3, l4)   # 7th place (skipped when one court is short on time)
     return out
 
 
@@ -1813,9 +1960,12 @@ async def _groups8_finish(db, tid: int):
     place_of_team = {}  # frozenset(team) -> place 1..8
     court_to_places = {1: (1, 2), 2: (3, 4), 3: (5, 6), 4: (7, 8)}
     for court, (winp, losep) in court_to_places.items():
-        w, l = finals[court]
-        place_of_team[frozenset(w)] = winp
-        place_of_team[frozenset(l)] = losep
+        if court in finals:
+            w, l = finals[court]
+            place_of_team[frozenset(w)] = winp
+            place_of_team[frozenset(l)] = losep
+        # court 4 (7-8) skipped → those two teams stay unranked (no scores row,
+        # so they won't appear in the final leaderboard).
 
     # Per-player wins/losses across every round.
     cur = await db.execute(
@@ -1856,6 +2006,7 @@ async def create_tournament(
     court_points: dict[int, int],
     player_ids: list[int],
     court_labels: dict[int, str] | None = None,
+    skip_7_8: bool = False,
 ) -> dict:
     """Create a new tournament with players, generate round 1, and activate it.
 
@@ -1899,15 +2050,26 @@ async def create_tournament(
     # Apply ordering
     ordered = list(player_ids)
     if initial_order == "random":
-        random.shuffle(ordered)
+        if mode == "rotating":
+            # KotC — individual seeding, shuffle players.
+            random.shuffle(ordered)
+        else:
+            # Fixed-pair modes (fixed/americano/groups8): pairs are adjacent
+            # positions and are FIXED. Shuffle whole pairs (keep partners
+            # together) so they're randomly spread across groups/courts.
+            pairs = [ordered[i:i + 2] for i in range(0, len(ordered) - len(ordered) % 2, 2)]
+            random.shuffle(pairs)
+            rest = ordered[len(pairs) * 2:]  # odd leftover (not expected here)
+            ordered = [p for pr in pairs for p in pr] + rest
 
     async with conn() as db:
         await db.execute("BEGIN")
         try:
             cur = await db.execute(
-                """INSERT INTO tournaments(name, num_courts, mode, initial_order, initial_points, start_round, status, current_round)
-                   VALUES(?,?,?,?,?,?,'active',1)""",
-                (name.strip(), num_courts, mode, initial_order, initial_points, start_round),
+                """INSERT INTO tournaments(name, num_courts, mode, initial_order, initial_points, start_round, status, current_round, skip_7_8)
+                   VALUES(?,?,?,?,?,?,'active',1,?)""",
+                (name.strip(), num_courts, mode, initial_order, initial_points, start_round,
+                 1 if skip_7_8 else 0),
             )
             tid = cur.lastrowid
 
@@ -1921,15 +2083,20 @@ async def create_tournament(
                     (tid, pid, pos, court),
                 )
 
-            # court points (+ optional display labels)
+            # court points (+ optional display labels). Iterate over the actual
+            # courts (1..num_courts) so labels are stored even for derived modes
+            # (groups8/americano) where court_points is empty.
             labels = court_labels or {}
-            for cn, pts in court_points.items():
+            for cn in range(1, num_courts + 1):
+                pts = court_points.get(cn, 0)
                 raw = labels.get(cn) if isinstance(labels, dict) else None
                 label = (str(raw).strip() or None) if raw is not None else None
                 # Don't store a label that's just the court's own number — the UI
                 # falls back to court_num anyway, keeps data clean.
                 if label == str(cn):
                     label = None
+                if pts == 0 and label is None:
+                    continue  # nothing to store for this court
                 await db.execute(
                     "INSERT INTO court_points(tournament_id, court_num, points, label) VALUES(?,?,?,?)",
                     (tid, cn, pts, label),
@@ -1959,6 +2126,21 @@ async def create_tournament(
         courts_out = []
         for ci in range(num_courts):
             chunk = sorted_players[ci*4:ci*4+4]
+            if len(chunk) < 4:
+                break
+            courts_out.append({
+                "court_num": ci + 1,
+                "team1": [chunk[0], chunk[1]],
+                "team2": [chunk[2], chunk[3]],
+            })
+    elif initial_order == "keep":
+        # "By Entry": court members AND pairs strictly by entry order
+        # (court1 = entries 1-4 as 1+2 vs 3+4, etc.). Balancing kicks in only
+        # from round 2 onward via the KotC movement.
+        sorted_players = sorted(tp, key=lambda x: (x["current_court"] or 999, x["position"]))
+        courts_out = []
+        for ci in range(num_courts):
+            chunk = sorted_players[ci * 4:ci * 4 + 4]
             if len(chunk) < 4:
                 break
             courts_out.append({

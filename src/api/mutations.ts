@@ -74,6 +74,18 @@ export function useNextRound() {
   });
 }
 
+// KotC "вылет": eliminate players, then advance with fewer courts.
+export function useEliminate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tid, player_ids }: { tid: number; player_ids: number[] }) =>
+      api(`/api/tournaments/${tid}/eliminate`, {
+        method: 'POST', body: JSON.stringify({ player_ids }),
+      }),
+    onSuccess: () => invalidateResultViews(qc),
+  });
+}
+
 export function useFinishTournament() {
   const qc = useQueryClient();
   return useMutation({

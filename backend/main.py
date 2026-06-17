@@ -362,6 +362,20 @@ async def next_round(tid: int, _user=Depends(get_admin)):
         raise HTTPException(400, str(e))
 
 
+class EliminateBody(BaseModel):
+    player_ids: list[int]
+
+
+@app.post("/api/tournaments/{tid}/eliminate")
+async def eliminate(tid: int, body: EliminateBody, _user=Depends(get_admin)):
+    """KotC: eliminate the given players and advance to the next round with a
+    reduced court count (re-seeded by current standings)."""
+    try:
+        return await q.eliminate_and_advance(tid, body.player_ids)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/tournaments/{tid}/undo-last-round")
 async def undo_last_round(tid: int, _user=Depends(get_admin)):
     """Roll back to the previous round (deletes the latest round) so a wrong
@@ -421,6 +435,7 @@ class TournamentCreateBody(BaseModel):
     court_points: dict[int, int]  # {court_num: points}
     player_ids: list[int]
     court_labels: dict[int, str] | None = None  # {court_num: display label}
+    skip_7_8: bool = False  # groups8: don't play the 7th-8th place match
 
 
 @app.post("/api/tournaments")
@@ -436,6 +451,7 @@ async def tournaments_create(body: TournamentCreateBody, _user=Depends(get_admin
             court_points=body.court_points,
             player_ids=body.player_ids,
             court_labels=body.court_labels,
+            skip_7_8=body.skip_7_8,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
