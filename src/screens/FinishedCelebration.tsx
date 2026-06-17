@@ -10,6 +10,7 @@ interface Props {
   pairLeaderboard?: ScoredPair[];
   onClose: () => void;
   onShareText?: () => void;
+  onSendCards?: () => void;  // admin: send personal result cards (post-finish)
 }
 
 // Unified row shape so the dense-ranking loop works the same for
@@ -39,7 +40,7 @@ const P = {
   serif: '"New York", "Cormorant Garamond", Georgia, "Times New Roman", serif',
 };
 
-export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboard, onClose, onShareText }: Props) {
+export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboard, onClose, onShareText, onSendCards }: Props) {
   const posterRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   // Mini Tournament (groups8): points ARE the place (9−place), which reads as
@@ -309,6 +310,12 @@ export function FinishedCelebration({ tournament: t, leaderboard, pairLeaderboar
           onClick={onSharePoster}
         />
         <div style={{ height: 8 }} />
+        {onSendCards && (
+          <>
+            <SecondaryCTA label="📤 Отправить карточки игрокам" onClick={onSendCards} />
+            <div style={{ height: 8 }} />
+          </>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           {onShareText && (
             <div style={{ flex: 1 }}>

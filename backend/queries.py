@@ -1832,7 +1832,8 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
     ties), then game difference, then games for, then entry order."""
     pairs = _groups8_pairs(ordered_player_ids)
     A, B = pairs[0:4], pairs[4:8]
-    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i, "beat": set()}
+    stats = {frozenset(p): {"team": p, "wins": 0, "gf": 0, "ga": 0, "order": i,
+                            "beat": set(), "vs": {}}
              for i, p in enumerate(pairs)}
     cur = await db.execute(
         """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, m.score1, m.score2
@@ -1845,8 +1846,10 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
         s1, s2 = (m["score1"] or 0), (m["score2"] or 0)
         if k1 in stats:
             stats[k1]["gf"] += s1; stats[k1]["ga"] += s2
+            v = stats[k1]["vs"].setdefault(k2, [0, 0]); v[0] += s1; v[1] += s2
         if k2 in stats:
             stats[k2]["gf"] += s2; stats[k2]["ga"] += s1
+            v = stats[k2]["vs"].setdefault(k1, [0, 0]); v[0] += s2; v[1] += s1
         if m["winner"] == 1 and k1 in stats:
             stats[k1]["wins"] += 1
             stats[k1]["beat"].add(k2)
@@ -1857,10 +1860,18 @@ async def _groups8_standings(db, tid: int, ordered_player_ids: list[int]):
     def rank(group):
         items = [stats[frozenset(p)] for p in group]
         for s in items:
-            # head-to-head wins counted only among teams tied on overall wins
+            # Among teams tied on overall wins, build a mini-table: head-to-head
+            # wins, then game difference computed ONLY in matches between the
+            # tied teams (not overall) — overall diff/gf are later fallbacks.
             tied = [o for o in items if o is not s and o["wins"] == s["wins"]]
             s["h2h"] = sum(1 for o in tied if frozenset(o["team"]) in s["beat"])
-        items.sort(key=lambda s: (-s["wins"], -s["h2h"], -(s["gf"] - s["ga"]), -s["gf"], s["order"]))
+            hgf = sum(s["vs"].get(frozenset(o["team"]), [0, 0])[0] for o in tied)
+            hga = sum(s["vs"].get(frozenset(o["team"]), [0, 0])[1] for o in tied)
+            s["h2h_diff"] = hgf - hga
+            s["h2h_gf"] = hgf
+        items.sort(key=lambda s: (
+            -s["wins"], -s["h2h"], -s["h2h_diff"], -s["h2h_gf"],
+            -(s["gf"] - s["ga"]), -s["gf"], s["order"]))
         return [s["team"] for s in items]
 
     return rank(A), rank(B)

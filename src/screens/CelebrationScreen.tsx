@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { FinishedCelebration } from './FinishedCelebration';
 import { ShareTextModal } from '../components/ShareTextModal';
+import { SendResultsModal } from '../components/SendResultsModal';
+import { useMe } from '../api/me';
 import { T } from '../lib/tokens';
 import type { Round, ScoredPair, ScoredPlayer, Tournament } from '../lib/types';
 
@@ -23,7 +25,9 @@ export function CelebrationScreen({ tid, onClose }: Props) {
     queryKey: ['tournament', tid],
     queryFn: () => api(`/api/tournaments/${tid}`),
   });
+  const { data: me } = useMe();
   const [shareText, setShareText] = useState<string | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);
 
   if (isLoading || !data) {
     return (
@@ -59,10 +63,12 @@ export function CelebrationScreen({ tid, onClose }: Props) {
         pairLeaderboard={data.pair_leaderboard}
         onClose={onClose}
         onShareText={onShareText}
+        onSendCards={me?.is_admin ? () => setSendOpen(true) : undefined}
       />
       {shareText !== null && (
         <ShareTextModal text={shareText} onClose={() => setShareText(null)} />
       )}
+      {sendOpen && <SendResultsModal tid={tid} onClose={() => setSendOpen(false)} />}
     </>
   );
 }
