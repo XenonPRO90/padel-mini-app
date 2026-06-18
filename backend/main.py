@@ -144,6 +144,77 @@ async def players_list(_user=Depends(get_tg_user)):
     return {"items": await q.get_all_players()}
 
 
+@app.get("/api/players/linked")
+async def players_linked(_user=Depends(get_tg_user)):
+    """Linked players only — used to pick participants for a casual game."""
+    return {"items": await q.get_linked_players()}
+
+
+# ─── Casual (friendly) games ──────────────────────────────
+
+class CasualGameIn(BaseModel):
+    p1: int
+    p2: int
+    p3: int
+    p4: int
+    score1: int
+    score2: int
+
+
+class CasualCreateBody(BaseModel):
+    games: list[CasualGameIn]
+    court_label: str | None = None
+    note: str | None = None
+
+
+class CasualConfirmBody(BaseModel):
+    ok: bool
+
+
+async def _require_player(user):
+    if user.get("_dev_mode"):
+        raise HTTPException(400, "Доступно только привязанным игрокам")
+    player = await q.get_player_by_tg(user["id"])
+    if not player:
+        raise HTTPException(400, "Доступно только привязанным игрокам")
+    return player
+
+
+@app.post("/api/casual")
+async def casual_create(body: CasualCreateBody, user=Depends(get_tg_user)):
+    player = await _require_player(user)
+    try:
+        return await q.create_casual_session(
+            player["id"], [g.dict() for g in body.games], body.court_label, body.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/casual/{sid}/confirm")
+async def casual_confirm(sid: int, body: CasualConfirmBody, user=Depends(get_tg_user)):
+    player = await _require_player(user)
+    try:
+        return await q.confirm_casual(sid, player["id"], body.ok)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/casual/pending")
+async def casual_pending(user=Depends(get_tg_user)):
+    if user.get("_dev_mode"):
+        return {"items": []}
+    player = await q.get_player_by_tg(user["id"])
+    return {"items": await q.get_casual_pending_for(player["id"]) if player else []}
+
+
+@app.get("/api/casual/my")
+async def casual_my(user=Depends(get_tg_user)):
+    if user.get("_dev_mode"):
+        return {"items": []}
+    player = await q.get_player_by_tg(user["id"])
+    return {"items": await q.get_casual_my(player["id"]) if player else []}
+
+
 @app.get("/api/players/{pid}")
 async def player_detail(pid: int, _user=Depends(get_tg_user)):
     p = await q.get_player(pid)
@@ -267,24 +338,33 @@ async def tournament_cards(tid: int, _admin=Depends(get_admin)):
 
 
 @app.post("/api/tournaments/{tid}/cards/send")
-async def tournament_cards_send(tid: int, _admin=Depends(get_admin)):
-    """Phase 4: render + DM a personal card to every LINKED player. Report back."""
+async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(get_admin)):
+    """Phase 4: render + DM a personal card to every LINKED player. Report back.
+
+    Idempotent: a player who already got a card for this tournament is skipped,
+    so pressing "Send" twice no longer double-DMs everyone. Pass ?force=true to
+    intentionally re-send to all linked players."""
     data = await q.get_tournament_cards(tid)
     if not data:
         raise HTTPException(404, "Турнир не найден")
     if data["tournament"]["status"] != "finished":
         raise HTTPException(400, "Турнир не завершён")
     linked = [c for c in data["cards"] if c["telegram_id"]]
+    already = set() if force else await q.get_sent_card_player_ids(tid)
+    pending = [c for c in linked if c["player_id"] not in already]
 
     async def one(c):
         c["avatar"] = await asyncio.to_thread(cards_mod.fetch_avatar_datauri, c.get("photo_url"))
         ok, reason = await cards_mod.render_and_send(c)
+        if ok:
+            await q.mark_card_sent(tid, c["player_id"])
         return {"name": c["name"], "ok": ok, "reason": reason}
 
-    results = await asyncio.gather(*[one(c) for c in linked])
+    results = await asyncio.gather(*[one(c) for c in pending])
     sent = sum(1 for r in results if r["ok"])
     failed = [{"name": r["name"], "reason": r["reason"]} for r in results if not r["ok"]]
     return {"sent": sent, "failed": failed,
+            "skipped": len(linked) - len(pending),
             "linked_count": len(linked), "total_count": len(data["cards"])}
 
 

@@ -172,6 +172,7 @@ export interface PlayerProfile {
   recent: ProfilePlacement[];
   partners: ProfilePartner[];
   best_partner: ProfilePartner | null;
+  worst_partner: ProfilePartner | null;
   nemesis: ProfileOpponent | null;
   favorite_opponent: ProfileOpponent | null;
   court_distribution: ProfileCourt[];
