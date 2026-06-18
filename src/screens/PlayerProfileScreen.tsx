@@ -282,6 +282,16 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               </div>
             )}
 
+            {/* Worst partner — gentle, only shown for a sub-.500 pairing */}
+            {data.worst_partner && (
+              <div style={{ marginBottom: 18 }}>
+                <ELabel style={{ marginBottom: 8, paddingLeft: 2 }}>{t('profile.worstPartner')}</ELabel>
+                <EGoldFrame>
+                  <PartnerRow p={data.worst_partner} highlight />
+                </EGoldFrame>
+              </div>
+            )}
+
             {/* Head-to-head: nemesis & favourite opponent */}
             {(data.nemesis || data.favorite_opponent) && (
               <div style={{ marginBottom: 18 }}>

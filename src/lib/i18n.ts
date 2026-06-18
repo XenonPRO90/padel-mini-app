@@ -97,6 +97,7 @@ export const STR = {
   'profile.racketPh': { ru: 'Твоя ракетка (напр. Babolat Air)', en: 'Your racket (e.g. Babolat Air)' },
   'profile.stats': { ru: 'Статистика', en: 'Stats' },
   'profile.bestPartner': { ru: 'Лучший партнёр', en: 'Best partner' },
+  'profile.worstPartner': { ru: '🤝 Пока не сложилось', en: "🤝 Not our duo (yet)" },
   'profile.h2h': { ru: 'Личные счёты', en: 'Head-to-head' },
   'profile.nemesis': { ru: 'Немезида', en: 'Nemesis' },
   'profile.favOpp': { ru: 'Любимый соперник', en: 'Favourite opponent' },

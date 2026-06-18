@@ -743,10 +743,21 @@ async def get_player_profile(pid: int):
          for mid, gw in derived["partners"].items()),
         key=lambda x: (-x["games"], -x["wins"]),
     )
-    eligible = [p for p in partners_sorted if p["games"] >= 4]
+    eligible = [p for p in partners_sorted if p["games"] >= 3]
     best_partner = max(
         eligible, key=lambda x: (x["wins"] / x["games"], x["games"]), default=None
     )
+    # "Not our duo (yet)" — gentle counterpart to best partner: the teammate with
+    # the lowest win-rate. Only surface a sub-.500 pair, and never the same person
+    # as the best partner (happens when there's a single eligible teammate).
+    worst_partner = min(
+        eligible, key=lambda x: (x["wins"] / x["games"], -x["games"]), default=None
+    )
+    if worst_partner and (
+        worst_partner["wins"] / worst_partner["games"] >= 0.5
+        or (best_partner and worst_partner["player_id"] == best_partner["player_id"])
+    ):
+        worst_partner = None
 
     # Head-to-head: nemesis (most losses to) & favourite victim (most wins vs),
     # min 3 meetings to be meaningful.
@@ -821,6 +832,7 @@ async def get_player_profile(pid: int):
         "recent": placements[:8],
         "partners": partners_sorted[:5],
         "best_partner": best_partner,
+        "worst_partner": worst_partner,
         "nemesis": nemesis,
         "favorite_opponent": favorite_opp,
         "court_distribution": court_dist,
