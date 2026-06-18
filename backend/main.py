@@ -338,24 +338,33 @@ async def tournament_cards(tid: int, _admin=Depends(get_admin)):
 
 
 @app.post("/api/tournaments/{tid}/cards/send")
-async def tournament_cards_send(tid: int, _admin=Depends(get_admin)):
-    """Phase 4: render + DM a personal card to every LINKED player. Report back."""
+async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(get_admin)):
+    """Phase 4: render + DM a personal card to every LINKED player. Report back.
+
+    Idempotent: a player who already got a card for this tournament is skipped,
+    so pressing "Send" twice no longer double-DMs everyone. Pass ?force=true to
+    intentionally re-send to all linked players."""
     data = await q.get_tournament_cards(tid)
     if not data:
         raise HTTPException(404, "Турнир не найден")
     if data["tournament"]["status"] != "finished":
         raise HTTPException(400, "Турнир не завершён")
     linked = [c for c in data["cards"] if c["telegram_id"]]
+    already = set() if force else await q.get_sent_card_player_ids(tid)
+    pending = [c for c in linked if c["player_id"] not in already]
 
     async def one(c):
         c["avatar"] = await asyncio.to_thread(cards_mod.fetch_avatar_datauri, c.get("photo_url"))
         ok, reason = await cards_mod.render_and_send(c)
+        if ok:
+            await q.mark_card_sent(tid, c["player_id"])
         return {"name": c["name"], "ok": ok, "reason": reason}
 
-    results = await asyncio.gather(*[one(c) for c in linked])
+    results = await asyncio.gather(*[one(c) for c in pending])
     sent = sum(1 for r in results if r["ok"])
     failed = [{"name": r["name"], "reason": r["reason"]} for r in results if not r["ok"]]
     return {"sent": sent, "failed": failed,
+            "skipped": len(linked) - len(pending),
             "linked_count": len(linked), "total_count": len(data["cards"])}
 
 

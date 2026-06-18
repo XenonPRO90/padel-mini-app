@@ -103,6 +103,13 @@ CARD_L = {
 }
 
 
+def _subtitle(c: dict) -> str:
+    """Tournament name + date, but avoid duplicating the date when the name
+    already contains it (e.g. 'PADEL MASTERS · RISE PADEL 17.06')."""
+    t, d = c["tournament"], str(c.get("date") or "")
+    return t if (not d or d in t) else f"{t} · {d}"
+
+
 def build_card_html(c: dict) -> str:
     """c: {name, initials, avatar (datauri|None), place, medal(1/2/3|None),
            partner(str|None), wins, losses, lang, tournament, date}"""
@@ -110,7 +117,7 @@ def build_card_html(c: dict) -> str:
     place = c["place"]
     title = L["champion"] if place == 1 else L["place"].format(n=place)
     title_color = GOLDDEEP if place == 1 else (MUTED if place in (2, 3) else GOLD)
-    sub = f'{c["tournament"]} · {c["date"]}'
+    sub = _subtitle(c)
     line = c.get("line") or L["line"].format(w=c.get("wins", 0), l=c.get("losses", 0))
     partner_line = ""
     if c.get("partner"):
@@ -166,19 +173,19 @@ async def render_png(html: str) -> bytes:
 
 
 def caption_for(c: dict) -> str:
-    t, d, place = c["tournament"], c["date"], c["place"]
+    sub, place = _subtitle(c), c["place"]
     en = c.get("lang", "ru") == "en"
     if place == 1:
-        return (f"🏆 Congrats on 1st place at {t} · {d}! 🎾" if en
-                else f"🏆 Поздравляем с 1-м местом на {t} · {d}! 🎾")
+        return (f"🏆 Congrats on 1st place at {sub}! 🎾" if en
+                else f"🏆 Поздравляем с 1-м местом на {sub}! 🎾")
     if place == 2:
-        return (f"🥈 Silver at {t} · {d} — great play!" if en
-                else f"🥈 Серебро на {t} · {d} — отлично сыграно!")
+        return (f"🥈 Silver at {sub} — great play!" if en
+                else f"🥈 Серебро на {sub} — отлично сыграно!")
     if place == 3:
-        return (f"🥉 Bronze at {t} · {d} — great play!" if en
-                else f"🥉 Бронза на {t} · {d} — отлично сыграно!")
-    return (f"Your result at {t} · {d} — place {place}. Thanks for playing! 🎾" if en
-            else f"Твой итог на {t} · {d} — {place} место. Спасибо за игру! 🎾")
+        return (f"🥉 Bronze at {sub} — great play!" if en
+                else f"🥉 Бронза на {sub} — отлично сыграно!")
+    return (f"Your result at {sub} — place {place}. Thanks for playing! 🎾" if en
+            else f"Твой итог на {sub} — {place} место. Спасибо за игру! 🎾")
 
 
 async def send_photo(chat_id: int, png: bytes, caption: str):

@@ -2347,6 +2347,38 @@ async def get_tournament_cards(tid: int):
             "linked_count": len(linked), "total_count": len(cards)}
 
 
+# A card is sent at most once per (tournament, player). The send endpoint is a
+# plain admin POST with no idempotency of its own, so pressing "Send" twice used
+# to DM every linked player twice. This table is the dedup ledger.
+async def _ensure_cards_sent(db):
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS cards_sent (
+               tournament_id INTEGER NOT NULL,
+               player_id     INTEGER NOT NULL,
+               sent_at       TEXT NOT NULL DEFAULT (datetime('now')),
+               PRIMARY KEY (tournament_id, player_id)
+           )""")
+
+
+async def get_sent_card_player_ids(tid: int) -> set:
+    """Player ids that already received a card for this tournament."""
+    async with conn() as db:
+        await _ensure_cards_sent(db)
+        cur = await db.execute(
+            "SELECT player_id FROM cards_sent WHERE tournament_id=?", (tid,))
+        return {r["player_id"] for r in await cur.fetchall()}
+
+
+async def mark_card_sent(tid: int, player_id: int):
+    """Record a successful send so re-pressing 'Send' skips this player."""
+    async with conn() as db:
+        await _ensure_cards_sent(db)
+        await db.execute(
+            "INSERT OR IGNORE INTO cards_sent (tournament_id, player_id) VALUES (?,?)",
+            (tid, player_id))
+        await db.commit()
+
+
 async def set_player_lang(pid: int, lang: str):
     """Store the player's UI language (from Telegram language_code) for card localization."""
     lang = "en" if str(lang).lower().startswith("en") else "ru"
