@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
 import { Avatar } from './PlayersScreen';
@@ -6,9 +6,6 @@ import { useLinkedPlayers, useCreateCasual, type CasualGameInput } from '../api/
 import type { Player } from '../lib/types';
 
 interface Props { onBack: () => void }
-
-// 3 possible 2v2 splits of 4 players (by index).
-const SPLITS: [number, number][] = [[0, 1], [0, 2], [0, 3]];
 
 export function CasualCreateScreen({ onBack }: Props) {
   const t = useT();
@@ -18,8 +15,9 @@ export function CasualCreateScreen({ onBack }: Props) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Player[]>([]);
   const [games, setGames] = useState<CasualGameInput[]>([]);
-  // draft game
-  const [splitIdx, setSplitIdx] = useState(0);
+  // draft game — explicit per-player team assignment (1 | 2), so fixed-partner
+  // games are possible and the admin always picks pairs (no auto-pairing).
+  const [teamOf, setTeamOf] = useState<Record<number, 1 | 2>>({});
   const [s1, setS1] = useState(0);
   const [s2, setS2] = useState(0);
   const [done, setDone] = useState(false);
@@ -30,17 +28,29 @@ export function CasualCreateScreen({ onBack }: Props) {
       : cur.length >= 4 ? cur : [...cur, p]);
   };
 
-  const teamsFor = (idx: number) => {
-    const [i, j] = SPLITS[idx];
-    const t1 = [sel[i], sel[j]];
-    const t2 = sel.filter((_, k) => k !== i && k !== j);
-    return { t1, t2 };
-  };
+  // Seed a sensible 2v2 default whenever the 4-player set changes; keep the
+  // admin's choice between games (fixed partners) as long as it stays valid.
+  useEffect(() => {
+    if (sel.length !== 4) return;
+    const ids = sel.map((p) => p.id);
+    const c1 = ids.filter((id) => teamOf[id] === 1).length;
+    const c2 = ids.filter((id) => teamOf[id] === 2).length;
+    const covered = ids.every((id) => teamOf[id] === 1 || teamOf[id] === 2);
+    if (!covered || c1 !== 2 || c2 !== 2) {
+      setTeamOf({ [ids[0]]: 1, [ids[1]]: 1, [ids[2]]: 2, [ids[3]]: 2 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel]);
+
+  const ids4 = sel.map((p) => p.id);
+  const team1 = ids4.filter((id) => teamOf[id] === 1);
+  const team2 = ids4.filter((id) => teamOf[id] === 2);
+  const valid2v2 = team1.length === 2 && team2.length === 2;
+  const setTeam = (id: number, tm: 1 | 2) => setTeamOf((m) => ({ ...m, [id]: tm }));
 
   const addGame = () => {
-    if (sel.length !== 4 || s1 === s2) return;
-    const { t1, t2 } = teamsFor(splitIdx);
-    setGames((g) => [...g, { p1: t1[0].id, p2: t1[1].id, p3: t2[0].id, p4: t2[1].id, score1: s1, score2: s2 }]);
+    if (!valid2v2 || s1 === s2) return;
+    setGames((g) => [...g, { p1: team1[0], p2: team1[1], p3: team2[0], p4: team2[1], score1: s1, score2: s2 }]);
     setS1(0); setS2(0);
   };
 
@@ -118,27 +128,44 @@ export function CasualCreateScreen({ onBack }: Props) {
 
           <div style={{ background: T.paper, border: `1px solid ${T.paperEdge}`, borderRadius: 12, padding: 12, marginTop: 6 }}>
             <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12, color: T.muted, marginBottom: 8 }}>{t('casual.tapToSplit')}</div>
-            {SPLITS.map((_, idx) => {
-              const { t1, t2 } = teamsFor(idx);
-              const on = idx === splitIdx;
-              return (
-                <button key={idx} onClick={() => setSplitIdx(idx)} style={{
-                  display: 'block', width: '100%', textAlign: 'center', marginBottom: 6, cursor: 'pointer',
-                  padding: '9px', borderRadius: 999,
-                  border: `1px solid ${on ? T.emerald : T.paperEdge}`,
-                  background: on ? T.emerald : 'transparent', color: on ? T.cream : T.ink,
-                  fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600,
-                }}>{t1[0].name} & {t1[1].name}　vs　{t2[0].name} & {t2[1].name}</button>
-              );
-            })}
+            {sel.map((p) => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Avatar name={p.name} size={26} photoUrl={p.photo_url} />
+                <span style={{ flex: 1, minWidth: 0, fontFamily: T.fontDisplay, fontSize: 14, color: T.ink,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1, 2].map((tm) => {
+                    const on = teamOf[p.id] === tm;
+                    return (
+                      <button key={tm} onClick={() => setTeam(p.id, tm as 1 | 2)} style={{
+                        minWidth: 56, padding: '7px 8px', borderRadius: 999, cursor: 'pointer',
+                        border: `1px solid ${on ? T.emerald : T.paperEdge}`,
+                        background: on ? T.emerald : 'transparent', color: on ? T.cream : T.muted,
+                        fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
+                      }}>{t('casual.team')} {tm}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {valid2v2 ? (
+              <div style={{ textAlign: 'center', fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, color: T.ink, margin: '10px 0 4px' }}>
+                {nameById(team1[0])} & {nameById(team1[1])} <span style={{ color: T.muted }}>vs</span> {nameById(team2[0])} & {nameById(team2[1])}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.burgundy, margin: '8px 0 4px' }}>
+                {t('casual.need2v2')}
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, margin: '12px 0' }}>
               <Stepper value={s1} onChange={setS1} />
               <span style={{ fontFamily: T.fontDisplay, fontSize: 18, color: T.muted }}>:</span>
               <Stepper value={s2} onChange={setS2} />
             </div>
-            <button onClick={addGame} disabled={s1 === s2} style={{
-              width: '100%', padding: '10px', borderRadius: 999, cursor: s1 === s2 ? 'default' : 'pointer',
+            <button onClick={addGame} disabled={!valid2v2 || s1 === s2} style={{
+              width: '100%', padding: '10px', borderRadius: 999, cursor: (!valid2v2 || s1 === s2) ? 'default' : 'pointer',
               border: `1px solid ${T.gold}`, background: 'transparent', color: T.goldDeep,
+              opacity: (!valid2v2 || s1 === s2) ? 0.5 : 1,
               fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600,
             }}>{t('casual.addGame')}</button>
           </div>
