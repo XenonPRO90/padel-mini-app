@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { T } from '../lib/tokens';
 import { MainCTA, SecondaryCTA } from '../components/MainCTA';
-import { courtDisplay, type ActiveTournamentResponse, type Match, type MatchPlayer } from '../lib/types';
+import { courtDisplay, groups8CourtTag, type ActiveTournamentResponse, type Match, type MatchPlayer } from '../lib/types';
 
 interface Props {
   onClose: () => void;
@@ -170,7 +170,11 @@ export function SchedulePosterScreen({ onClose }: Props) {
           {/* Court cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {round.matches.map((m) => (
-              <CourtRow key={m.match_id} match={m} />
+              <CourtRow
+                key={m.match_id}
+                match={m}
+                tag={t.mode === 'groups8' ? groups8CourtTag(round.round_num, m.court_num) : undefined}
+              />
             ))}
           </div>
 
@@ -206,10 +210,10 @@ export function SchedulePosterScreen({ onClose }: Props) {
   );
 }
 
-function CourtRow({ match }: { match: Match }) {
+function CourtRow({ match, tag }: { match: Match; tag?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
-      {/* Court label — dark forest square with court number + ball */}
+      {/* Court label — dark forest square with court number + ball (+ group/phase tag) */}
       <div style={{
         width: 72,
         background: P.courtBg,
@@ -232,6 +236,13 @@ function CourtRow({ match }: { match: Match }) {
         <div style={{ marginTop: 6 }}>
           <TennisBallSmall />
         </div>
+        {tag && (
+          <div style={{
+            marginTop: 7, fontFamily: P.serif, fontSize: 9, fontWeight: 500,
+            letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'center',
+            lineHeight: 1.2, color: P.courtText, opacity: 0.92,
+          }}>{tag}</div>
+        )}
       </div>
       {/* Players card — each player on its own line so long names don't truncate */}
       <div style={{
