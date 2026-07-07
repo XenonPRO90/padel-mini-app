@@ -83,13 +83,14 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
   const [period, setPeriod] = useState<'all' | 'month'>('all');
   const [by, setBy] = useState<ClubBy>('rating');
   const [showInfo, setShowInfo] = useState(false);
-  // composite rating is all-time; period applies only to points/winrate
-  const effPeriod = by === 'rating' ? 'all' : period;
+  // composite rating & ELO are all-time; period applies only to points/winrate
+  const effPeriod = (by === 'rating' || by === 'elo') ? 'all' : period;
   const { data, isLoading } = useClubLeaderboard(effPeriod, by);
   const items = data?.items ?? [];
 
   const mainValue = (r: ClubRow) =>
     by === 'rating' ? (r.rating ?? 0)
+    : by === 'elo' ? (r.elo?.toFixed(2) ?? '—')
     : by === 'points' ? r.points
     : `${Math.round(r.win_rate * 100)}%`;
 
@@ -103,11 +104,13 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
             fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 700, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
           }}>?</button>
+        ) : by === 'elo' ? (
+          <div style={{ marginBottom: 12 }} />
         ) : (
           <Toggle options={[{ id: 'all', label: t('club.allTime') }, { id: 'month', label: t('club.month') }]}
             value={period} onChange={(v) => setPeriod(v as 'all' | 'month')} />
         )}
-        <Toggle options={[{ id: 'rating', label: t('club.byRating') }, { id: 'points', label: t('club.byPoints') }, { id: 'winrate', label: t('club.byWinrate') }]}
+        <Toggle options={[{ id: 'rating', label: t('club.byRating') }, { id: 'elo', label: t('club.byElo') }, { id: 'points', label: t('club.byPoints') }, { id: 'winrate', label: t('club.byWinrate') }]}
           value={by} onChange={(v) => setBy(v as ClubBy)} />
       </div>
       {showInfo && <RatingInfoModal onClose={() => setShowInfo(false)} />}
@@ -139,6 +142,11 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
                       {Math.round(r.win_rate * 100)}% · {t('club.games', { n: r.games })}{r.champion ? ` · ${r.champion}🏆` : ''}
                     </div>
                   )}
+                  {by === 'elo' && (
+                    <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, whiteSpace: 'nowrap' }}>
+                      {t('club.playsAs', { lvl: r.elo_level ?? r.level })}{r.elo_level && r.elo_level !== r.level ? ` · ур. ${r.level}` : ''}{r.verified ? '' : ' · калибровка'}
+                    </div>
+                  )}
                 </div>
                 <span style={{ fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 700, color: T.goldDeep, fontVariantNumeric: 'tabular-nums' }}>
                   {mainValue(r)}
@@ -151,6 +159,11 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
       {by === 'rating' && (
         <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, marginTop: 8, textAlign: 'center' }}>
           {t('club.ratingFooter')}
+        </div>
+      )}
+      {by === 'elo' && (
+        <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 11, color: T.muted, marginTop: 8, textAlign: 'center' }}>
+          {t('club.eloFooter')}
         </div>
       )}
       {by === 'winrate' && (
