@@ -337,13 +337,18 @@ async def tournament_cards(tid: int, _admin=Depends(get_admin)):
     }
 
 
+_card_send_tasks: set = set()  # keep refs to background send tasks so they aren't GC'd
+
+
 @app.post("/api/tournaments/{tid}/cards/send")
 async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(get_admin)):
-    """Phase 4: render + DM a personal card to every LINKED player. Report back.
+    """Phase 4: render + DM a personal card to every LINKED player.
 
-    Idempotent: a player who already got a card for this tournament is skipped,
-    so pressing "Send" twice no longer double-DMs everyone. Pass ?force=true to
-    intentionally re-send to all linked players."""
+    Rendering + sending runs in the BACKGROUND and the request returns at once
+    (the render of ~16 cards took 30-60s, and the Telegram in-app WebView drops
+    such long requests). Idempotent: a player already sent a card is skipped, so
+    pressing "Send" again retries only who didn't get one. ?force=true re-sends
+    to all linked players."""
     data = await q.get_tournament_cards(tid)
     if not data:
         raise HTTPException(404, "Турнир не найден")
@@ -355,15 +360,20 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
 
     async def one(c):
         c["avatar"] = await asyncio.to_thread(cards_mod.fetch_avatar_datauri, c.get("photo_url"))
-        ok, reason = await cards_mod.render_and_send(c)
+        ok, _reason = await cards_mod.render_and_send(c)
         if ok:
             await q.mark_card_sent(tid, c["player_id"])
-        return {"name": c["name"], "ok": ok, "reason": reason}
 
-    results = await asyncio.gather(*[one(c) for c in pending])
-    sent = sum(1 for r in results if r["ok"])
-    failed = [{"name": r["name"], "reason": r["reason"]} for r in results if not r["ok"]]
-    return {"sent": sent, "failed": failed,
+    async def _run():
+        await asyncio.gather(*[one(c) for c in pending], return_exceptions=True)
+
+    task = asyncio.create_task(_run())
+    _card_send_tasks.add(task)
+    task.add_done_callback(_card_send_tasks.discard)
+
+    # Returns immediately; "sent" = queued count. Delivery finishes in the
+    # background within seconds. Failures stay unmarked → a re-press retries them.
+    return {"sent": len(pending), "failed": [],
             "skipped": len(linked) - len(pending),
             "linked_count": len(linked), "total_count": len(data["cards"])}
 
