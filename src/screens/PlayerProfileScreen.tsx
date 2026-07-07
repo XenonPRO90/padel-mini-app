@@ -158,6 +158,12 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <LevelBadge level={data.player.level} />
                 <SideBadge side={data.player.side} />
+                {data.player.elo != null && (
+                  <span style={{
+                    fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                    color: T.cream, background: T.emerald, borderRadius: 999, padding: '2px 9px',
+                  }}>ELO {data.player.elo.toFixed(2)}{data.elo_level && data.elo_level !== data.player.level ? ` · ${data.elo_level}` : ''}</span>
+                )}
                 {data.stats.club_rank && (
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,

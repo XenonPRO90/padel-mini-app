@@ -12,6 +12,8 @@ export interface Player {
   username?: string | null;
   photo_url?: string | null;
   racket?: string | null;
+  elo?: number | null;
+  verified?: number | boolean | null;
 }
 
 export interface ScoredPlayer extends Player {
@@ -146,6 +148,7 @@ export interface ProfileCourt {
 
 export interface PlayerProfile {
   player: Player;
+  elo_level?: string | null;
   stats: {
     tournaments: number;
     games: number;
