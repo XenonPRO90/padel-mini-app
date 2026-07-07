@@ -162,7 +162,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
                     color: T.cream, background: T.emerald, borderRadius: 999, padding: '2px 9px',
-                  }}>ELO {data.player.elo.toFixed(2)}{data.elo_level && data.elo_level !== data.player.level ? ` · ${data.elo_level}` : ''}</span>
+                  }}>ELO {data.player.elo.toFixed(2)}{!data.player.verified ? ` · ${t('profile.calibrating')}` : (data.elo_level && data.elo_level !== data.player.level ? ` · ${data.elo_level}` : '')}</span>
                 )}
                 {data.stats.club_rank && (
                   <span style={{

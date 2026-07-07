@@ -235,6 +235,14 @@ export const STR = {
   'admin.pending': { ru: 'На рассмотрении · {n}', en: 'Pending · {n}' },
   'admin.approve': { ru: 'Принять', en: 'Approve' },
   'admin.approveFail': { ru: 'Не удалось одобрить', en: 'Could not approve' },
+  'admin.levelTitle': { ru: 'Уровни игроков', en: 'Player levels' },
+  'admin.levelHint': { ru: 'Подсказки по ELO — подтвердите или пропустите', en: 'ELO-based suggestions — confirm or skip' },
+  'admin.sugAssign': { ru: 'Назначить', en: 'Assign' },
+  'admin.sugUp': { ru: 'Повысить', en: 'Promote' },
+  'admin.sugDown': { ru: 'Понизить', en: 'Demote' },
+  'admin.sugCalibrated': { ru: 'новичок · калибровка пройдена ({g} игр)', en: 'new · calibrated ({g} games)' },
+  'form.levelCalib': { ru: 'Уровень определится автоматически после первых игр', en: 'Your level is set automatically after your first games' },
+  'profile.calibrating': { ru: 'калибровка', en: 'calibrating' },
 
   // Tournament detail
   'td.finalStandings': { ru: 'Итоги', en: 'Final standings' },

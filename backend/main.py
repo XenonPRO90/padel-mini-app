@@ -286,6 +286,25 @@ async def join_request_reject(rid: int, admin=Depends(get_admin)):
     return await q.reject_join_request(rid, admin["id"])
 
 
+@app.get("/api/level-suggestions")
+async def level_suggestions(_admin=Depends(get_admin)):
+    """ELO-driven level changes to propose to the admin (assign/promote/demote)."""
+    return {"items": await q.get_level_suggestions()}
+
+
+class SetLevelBody(BaseModel):
+    level: str
+
+
+@app.post("/api/players/{pid}/level")
+async def set_level(pid: int, body: SetLevelBody, _admin=Depends(get_admin)):
+    """Admin confirms a level (from a suggestion): sets level + verified, recomputes ELO."""
+    try:
+        return await q.set_player_level(pid, body.level)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 class OwnProfileBody(BaseModel):
     racket: str | None = None
 

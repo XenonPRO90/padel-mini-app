@@ -480,9 +480,13 @@ async def approve_join_request(req_id: int, reviewed_by: int):
             )
             await db.commit()
             raise ValueError("Этот Telegram уже привязан к игроку")
+        # New players join WITHOUT a confirmed level: seed a provisional 'C' (so
+        # pairing/balancing can place them) and verified=0. After a calibration
+        # window (elo_games ≥ ELO_CAL_GAMES) the admin gets a level suggestion.
         cur = await db.execute(
-            "INSERT INTO players(name, level, side, telegram_id, username) VALUES(?,?,?,?,?)",
-            (r["name"], r["level"] or "C", "both", r["tg_id"], r["username"]),
+            "INSERT INTO players(name, level, side, telegram_id, username, verified) "
+            "VALUES(?, 'C', 'both', ?, ?, 0)",
+            (r["name"], r["tg_id"], r["username"]),
         )
         pid = cur.lastrowid
         await db.execute(
@@ -2500,10 +2504,12 @@ async def recompute_club_elo(db):
         await db.execute(
             "INSERT INTO elo_history(player_id, tournament_id, elo_before, elo_after, games_after) "
             "VALUES(?,?,?,?,?)", (pid, tid, round(bef, 4), round(aft, 4), g))
+    # verified (= admin-confirmed level) is NOT touched here — it is set by the
+    # admin when they act on a level suggestion. Recompute only writes elo/games.
     for pid in prow:
         await db.execute(
-            "UPDATE players SET elo=?, verified=? WHERE id=?",
-            (round(elo[pid], 4), 1 if games[pid] >= ELO_CAL_GAMES else 0, pid))
+            "UPDATE players SET elo=?, elo_games=? WHERE id=?",
+            (round(elo[pid], 4), games[pid], pid))
     return {"players": len(prow), "rated_matches": len(rows), "history_rows": len(hist)}
 
 
@@ -2513,6 +2519,54 @@ async def rebuild_elo():
         res = await recompute_club_elo(db)
         await db.commit()
     return res
+
+
+ELO_SUGGEST_GAP = 0.35   # ELO must sit this far past the level to suggest a change
+
+
+async def get_level_suggestions():
+    """Level changes to propose to the admin, derived from ELO. Excludes coach.
+      - assign  : new player finished calibration (elo_games>=CAL) but level not
+                  yet confirmed (verified=0) → propose their ELO-implied level.
+      - promote : verified player whose ELO drifted a clear step above their level.
+      - demote  : ... a clear step below."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, name, level, photo_url, elo, elo_games, verified "
+            "FROM players WHERE elo IS NOT NULL AND rating_excluded=0")
+        rows = await cur.fetchall()
+    out = []
+    for r in rows:
+        elo = r["elo"]; lvl = (r["level"] or "C").strip()
+        implied = elo_to_level(elo)
+        base = {"player_id": r["id"], "name": r["name"], "level": lvl,
+                "photo_url": r["photo_url"], "elo": round(elo, 2),
+                "elo_level": implied, "games": r["elo_games"]}
+        if not r["verified"]:
+            if r["elo_games"] >= ELO_CAL_GAMES:
+                out.append({**base, "kind": "assign", "suggested": implied})
+            continue
+        gap = elo - elo_level_value(lvl)
+        if implied != lvl and gap >= ELO_SUGGEST_GAP:
+            out.append({**base, "kind": "promote", "suggested": implied})
+        elif implied != lvl and gap <= -ELO_SUGGEST_GAP:
+            out.append({**base, "kind": "demote", "suggested": implied})
+    rank = {"assign": 0, "promote": 1, "demote": 2}
+    out.sort(key=lambda x: (rank[x["kind"]], -abs(x["elo"] - elo_level_value(x["level"]))))
+    return out
+
+
+async def set_player_level(pid: int, level: str):
+    """Admin confirms/changes a player's level (from a suggestion or manually):
+    set level + verified=1, then recompute ELO. Floor and start-seed follow the
+    new level; for a well-played player ELO barely moves (results dominate), for a
+    new/unverified one it effectively re-seeds — matching the agreed rule."""
+    level = _normalize_level(level)
+    async with conn() as db:
+        await db.execute("UPDATE players SET level=?, verified=1 WHERE id=?", (level, pid))
+        await recompute_club_elo(db)
+        await db.commit()
+    return {"ok": True, "player_id": pid, "level": level}
 
 
 async def set_player_lang(pid: int, lang: str):
