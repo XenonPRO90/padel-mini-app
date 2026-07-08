@@ -2441,9 +2441,21 @@ def elo_floor(value: float) -> float:
     return max(below) if below else value
 
 
+# Canonical level bands (name, threshold ELO). A player is "at" a level once
+# their ELO reaches its threshold — C+ needs 4.0, C needs 3.5, etc. (Liza 2026-07-07).
+_ELO_BANDS = [("D", 1.0), ("D+", 1.5), ("D+strong", 2.0), ("C-", 2.5),
+              ("C-strong", 3.0), ("C", 3.5), ("C+", 4.0), ("B", 5.0),
+              ("B+", 6.0), ("A", 7.0), ("A+", 8.0)]
+
+
 def elo_to_level(value: float) -> str:
-    """Nearest named level to an ELO value (for promote/demote suggestions)."""
-    return min(ELO_SCALE.items(), key=lambda kv: abs(kv[1] - value))[0]
+    """The level band a player is IN: the highest level whose threshold the ELO
+    has reached (NOT the nearest). 3.76 → C (C+ needs 4.0)."""
+    name = _ELO_BANDS[0][0]
+    for lvl, thr in _ELO_BANDS:
+        if value >= thr - 1e-9:
+            name = lvl
+    return name
 
 
 async def recompute_club_elo(db):
@@ -2521,7 +2533,7 @@ async def rebuild_elo():
     return res
 
 
-ELO_SUGGEST_GAP = 0.35   # ELO must sit this far past the level to suggest a change
+ELO_DEMOTE_BUFFER = 0.25  # ELO must fall this far below the level threshold to suggest demote
 
 
 async def get_level_suggestions():
@@ -2546,10 +2558,14 @@ async def get_level_suggestions():
             if r["elo_games"] >= ELO_CAL_GAMES:
                 out.append({**base, "kind": "assign", "suggested": implied})
             continue
-        gap = elo - elo_level_value(lvl)
-        if implied != lvl and gap >= ELO_SUGGEST_GAP:
+        # Band-based (Liza): promote once ELO reaches the NEXT level's threshold;
+        # demote only when a player has clearly bottomed out — sitting at the floor
+        # (a full step below their level) — so mild ELO drift doesn't nag the admin.
+        cur_val = elo_level_value(lvl)
+        band_val = elo_level_value(implied)
+        if band_val > cur_val:
             out.append({**base, "kind": "promote", "suggested": implied})
-        elif implied != lvl and gap <= -ELO_SUGGEST_GAP:
+        elif elo <= elo_floor(cur_val) + 0.02:
             out.append({**base, "kind": "demote", "suggested": implied})
     rank = {"assign": 0, "promote": 1, "demote": 2}
     out.sort(key=lambda x: (rank[x["kind"]], -abs(x["elo"] - elo_level_value(x["level"]))))

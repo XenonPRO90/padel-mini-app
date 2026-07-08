@@ -121,12 +121,12 @@ function RatingView({ onOpenPlayer }: { onOpenPlayer?: (p: Player) => void }) {
       ) : (
         <EGoldFrame>
           <div style={{ padding: '2px 0' }}>
-            {items.slice(0, 30).map((r, i) => (
+            {items.slice(0, 300).map((r, i) => (
               <div key={r.player_id} onClick={() => onOpenPlayer?.({ id: r.player_id, name: r.name, level: r.level, side: 'both' })}
                 style={{
                   display: 'grid', gridTemplateColumns: '36px 32px 1fr auto', alignItems: 'center', gap: 10,
                   padding: '10px 14px', cursor: onOpenPlayer ? 'pointer' : 'default',
-                  borderBottom: i === Math.min(items.length, 30) - 1 ? 'none' : `1px solid ${T.paperEdge}`,
+                  borderBottom: i === Math.min(items.length, 300) - 1 ? 'none' : `1px solid ${T.paperEdge}`,
                 }}>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   {i < 3 ? <EMedal place={(i + 1) as 1 | 2 | 3} size={24} /> : <EPlace n={i + 1} />}
