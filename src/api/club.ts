@@ -23,6 +23,8 @@ export interface ClubRow {
   elo?: number;
   elo_level?: string;
   verified?: boolean;
+  elo_games?: number;
+  validating?: boolean;
 }
 
 export interface ClubPair {

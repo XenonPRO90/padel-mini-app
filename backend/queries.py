@@ -901,7 +901,7 @@ async def get_elo_leaderboard():
     async with conn() as db:
         cur = await db.execute(
             """SELECT p.id AS pid, p.name, p.level, p.photo_url, p.elo, p.verified,
-                      COALESCE(SUM(s.wins), 0) AS w, COALESCE(SUM(s.losses), 0) AS l
+                      p.elo_games, COALESCE(SUM(s.wins), 0) AS w, COALESCE(SUM(s.losses), 0) AS l
                FROM players p LEFT JOIN scores s ON s.player_id = p.id
                WHERE p.elo IS NOT NULL AND p.rating_excluded = 0
                GROUP BY p.id""")
@@ -913,9 +913,11 @@ async def get_elo_leaderboard():
             "player_id": r["pid"], "name": r["name"], "level": r["level"],
             "photo_url": r["photo_url"], "elo": round(r["elo"], 2),
             "elo_level": elo_to_level(r["elo"]), "verified": bool(r["verified"]),
+            "elo_games": r["elo_games"], "validating": r["elo_games"] < ELO_CAL_GAMES,
             "games": g, "win_rate": round(r["w"] / g, 3) if g else 0.0,
         })
-    out.sort(key=lambda x: -x["elo"])
+    # players still on validation (too few rated games) sink to the bottom
+    out.sort(key=lambda x: (x["validating"], -x["elo"]))
     return out
 
 
@@ -1812,13 +1814,16 @@ async def create_player(name: str, level: str, side: str) -> dict:
 
 
 async def update_player(pid: int, name: str, level: str, side: str) -> dict:
+    """Admin edit. A manual level set counts as confirming the level (verified=1)
+    and triggers an ELO recompute so the change takes effect immediately."""
     level = _normalize_level(level)
     side = _normalize_side(side)
     async with conn() as db:
         await db.execute(
-            "UPDATE players SET name=?, level=?, side=? WHERE id=?",
+            "UPDATE players SET name=?, level=?, side=?, verified=1 WHERE id=?",
             (name.strip(), level, side, pid),
         )
+        await recompute_club_elo(db)
         await db.commit()
     return {"id": pid, "name": name, "level": level, "side": side}
 
@@ -2533,7 +2538,8 @@ async def rebuild_elo():
     return res
 
 
-ELO_DEMOTE_BUFFER = 0.25  # ELO must fall this far below the level threshold to suggest demote
+ELO_PROMOTE_BUFFER = 0.05  # ELO must sit this far INTO the next band before suggesting promote
+                           # (hysteresis so a borderline player doesn't flap in/out on recompute)
 
 
 async def get_level_suggestions():
@@ -2563,7 +2569,7 @@ async def get_level_suggestions():
         # (a full step below their level) — so mild ELO drift doesn't nag the admin.
         cur_val = elo_level_value(lvl)
         band_val = elo_level_value(implied)
-        if band_val > cur_val:
+        if band_val > cur_val and elo >= band_val + ELO_PROMOTE_BUFFER:
             out.append({**base, "kind": "promote", "suggested": implied})
         elif elo <= elo_floor(cur_val) + 0.02:
             out.append({**base, "kind": "demote", "suggested": implied})

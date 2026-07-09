@@ -59,6 +59,7 @@ export const STR = {
   'club.byElo': { ru: 'ELO', en: 'ELO' },
   'club.playsAs': { ru: 'играет как {lvl}', en: 'plays as {lvl}' },
   'club.eloFooter': { ru: 'ELO по результатам · старт от уровня · тренер вне зачёта', en: 'ELO from results · seeded by level · coach excluded' },
+  'club.validating': { ru: 'уровень на валидации', en: 'level validating' },
   'club.ratingFooter': { ru: 'композит: качество · титулы · опыт · форма · всё время',
     en: 'composite: quality · titles · experience · form · all-time' },
   'club.winrateNote': { ru: 'в рейтинге по винрейту — от 10 игр', en: 'win-rate ranking — 10+ games' },
