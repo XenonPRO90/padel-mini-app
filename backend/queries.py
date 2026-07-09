@@ -484,8 +484,8 @@ async def approve_join_request(req_id: int, reviewed_by: int):
         # pairing/balancing can place them) and verified=0. After a calibration
         # window (elo_games ≥ ELO_CAL_GAMES) the admin gets a level suggestion.
         cur = await db.execute(
-            "INSERT INTO players(name, level, side, telegram_id, username, verified) "
-            "VALUES(?, 'C', 'both', ?, ?, 0)",
+            "INSERT INTO players(name, level, side, telegram_id, username, verified, elo_seed) "
+            "VALUES(?, 'C', 'both', ?, ?, 0, 3.5)",
             (r["name"], r["tg_id"], r["username"]),
         )
         pid = cur.lastrowid
@@ -2467,10 +2467,14 @@ async def recompute_club_elo(db):
     """Deterministic full recompute of every player's ELO from match history.
     Writes players.elo/verified and per-tournament elo_history. Runs inside the
     caller's transaction (no commit here)."""
-    cur = await db.execute("SELECT id, level, rating_excluded FROM players")
+    cur = await db.execute("SELECT id, level, rating_excluded, elo_seed FROM players")
     prow = {r["id"]: r for r in await cur.fetchall()}
-    elo = {pid: elo_level_value(p["level"]) for pid, p in prow.items()}
-    flr = {pid: elo_floor(elo[pid]) for pid in prow}
+    # start from the FROZEN seed (set at creation, not the current level) so that
+    # changing a player's level relabels them without re-inflating their earned
+    # ELO. Floor still follows the current level. (Liza 2026-07-08.)
+    elo = {pid: (p["elo_seed"] if p["elo_seed"] is not None else elo_level_value(p["level"]))
+           for pid, p in prow.items()}
+    flr = {pid: elo_floor(elo_level_value(p["level"])) for pid, p in prow.items()}
     games = {pid: 0 for pid in prow}
     excluded = {pid for pid, p in prow.items() if p["rating_excluded"]}
 
