@@ -19,6 +19,12 @@ export interface ClubRow {
   podium?: number;
   recent_games?: number;
   components?: { quality: number; titles: number; volume: number; form: number };
+  // present only for by='elo'
+  elo?: number;
+  elo_level?: string;
+  verified?: boolean;
+  elo_games?: number;
+  validating?: boolean;
 }
 
 export interface ClubPair {
@@ -39,7 +45,7 @@ export interface ClubRecords {
   champions: ClubChampion[];
 }
 
-export type ClubBy = 'rating' | 'points' | 'winrate';
+export type ClubBy = 'rating' | 'points' | 'winrate' | 'elo';
 
 export function useClubLeaderboard(period: 'all' | 'month', by: ClubBy) {
   return useQuery<{ items: ClubRow[] }>({

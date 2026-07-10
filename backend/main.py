@@ -286,6 +286,25 @@ async def join_request_reject(rid: int, admin=Depends(get_admin)):
     return await q.reject_join_request(rid, admin["id"])
 
 
+@app.get("/api/level-suggestions")
+async def level_suggestions(_admin=Depends(get_admin)):
+    """ELO-driven level changes to propose to the admin (assign/promote/demote)."""
+    return {"items": await q.get_level_suggestions()}
+
+
+class SetLevelBody(BaseModel):
+    level: str
+
+
+@app.post("/api/players/{pid}/level")
+async def set_level(pid: int, body: SetLevelBody, _admin=Depends(get_admin)):
+    """Admin confirms a level (from a suggestion): sets level + verified, recomputes ELO."""
+    try:
+        return await q.set_player_level(pid, body.level)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 class OwnProfileBody(BaseModel):
     racket: str | None = None
 
@@ -444,12 +463,25 @@ async def swap_players(body: SwapBody, _user=Depends(get_admin)):
         raise HTTPException(400, str(e))
 
 
+async def _recompute_elo_if_finished(tid: int):
+    """After a tournament finishes, refresh the club ELO (full recompute, ~1s).
+    Wrapped so an ELO hiccup can never break the tournament-finish flow."""
+    try:
+        t = await q.get_tournament(tid)
+        if t and t.get("status") == "finished":
+            await q.rebuild_elo()
+    except Exception:
+        pass
+
+
 @app.post("/api/tournaments/{tid}/next-round")
 async def next_round(tid: int, _user=Depends(get_admin)):
     try:
-        return await q.advance_to_next_round(tid)
+        r = await q.advance_to_next_round(tid)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    await _recompute_elo_if_finished(tid)
+    return r
 
 
 class EliminateBody(BaseModel):
@@ -478,7 +510,9 @@ async def undo_last_round(tid: int, _user=Depends(get_admin)):
 
 @app.post("/api/tournaments/{tid}/finish")
 async def finish(tid: int, _user=Depends(get_admin)):
-    return await q.finish_tournament(tid)
+    r = await q.finish_tournament(tid)
+    await _recompute_elo_if_finished(tid)
+    return r
 
 
 # ─── Player CRUD ───────────────────────────────────────────

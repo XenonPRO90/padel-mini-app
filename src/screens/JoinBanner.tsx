@@ -5,7 +5,6 @@ import { useMe } from '../api/me';
 import { useSubmitJoinRequest } from '../api/joinRequests';
 import { useT } from '../lib/i18n';
 
-const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C-', 'D'];
 
 // Self-contained: shows nothing for admins or already-linked users.
 // Non-linked → "подать заявку" (or "на рассмотрении" if pending).
@@ -44,13 +43,12 @@ export function JoinBanner() {
 function JoinModal({ defaultName, onClose }: { defaultName: string; onClose: () => void }) {
   const t = useT();
   const [name, setName] = useState(defaultName);
-  const [level, setLevel] = useState('C');
   const submit = useSubmitJoinRequest();
 
   const onSend = async () => {
     if (!name.trim()) { alert(t('form.enterName')); return; }
     try {
-      await submit.mutateAsync({ name: name.trim(), level });
+      await submit.mutateAsync({ name: name.trim(), level: 'C' });
       onClose();
     } catch (e) {
       alert((e as Error).message || t('form.submitFail'));
@@ -79,18 +77,11 @@ function JoinModal({ defaultName, onClose }: { defaultName: string; onClose: () 
             fontSize: 16, color: T.ink, marginBottom: 14,
           }} />
 
-        <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6, textTransform: 'uppercase' }}>{t('form.level')}</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 18 }}>
-          {LEVELS.map((l) => (
-            <button key={l} onClick={() => setLevel(l)} style={{
-              padding: '8px 12px', borderRadius: 999, cursor: 'pointer',
-              border: `1px solid ${level === l ? T.emerald : T.paperEdge}`,
-              background: level === l ? T.emerald : 'transparent',
-              color: level === l ? T.cream : T.ink,
-              fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600,
-            }}>{l}</button>
-          ))}
-        </div>
+        <div style={{
+          fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12.5, color: T.muted,
+          background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 10,
+          padding: '10px 12px', marginBottom: 18,
+        }}>{t('form.levelCalib')}</div>
 
         <EBtn kind="primary" style={{ width: '100%' }} disabled={submit.isPending} onClick={onSend}>
           {submit.isPending ? t('form.submitting') : t('form.submit')}

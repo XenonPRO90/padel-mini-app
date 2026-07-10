@@ -349,7 +349,8 @@ async def get_linked_players():
 async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
-            "SELECT id, name, level, side, telegram_id, username, photo_url, racket FROM players WHERE id=?",
+            "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
+            "elo, verified FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
@@ -479,9 +480,13 @@ async def approve_join_request(req_id: int, reviewed_by: int):
             )
             await db.commit()
             raise ValueError("Этот Telegram уже привязан к игроку")
+        # New players join WITHOUT a confirmed level: seed a provisional 'C' (so
+        # pairing/balancing can place them) and verified=0. After a calibration
+        # window (elo_games ≥ ELO_CAL_GAMES) the admin gets a level suggestion.
         cur = await db.execute(
-            "INSERT INTO players(name, level, side, telegram_id, username) VALUES(?,?,?,?,?)",
-            (r["name"], r["level"] or "C", "both", r["tg_id"], r["username"]),
+            "INSERT INTO players(name, level, side, telegram_id, username, verified, elo_seed) "
+            "VALUES(?, 'C', 'both', ?, ?, 0, 3.5)",
+            (r["name"], r["tg_id"], r["username"]),
         )
         pid = cur.lastrowid
         await db.execute(
@@ -806,6 +811,7 @@ async def get_player_profile(pid: int):
 
     return {
         "player": player,
+        "elo_level": (elo_to_level(player["elo"]) if player.get("elo") is not None else None),
         "stats": {
             "tournaments": tournaments_all,
             "games": games,
@@ -848,6 +854,8 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
     Returns ranked players with name/level/photo."""
     if by == "rating":
         return await get_club_rating()
+    if by == "elo":
+        return await get_elo_leaderboard()
     from datetime import datetime
     async with conn() as db:
         if period == "month":
@@ -884,6 +892,32 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
         out.sort(key=lambda x: (-x["win_rate"], -x["games"]))
     else:
         out.sort(key=lambda x: (-x["points"], -x["wins"]))
+    return out
+
+
+async def get_elo_leaderboard():
+    """Club ranking by live ELO. Excludes the coach (rating_excluded). Returns
+    name, level, elo, implied level (nearest), verified, games, win_rate."""
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT p.id AS pid, p.name, p.level, p.photo_url, p.elo, p.verified,
+                      p.elo_games, COALESCE(SUM(s.wins), 0) AS w, COALESCE(SUM(s.losses), 0) AS l
+               FROM players p LEFT JOIN scores s ON s.player_id = p.id
+               WHERE p.elo IS NOT NULL AND p.rating_excluded = 0
+               GROUP BY p.id""")
+        rows = await cur.fetchall()
+    out = []
+    for r in rows:
+        g = r["w"] + r["l"]
+        out.append({
+            "player_id": r["pid"], "name": r["name"], "level": r["level"],
+            "photo_url": r["photo_url"], "elo": round(r["elo"], 2),
+            "elo_level": elo_to_level(r["elo"]), "verified": bool(r["verified"]),
+            "elo_games": r["elo_games"], "validating": r["elo_games"] < ELO_CAL_GAMES,
+            "games": g, "win_rate": round(r["w"] / g, 3) if g else 0.0,
+        })
+    # players still on validation (too few rated games) sink to the bottom
+    out.sort(key=lambda x: (x["validating"], -x["elo"]))
     return out
 
 
@@ -1770,9 +1804,12 @@ async def create_player(name: str, level: str, side: str) -> dict:
     if side not in {"right", "left", "both"}:
         raise ValueError(f"invalid side: {side}")
     async with conn() as db:
+        # Freeze the ELO start-seed at the level the admin picked, exactly like the
+        # join path does. Without it elo_seed stays NULL, recompute falls back to the
+        # CURRENT level, and a later promote/demote would drag the anchor along.
         cur = await db.execute(
-            "INSERT INTO players(name, level, side) VALUES(?,?,?)",
-            (name, level, side),
+            "INSERT INTO players(name, level, side, verified, elo_seed) VALUES(?,?,?,1,?)",
+            (name, level, side, elo_level_value(level)),
         )
         await db.commit()
         pid = cur.lastrowid
@@ -1780,13 +1817,16 @@ async def create_player(name: str, level: str, side: str) -> dict:
 
 
 async def update_player(pid: int, name: str, level: str, side: str) -> dict:
+    """Admin edit. A manual level set counts as confirming the level (verified=1)
+    and triggers an ELO recompute so the change takes effect immediately."""
     level = _normalize_level(level)
     side = _normalize_side(side)
     async with conn() as db:
         await db.execute(
-            "UPDATE players SET name=?, level=?, side=? WHERE id=?",
+            "UPDATE players SET name=?, level=?, side=?, verified=1 WHERE id=?",
             (name.strip(), level, side, pid),
         )
+        await recompute_club_elo(db)
         await db.commit()
     return {"id": pid, "name": name, "level": level, "side": side}
 
@@ -2384,6 +2424,178 @@ async def mark_card_sent(tid: int, player_id: int):
             "INSERT OR IGNORE INTO cards_sent (tournament_id, player_id) VALUES (?,?)",
             (tid, player_id))
         await db.commit()
+
+
+# ─── ELO rating (live, per Liza spec) ────────────────────────────────────
+# Start = numeric value of the player's level; floor = "level − 1 step"; the
+# expected result comes from the ELO gap between the two teams; games with a
+# rating_excluded player (the coach) and casual games are ignored. Constants are
+# tunable — being calibrated with Liza on dev.
+ELO_SCALE = {"D": 1.0, "D+": 1.5, "D+strong": 2.0, "D+ strong": 2.0, "C-": 2.5,
+             "C-strong": 3.0, "C- strong": 3.0, "C": 3.5, "C+": 4.0,
+             "B": 5.0, "B+": 6.0, "A": 7.0, "A+": 8.0}
+_ELO_STEPS = sorted(set(ELO_SCALE.values()))
+ELO_S = 1.5           # logistic scale: one level step (0.5) ≈ 68% expected
+ELO_K = 0.05          # per-match step (tunable)
+ELO_CAL_GAMES = 6     # games to become "verified" (~first tournament)
+
+
+def elo_level_value(level: str) -> float:
+    return ELO_SCALE.get((level or "C").strip(), 3.5)
+
+
+def elo_floor(value: float) -> float:
+    below = [v for v in _ELO_STEPS if v < value]
+    return max(below) if below else value
+
+
+# Canonical level bands (name, threshold ELO). A player is "at" a level once
+# their ELO reaches its threshold — C+ needs 4.0, C needs 3.5, etc. (Liza 2026-07-07).
+_ELO_BANDS = [("D", 1.0), ("D+", 1.5), ("D+strong", 2.0), ("C-", 2.5),
+              ("C-strong", 3.0), ("C", 3.5), ("C+", 4.0), ("B", 5.0),
+              ("B+", 6.0), ("A", 7.0), ("A+", 8.0)]
+
+
+def elo_to_level(value: float) -> str:
+    """The level band a player is IN: the highest level whose threshold the ELO
+    has reached (NOT the nearest). 3.76 → C (C+ needs 4.0)."""
+    name = _ELO_BANDS[0][0]
+    for lvl, thr in _ELO_BANDS:
+        if value >= thr - 1e-9:
+            name = lvl
+    return name
+
+
+async def recompute_club_elo(db):
+    """Deterministic full recompute of every player's ELO from match history.
+    Writes players.elo/verified and per-tournament elo_history. Runs inside the
+    caller's transaction (no commit here)."""
+    cur = await db.execute("SELECT id, level, rating_excluded, elo_seed FROM players")
+    prow = {r["id"]: r for r in await cur.fetchall()}
+    # start from the FROZEN seed (set at creation, not the current level) so that
+    # changing a player's level relabels them without re-inflating their earned
+    # ELO. Floor still follows the current level. (Liza 2026-07-08.)
+    elo = {pid: (p["elo_seed"] if p["elo_seed"] is not None else elo_level_value(p["level"]))
+           for pid, p in prow.items()}
+    flr = {pid: elo_floor(elo_level_value(p["level"])) for pid, p in prow.items()}
+    games = {pid: 0 for pid in prow}
+    excluded = {pid for pid, p in prow.items() if p["rating_excluded"]}
+
+    cur = await db.execute(
+        """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, m.score1, m.score2, t.id AS tid
+           FROM matches m JOIN rounds r ON r.id=m.round_id
+           JOIN tournaments t ON t.id=r.tournament_id
+           WHERE t.status='finished' AND m.winner IS NOT NULL AND t.mode!='casual'
+           ORDER BY t.created_at, t.id, r.round_num, m.court_num""")
+    rows = await cur.fetchall()
+
+    hist = []           # (pid, tid, elo_before_tournament, elo_after, games_after)
+    cur_tid = {}        # pid -> tournament currently accumulating
+    start_elo = {}      # pid -> elo at the start of that tournament
+
+    def touch(pid, tid):
+        if cur_tid.get(pid) != tid:
+            if pid in cur_tid:
+                hist.append((pid, cur_tid[pid], start_elo[pid], elo[pid], games[pid]))
+            cur_tid[pid] = tid
+            start_elo[pid] = elo[pid]
+
+    for m in rows:
+        ids = [m["p1"], m["p2"], m["p3"], m["p4"]]
+        if excluded & set(ids):
+            continue
+        tid = m["tid"]
+        for pid in ids:
+            touch(pid, tid)
+        A = [m["p1"], m["p2"]]; B = [m["p3"], m["p4"]]
+        ea = (elo[A[0]] + elo[A[1]]) / 2
+        eb = (elo[B[0]] + elo[B[1]]) / 2
+        exp_a = 1 / (1 + 10 ** ((eb - ea) / ELO_S))
+        s1, s2 = m["score1"], m["score2"]
+        act_a = (s1 / (s1 + s2)) if (s1 is not None and s2 is not None and (s1 + s2) > 0) \
+            else (1.0 if m["winner"] == 1 else 0.0)
+        d = ELO_K * (act_a - exp_a)
+        for pid in A:
+            elo[pid] = max(elo[pid] + d, flr[pid]); games[pid] += 1
+        for pid in B:
+            elo[pid] = max(elo[pid] - d, flr[pid]); games[pid] += 1
+
+    for pid in cur_tid:
+        hist.append((pid, cur_tid[pid], start_elo[pid], elo[pid], games[pid]))
+
+    await db.execute("DELETE FROM elo_history")
+    for pid, tid, bef, aft, g in hist:
+        await db.execute(
+            "INSERT INTO elo_history(player_id, tournament_id, elo_before, elo_after, games_after) "
+            "VALUES(?,?,?,?,?)", (pid, tid, round(bef, 4), round(aft, 4), g))
+    # verified (= admin-confirmed level) is NOT touched here — it is set by the
+    # admin when they act on a level suggestion. Recompute only writes elo/games.
+    for pid in prow:
+        await db.execute(
+            "UPDATE players SET elo=?, elo_games=? WHERE id=?",
+            (round(elo[pid], 4), games[pid], pid))
+    return {"players": len(prow), "rated_matches": len(rows), "history_rows": len(hist)}
+
+
+async def rebuild_elo():
+    """Public entrypoint: recompute ELO for the whole club and commit."""
+    async with conn() as db:
+        res = await recompute_club_elo(db)
+        await db.commit()
+    return res
+
+
+ELO_PROMOTE_BUFFER = 0.05  # ELO must sit this far INTO the next band before suggesting promote
+                           # (hysteresis so a borderline player doesn't flap in/out on recompute)
+
+
+async def get_level_suggestions():
+    """Level changes to propose to the admin, derived from ELO. Excludes coach.
+      - assign  : new player finished calibration (elo_games>=CAL) but level not
+                  yet confirmed (verified=0) → propose their ELO-implied level.
+      - promote : verified player whose ELO drifted a clear step above their level.
+      - demote  : ... a clear step below."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, name, level, photo_url, elo, elo_games, verified "
+            "FROM players WHERE elo IS NOT NULL AND rating_excluded=0")
+        rows = await cur.fetchall()
+    out = []
+    for r in rows:
+        elo = r["elo"]; lvl = (r["level"] or "C").strip()
+        implied = elo_to_level(elo)
+        base = {"player_id": r["id"], "name": r["name"], "level": lvl,
+                "photo_url": r["photo_url"], "elo": round(elo, 2),
+                "elo_level": implied, "games": r["elo_games"]}
+        if not r["verified"]:
+            if r["elo_games"] >= ELO_CAL_GAMES:
+                out.append({**base, "kind": "assign", "suggested": implied})
+            continue
+        # Band-based (Liza): promote once ELO reaches the NEXT level's threshold;
+        # demote only when a player has clearly bottomed out — sitting at the floor
+        # (a full step below their level) — so mild ELO drift doesn't nag the admin.
+        cur_val = elo_level_value(lvl)
+        band_val = elo_level_value(implied)
+        if band_val > cur_val and elo >= band_val + ELO_PROMOTE_BUFFER:
+            out.append({**base, "kind": "promote", "suggested": implied})
+        elif elo <= elo_floor(cur_val) + 0.02:
+            out.append({**base, "kind": "demote", "suggested": implied})
+    rank = {"assign": 0, "promote": 1, "demote": 2}
+    out.sort(key=lambda x: (rank[x["kind"]], -abs(x["elo"] - elo_level_value(x["level"]))))
+    return out
+
+
+async def set_player_level(pid: int, level: str):
+    """Admin confirms/changes a player's level (from a suggestion or manually):
+    set level + verified=1, then recompute ELO. Floor and start-seed follow the
+    new level; for a well-played player ELO barely moves (results dominate), for a
+    new/unverified one it effectively re-seeds — matching the agreed rule."""
+    level = _normalize_level(level)
+    async with conn() as db:
+        await db.execute("UPDATE players SET level=?, verified=1 WHERE id=?", (level, pid))
+        await recompute_club_elo(db)
+        await db.commit()
+    return {"ok": True, "player_id": pid, "level": level}
 
 
 async def set_player_lang(pid: int, lang: str):

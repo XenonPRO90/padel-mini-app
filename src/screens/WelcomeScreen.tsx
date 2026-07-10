@@ -6,7 +6,6 @@ import { useSubmitJoinRequest } from '../api/joinRequests';
 import { useT } from '../lib/i18n';
 import { LangToggle } from '../components/LangToggle';
 
-const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C-', 'D'];
 
 // First screen for a brand-new user (not linked, not admin): explains the club
 // and lets them apply right here. No browsing the club until accepted.
@@ -15,14 +14,13 @@ export function WelcomeScreen() {
   const { data: me } = useMe();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState(me?.user.first_name || '');
-  const [level, setLevel] = useState('C');
   const submit = useSubmitJoinRequest();
   const pending = me?.join_status === 'pending';
 
   const onSend = async () => {
     if (!name.trim()) { alert(t('form.enterName')); return; }
     try {
-      await submit.mutateAsync({ name: name.trim(), level });
+      await submit.mutateAsync({ name: name.trim(), level: 'C' });
     } catch (e) {
       alert((e as Error).message || t('form.submitFail'));
     }
@@ -81,18 +79,11 @@ export function WelcomeScreen() {
                 border: `1px solid ${T.paperEdge}`, background: T.paper,
                 fontFamily: T.fontDisplay, fontSize: 16, color: T.ink, marginBottom: 12,
               }} />
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 10, letterSpacing: 2, color: T.gold, marginBottom: 6, textTransform: 'uppercase' }}>{t('form.level')}</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-              {LEVELS.map((l) => (
-                <button key={l} onClick={() => setLevel(l)} style={{
-                  padding: '8px 12px', borderRadius: 999, cursor: 'pointer',
-                  border: `1px solid ${level === l ? T.emerald : T.paperEdge}`,
-                  background: level === l ? T.emerald : 'transparent',
-                  color: level === l ? T.cream : T.ink,
-                  fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600,
-                }}>{l}</button>
-              ))}
-            </div>
+            <div style={{
+              fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 12.5, color: T.muted,
+              background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 10,
+              padding: '10px 12px', marginBottom: 14,
+            }}>{t('form.levelCalib')}</div>
             <EBtn kind="primary" style={{ width: '100%' }} disabled={submit.isPending} onClick={onSend}>
               {submit.isPending ? t('form.submitting') : t('form.submit')}
             </EBtn>
