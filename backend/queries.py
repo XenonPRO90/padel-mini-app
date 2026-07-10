@@ -1804,9 +1804,12 @@ async def create_player(name: str, level: str, side: str) -> dict:
     if side not in {"right", "left", "both"}:
         raise ValueError(f"invalid side: {side}")
     async with conn() as db:
+        # Freeze the ELO start-seed at the level the admin picked, exactly like the
+        # join path does. Without it elo_seed stays NULL, recompute falls back to the
+        # CURRENT level, and a later promote/demote would drag the anchor along.
         cur = await db.execute(
-            "INSERT INTO players(name, level, side) VALUES(?,?,?)",
-            (name, level, side),
+            "INSERT INTO players(name, level, side, verified, elo_seed) VALUES(?,?,?,1,?)",
+            (name, level, side, elo_level_value(level)),
         )
         await db.commit()
         pid = cur.lastrowid
