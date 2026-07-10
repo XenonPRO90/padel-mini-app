@@ -722,11 +722,13 @@ async def get_player_profile(pid: int):
             for r in await cur.fetchall():
                 names[r["id"]] = r["name"]; levels[r["id"]] = r["level"]
 
-    # Club rank from the composite rating (same metric as Club → Рейтинг).
-    rating_list = await get_club_rating()
-    my_rating = next((x for x in rating_list if x["player_id"] == pid), None)
-    club_rank = {"rank": my_rating["rank"], "total": len(rating_list)} if my_rating else None
-    club_rating = my_rating["rating"] if my_rating else None
+    # Club rank from the ELO board, in the exact order Club → Рейтинг renders it
+    # (players still on validation sink to the bottom), so the "#N в клубе" badge
+    # always matches the row the player sees there. The coach and anyone without an
+    # ELO are absent from that board and simply get no rank.
+    elo_list = await get_elo_leaderboard()
+    my_i = next((i for i, x in enumerate(elo_list) if x["player_id"] == pid), None)
+    club_rank = {"rank": my_i + 1, "total": len(elo_list)} if my_i is not None else None
 
     # Totals from scores (authoritative, all tournaments) so games == W+L.
     base = await get_player_stats(pid)
@@ -830,7 +832,6 @@ async def get_player_profile(pid: int):
             "giant_matches": giant_matches,
             "club_rank": club_rank["rank"] if club_rank else None,
             "club_total": club_rank["total"] if club_rank else None,
-            "club_rating": club_rating,
             "recent_win_rate": recent_win_rate,
             "recent_games": rg,
             "form": derived["form"],
