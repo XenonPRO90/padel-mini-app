@@ -169,7 +169,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
                     color: T.goldDeep, border: `1px solid ${T.gold}`, borderRadius: 999,
                     padding: '2px 8px',
-                  }}>{t('profile.inClub', { n: data.stats.club_rank })}{data.stats.club_rating != null ? ` · ${data.stats.club_rating}` : ''}</span>
+                  }}>{t('profile.inClub', { n: data.stats.club_rank })}</span>
                 )}
                 {linked && (
                   <span style={{
