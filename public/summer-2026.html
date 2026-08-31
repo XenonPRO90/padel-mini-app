@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Статистика клуба Padel Masters за лето 2026: ELO на 1 июня и 28 августа, турниры, титулы и номинации для награждения.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="Итоги лета на корте — Padel Masters">
+<meta property="og:description" content="61 турнир, 150 игроков, 1159 матчей. ELO 01.06 → 28.08, титулы и шесть номинаций.">
+<meta property="og:type" content="article">
+<link rel="icon" href="/favicon.svg">
+<title>Лето клуба Padel Masters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Karla:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F2ECE0; --surface:#FBF7EF; --line:#DFD5C4; --line-soft:#EBE3D5;
+  --ink:#161D18; --body:#3A423B; --muted:#71786D;
+  --court:#2B4033; --gold:#A87C2C; --up:#3F6B4E; --down:#9A4B3C;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#101410; --surface:#171D18; --line:#2C332C; --line-soft:#222822;
+    --ink:#EDE7D9; --body:#CBD1C6; --muted:#8E958A;
+    --court:#9CC0A8; --gold:#D2A253; --up:#8FBE9E; --down:#D08C7C;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101410; --surface:#171D18; --line:#2C332C; --line-soft:#222822;
+  --ink:#EDE7D9; --body:#CBD1C6; --muted:#8E958A;
+  --court:#9CC0A8; --gold:#D2A253; --up:#8FBE9E; --down:#D08C7C;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--body); margin:0;
+  font-family:"Karla",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1040px; margin:0 auto; padding:56px 24px 96px; display:flex; flex-direction:column; gap:56px}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:0;
+}
+h1{
+  font-family:"Fraunces","Iowan Old Style",Georgia,serif; font-optical-sizing:auto;
+  font-weight:600; font-size:clamp(38px,6.2vw,60px); line-height:1.02; letter-spacing:-.02em;
+  color:var(--ink); margin:12px 0 0; text-wrap:balance;
+}
+h2{
+  font-family:"Fraunces","Iowan Old Style",Georgia,serif; font-weight:600;
+  font-size:clamp(22px,3vw,28px); line-height:1.15; letter-spacing:-.01em;
+  color:var(--ink); margin:0; text-wrap:balance;
+}
+h3{font-family:"Fraunces",Georgia,serif; font-weight:600; font-size:19px; color:var(--ink); margin:0; line-height:1.2}
+p{margin:0; max-width:64ch}
+section{display:flex; flex-direction:column; gap:20px}
+.head-note{display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:18px}
+.head-note span{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted);
+  letter-spacing:.02em;
+}
+.rule{height:1px; background:var(--line); border:0; margin:0}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line)}
+.stat{background:var(--surface); padding:20px 18px; display:flex; flex-direction:column; gap:6px}
+.stat b{
+  font-family:"Fraunces",Georgia,serif; font-weight:600; font-size:34px; line-height:1;
+  color:var(--ink); font-variant-numeric:tabular-nums;
+}
+.stat span{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.awards{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px}
+.award{
+  background:var(--surface); border:1px solid var(--line); padding:22px 20px 18px;
+  display:flex; flex-direction:column; gap:14px;
+}
+.award .cat{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--gold)}
+.award .who{display:flex; align-items:baseline; justify-content:space-between; gap:12px}
+.award .metric{
+  font-family:"Fraunces",Georgia,serif; font-weight:600; font-size:26px; color:var(--court);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.award p{font-size:14px; color:var(--muted)}
+.runners{display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--line-soft); padding-top:12px}
+.runners div{
+  display:flex; justify-content:space-between; gap:12px; font-size:13px; color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.scroll{overflow-x:auto; border:1px solid var(--line); background:var(--surface)}
+table{border-collapse:collapse; width:100%; min-width:660px; font-size:14px}
+th{
+  font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); text-align:right; padding:14px 12px;
+  border-bottom:1px solid var(--line); white-space:nowrap; background:var(--surface);
+}
+th:first-child,td:first-child{text-align:left; padding-left:18px}
+th:nth-child(2),td:nth-child(2){text-align:left}
+td{padding:11px 12px; text-align:right; border-bottom:1px solid var(--line-soft); font-variant-numeric:tabular-nums; color:var(--body)}
+tr:last-child td{border-bottom:0}
+td.name{color:var(--ink); font-weight:600; white-space:nowrap}
+td.rk{color:var(--muted); font-family:"IBM Plex Mono",monospace; font-size:12px; width:44px}
+.lvl{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted); border:1px solid var(--line); padding:1px 6px; border-radius:2px; white-space:nowrap}
+.up{color:var(--up); font-weight:700}
+.dn{color:var(--down)}
+.zero{color:var(--muted)}
+.new{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.08em; color:var(--gold)}
+.bar{display:inline-block; height:6px; background:var(--up); vertical-align:middle; margin-left:8px; opacity:.5}
+.bar.n{background:var(--down)}
+.foot{display:flex; flex-direction:column; gap:10px; font-size:13.5px; color:var(--muted)}
+.foot b{color:var(--ink); font-weight:600}
+@media (max-width:640px){ .wrap{padding:40px 16px 72px; gap:44px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Padel Masters · King of the Court</p>
+    <h1>Итоги лета<br>на корте</h1>
+    <div class="head-note">
+      <span>1 июня — 28 августа 2026</span><span>·</span>
+      <span>61 турнира</span><span>·</span>
+      <span>выгрузка из бота, 1159 матчей</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="stats">
+      <div class="stat"><b>61</b><span>турниров</span></div>
+      <div class="stat"><b>150</b><span>игроков вышло</span></div>
+      <div class="stat"><b>1159</b><span>сыгранных матчей</span></div>
+      <div class="stat"><b>92</b><span>дебютировали</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div>
+      <p class="eyebrow">Кого награждать</p>
+      <h2 style="margin-top:10px">Шесть номинаций</h2>
+    </div>
+    <p>Под каждой карточкой — ближайшие преследователи, если захочется наградить не одного, а тройку.</p>
+    <div class="awards"><article class="award"><div class="cat">Прогресс лета</div><div class="who"><h3>Andy</h3><div class="metric">+0.48</div></div><p>ELO 4.06 → 4.54 за 8 турниров — крупнейший рост в клубе.</p><div class="runners"><div><span>Konstantin Sidorenko</span><span>+0.39</span></div><div><span>Igor D</span><span>+0.33</span></div><div><span>Shamil</span><span>+0.32</span></div></div></article><article class="award"><div class="cat">Железный человек</div><div class="who"><h3>Andrey Romanov</h3><div class="metric">29</div></div><p>29 турниров и 160 матчей за лето — чаще всех на корте.</p><div class="runners"><div><span>Shamil</span><span>29 турн.</span></div><div><span>Nodir</span><span>28 турн.</span></div><div><span>Boris Batischev</span><span>24 турн.</span></div></div></article><article class="award"><div class="cat">Коллекционер титулов</div><div class="who"><h3>Roman E</h3><div class="metric">5</div></div><p>5 побед в турнирах и 7 подиумов из 17 выходов.</p><div class="runners"><div><span>Shamil</span><span>4 титула</span></div><div><span>Konstantin Sidorenko</span><span>4 титула</span></div><div><span>Roman M</span><span>4 титула</span></div></div></article><article class="award"><div class="cat">Лучший процент побед</div><div class="who"><h3>Konstantin Sidorenko</h3><div class="metric">70%</div></div><p>61 побед в 87 матчах. Минимум 40 матчей за лето.</p><div class="runners"><div><span>Sasha Shibanov</span><span>70%</span></div><div><span>Roman M</span><span>65%</span></div><div><span>Akullych</span><span>62%</span></div></div></article><article class="award"><div class="cat">Серия побед</div><div class="who"><h3>Roman M</h3><div class="metric">12</div></div><p>12 матчей подряд без поражений — самая длинная серия лета.</p><div class="runners"><div><span>Andy</span><span>11 подряд</span></div><div><span>Akullych</span><span>10 подряд</span></div><div><span>Roman E</span><span>9 подряд</span></div></div></article><article class="award"><div class="cat">Дебют лета</div><div class="who"><h3>Akullych</h3><div class="metric">62%</div></div><p>Первое лето в клубе: 11 турниров, ELO 3.72. Минимум 8 турниров.</p><div class="runners"><div><span>Max</span><span>62% · 9 турн.</span></div><div><span>Vladimir Sabylin</span><span>61% · 9 турн.</span></div><div><span>Victoria 0808</span><span>61% · 11 турн.</span></div></div></article></div>
+  </section>
+
+  <section>
+    <div>
+      <p class="eyebrow">Рост рейтинга</p>
+      <h2 style="margin-top:10px">Кто прибавил за лето</h2>
+    </div>
+    <p>ELO на 1 июня против ELO на 28 августа — только те, кто сыграл минимум 5 турниров и имел рейтинг на обе даты.</p>
+    <div class="scroll"><table><thead><tr><th>#</th><th>Игрок</th><th>ELO 01.06</th><th>ELO 28.08</th><th>Δ за лето</th><th>Турниров</th><th>Матчей</th><th>Побед</th><th>Винрейт</th><th>Титулов</th><th>Подиумов</th></tr></thead><tbody>
+<tr><td class="rk">1</td><td class="name">Andy <span class="lvl">C+</span></td><td>4.06</td><td>4.54</td><td class="up">+0.48<span class="bar" style="width:43px"></span></td><td>8</td><td>30</td><td>27</td><td>90%</td><td>3</td><td>5</td></tr>
+<tr><td class="rk">2</td><td class="name">Konstantin Sidorenko <span class="lvl">C- strong</span></td><td>3.35</td><td>3.75</td><td class="up">+0.39<span class="bar" style="width:35px"></span></td><td>18</td><td>87</td><td>61</td><td>70%</td><td>4</td><td>11</td></tr>
+<tr><td class="rk">3</td><td class="name">Igor D <span class="lvl">C</span></td><td>3.64</td><td>3.97</td><td class="up">+0.33<span class="bar" style="width:30px"></span></td><td>16</td><td>93</td><td>57</td><td>61%</td><td>·</td><td>10</td></tr>
+<tr><td class="rk">4</td><td class="name">Shamil <span class="lvl">C</span></td><td>3.29</td><td>3.62</td><td class="up">+0.32<span class="bar" style="width:29px"></span></td><td>29</td><td>151</td><td>86</td><td>57%</td><td>4</td><td>15</td></tr>
+<tr><td class="rk">5</td><td class="name">Sasha Shibanov <span class="lvl">C</span></td><td>3.78</td><td>4.06</td><td class="up">+0.29<span class="bar" style="width:26px"></span></td><td>13</td><td>63</td><td>44</td><td>70%</td><td>3</td><td>9</td></tr>
+<tr><td class="rk">6</td><td class="name">Sergei SerB <span class="lvl">C</span></td><td>3.61</td><td>3.81</td><td class="up">+0.21<span class="bar" style="width:19px"></span></td><td>13</td><td>70</td><td>39</td><td>56%</td><td>1</td><td>4</td></tr>
+<tr><td class="rk">7</td><td class="name">Vadim Vasilyev <span class="lvl">C- strong</span></td><td>3.05</td><td>3.21</td><td class="up">+0.16<span class="bar" style="width:14px"></span></td><td>19</td><td>120</td><td>64</td><td>53%</td><td>3</td><td>8</td></tr>
+<tr><td class="rk">8</td><td class="name">Alexey P <span class="lvl">C- strong</span></td><td>2.90</td><td>3.04</td><td class="up">+0.14<span class="bar" style="width:13px"></span></td><td>6</td><td>28</td><td>16</td><td>57%</td><td>1</td><td>2</td></tr>
+<tr><td class="rk">9</td><td class="name">Ivan Shirokov <span class="lvl">C- strong</span></td><td>2.98</td><td>3.11</td><td class="up">+0.13<span class="bar" style="width:12px"></span></td><td>5</td><td>33</td><td>18</td><td>55%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">10</td><td class="name">Roman Pishchulov <span class="lvl">C</span></td><td>3.50</td><td>3.60</td><td class="up">+0.10<span class="bar" style="width:9px"></span></td><td>13</td><td>79</td><td>47</td><td>60%</td><td>1</td><td>6</td></tr>
+<tr><td class="rk">11</td><td class="name">Rasul <span class="lvl">C</span></td><td>3.39</td><td>3.47</td><td class="up">+0.08<span class="bar" style="width:7px"></span></td><td>20</td><td>104</td><td>51</td><td>49%</td><td>2</td><td>11</td></tr>
+<tr><td class="rk">12</td><td class="name">Christian <span class="lvl">C</span></td><td>3.41</td><td>3.48</td><td class="up">+0.07<span class="bar" style="width:6px"></span></td><td>5</td><td>25</td><td>14</td><td>56%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">13</td><td class="name">Stas Hill <span class="lvl">C- strong</span></td><td>2.90</td><td>2.96</td><td class="up">+0.06<span class="bar" style="width:5px"></span></td><td>7</td><td>33</td><td>17</td><td>52%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">14</td><td class="name">Vitaly DOS <span class="lvl">C</span></td><td>3.63</td><td>3.66</td><td class="up">+0.03<span class="bar" style="width:3px"></span></td><td>14</td><td>73</td><td>34</td><td>47%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">15</td><td class="name">Artur Art <span class="lvl">C</span></td><td>3.37</td><td>3.40</td><td class="up">+0.02<span class="bar" style="width:2px"></span></td><td>9</td><td>55</td><td>31</td><td>56%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">16</td><td class="name">Farid <span class="lvl">C</span></td><td>3.31</td><td>3.31</td><td class="zero">0.00</td><td>10</td><td>56</td><td>27</td><td>48%</td><td>2</td><td>4</td></tr>
+<tr><td class="rk">17</td><td class="name">Mark Smirnov <span class="lvl">C</span></td><td>3.47</td><td>3.46</td><td class="dn">-0.01<span class="bar n" style="width:1px"></span></td><td>16</td><td>81</td><td>40</td><td>49%</td><td>2</td><td>7</td></tr>
+<tr><td class="rk">18</td><td class="name">Arty Dzis <span class="lvl">C</span></td><td>3.84</td><td>3.82</td><td class="dn">-0.01<span class="bar n" style="width:1px"></span></td><td>13</td><td>62</td><td>36</td><td>58%</td><td>3</td><td>8</td></tr>
+<tr><td class="rk">19</td><td class="name">Abdurahman <span class="lvl">C+</span></td><td>4.09</td><td>4.07</td><td class="dn">-0.02<span class="bar n" style="width:2px"></span></td><td>10</td><td>44</td><td>24</td><td>55%</td><td>2</td><td>4</td></tr>
+<tr><td class="rk">20</td><td class="name">Nikolai Denisov <span class="lvl">C+</span></td><td>4.22</td><td>4.19</td><td class="dn">-0.03<span class="bar n" style="width:3px"></span></td><td>21</td><td>97</td><td>55</td><td>57%</td><td>2</td><td>7</td></tr>
+<tr><td class="rk">21</td><td class="name">Kirill Bogdanov <span class="lvl">C- strong</span></td><td>2.78</td><td>2.75</td><td class="dn">-0.03<span class="bar n" style="width:3px"></span></td><td>9</td><td>63</td><td>28</td><td>44%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">22</td><td class="name">Konstantin S <span class="lvl">C- strong</span></td><td>3.15</td><td>3.12</td><td class="dn">-0.03<span class="bar n" style="width:3px"></span></td><td>5</td><td>34</td><td>17</td><td>50%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">23</td><td class="name">Liza <span class="lvl">C- strong</span></td><td>2.94</td><td>2.89</td><td class="dn">-0.05<span class="bar n" style="width:4px"></span></td><td>6</td><td>38</td><td>14</td><td>37%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">24</td><td class="name">Dima Larin <span class="lvl">C</span></td><td>3.32</td><td>3.25</td><td class="dn">-0.07<span class="bar n" style="width:6px"></span></td><td>8</td><td>52</td><td>24</td><td>46%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">25</td><td class="name">Artur AK <span class="lvl">C- strong</span></td><td>2.73</td><td>2.64</td><td class="dn">-0.09<span class="bar n" style="width:8px"></span></td><td>8</td><td>56</td><td>23</td><td>41%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">26</td><td class="name">Anatoly Pasternak <span class="lvl">C- strong</span></td><td>2.99</td><td>2.88</td><td class="dn">-0.11<span class="bar n" style="width:10px"></span></td><td>22</td><td>124</td><td>52</td><td>42%</td><td>1</td><td>9</td></tr>
+<tr><td class="rk">27</td><td class="name">Ilya Petrov <span class="lvl">C</span></td><td>3.56</td><td>3.45</td><td class="dn">-0.11<span class="bar n" style="width:10px"></span></td><td>11</td><td>77</td><td>38</td><td>49%</td><td>1</td><td>2</td></tr>
+<tr><td class="rk">28</td><td class="name">Alex Scheglov <span class="lvl">C</span></td><td>3.96</td><td>3.85</td><td class="dn">-0.11<span class="bar n" style="width:10px"></span></td><td>7</td><td>36</td><td>20</td><td>56%</td><td>1</td><td>3</td></tr>
+<tr><td class="rk">29</td><td class="name">Boris Batischev <span class="lvl">C- strong</span></td><td>2.94</td><td>2.81</td><td class="dn">-0.13<span class="bar n" style="width:12px"></span></td><td>24</td><td>150</td><td>73</td><td>49%</td><td>·</td><td>4</td></tr>
+<tr><td class="rk">30</td><td class="name">Andrey Romanov <span class="lvl">C</span></td><td>3.56</td><td>3.42</td><td class="dn">-0.14<span class="bar n" style="width:13px"></span></td><td>29</td><td>160</td><td>82</td><td>51%</td><td>3</td><td>12</td></tr>
+<tr><td class="rk">31</td><td class="name">Mikhail Ulitin <span class="lvl">C- strong</span></td><td>2.87</td><td>2.73</td><td class="dn">-0.14<span class="bar n" style="width:13px"></span></td><td>8</td><td>56</td><td>23</td><td>41%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">32</td><td class="name">Ilya Borisov <span class="lvl">C</span></td><td>3.86</td><td>3.72</td><td class="dn">-0.14<span class="bar n" style="width:13px"></span></td><td>6</td><td>38</td><td>18</td><td>47%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">33</td><td class="name">Ivan IV•A <span class="lvl">C</span></td><td>3.22</td><td>3.00</td><td class="dn">-0.22<span class="bar n" style="width:20px"></span></td><td>6</td><td>42</td><td>12</td><td>29%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">34</td><td class="name">Nodir <span class="lvl">C- strong</span></td><td>2.97</td><td>2.74</td><td class="dn">-0.23<span class="bar n" style="width:21px"></span></td><td>28</td><td>160</td><td>64</td><td>40%</td><td>3</td><td>8</td></tr>
+<tr><td class="rk">35</td><td class="name">Vlad Smirnov <span class="lvl">C</span></td><td>3.47</td><td>3.22</td><td class="dn">-0.25<span class="bar n" style="width:22px"></span></td><td>8</td><td>48</td><td>20</td><td>42%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">36</td><td class="name">Artem Zubkov <span class="lvl">C- strong</span></td><td>2.99</td><td>2.71</td><td class="dn">-0.28<span class="bar n" style="width:25px"></span></td><td>9</td><td>56</td><td>21</td><td>38%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">37</td><td class="name">Andrei MSK <span class="lvl">C</span></td><td>3.28</td><td>3.00</td><td class="dn">-0.28<span class="bar n" style="width:25px"></span></td><td>6</td><td>36</td><td>12</td><td>33%</td><td>·</td><td>1</td></tr>
+</tbody></table></div>
+  </section>
+
+  <section>
+    <div>
+      <p class="eyebrow">Общая таблица</p>
+      <h2 style="margin-top:10px">Все, кто сыграл 5+ турниров</h2>
+    </div>
+    <p>Отсортировано по ELO на 28 августа. Дебютанты лета не имели рейтинга 1 июня — у них стоит прочерк.</p>
+    <div class="scroll"><table><thead><tr><th>#</th><th>Игрок</th><th>ELO 01.06</th><th>ELO 28.08</th><th>Δ за лето</th><th>Турниров</th><th>Матчей</th><th>Побед</th><th>Винрейт</th><th>Титулов</th><th>Подиумов</th></tr></thead><tbody>
+<tr><td class="rk">1</td><td class="name">Andy <span class="lvl">C+</span></td><td>4.06</td><td>4.54</td><td class="up">+0.48<span class="bar" style="width:43px"></span></td><td>8</td><td>30</td><td>27</td><td>90%</td><td>3</td><td>5</td></tr>
+<tr><td class="rk">2</td><td class="name">Diana <span class="lvl">C+</span></td><td>—</td><td>4.20</td><td><span class="new">дебют лета</span></td><td>5</td><td>20</td><td>16</td><td>80%</td><td>1</td><td>4</td></tr>
+<tr><td class="rk">3</td><td class="name">Nikolai Denisov <span class="lvl">C+</span></td><td>4.22</td><td>4.19</td><td class="dn">-0.03<span class="bar n" style="width:3px"></span></td><td>21</td><td>97</td><td>55</td><td>57%</td><td>2</td><td>7</td></tr>
+<tr><td class="rk">4</td><td class="name">Abdurahman <span class="lvl">C+</span></td><td>4.09</td><td>4.07</td><td class="dn">-0.02<span class="bar n" style="width:2px"></span></td><td>10</td><td>44</td><td>24</td><td>55%</td><td>2</td><td>4</td></tr>
+<tr><td class="rk">5</td><td class="name">Sasha Shibanov <span class="lvl">C</span></td><td>3.78</td><td>4.06</td><td class="up">+0.29<span class="bar" style="width:26px"></span></td><td>13</td><td>63</td><td>44</td><td>70%</td><td>3</td><td>9</td></tr>
+<tr><td class="rk">6</td><td class="name">Igor D <span class="lvl">C</span></td><td>3.64</td><td>3.97</td><td class="up">+0.33<span class="bar" style="width:30px"></span></td><td>16</td><td>93</td><td>57</td><td>61%</td><td>·</td><td>10</td></tr>
+<tr><td class="rk">7</td><td class="name">Alex Scheglov <span class="lvl">C</span></td><td>3.96</td><td>3.85</td><td class="dn">-0.11<span class="bar n" style="width:10px"></span></td><td>7</td><td>36</td><td>20</td><td>56%</td><td>1</td><td>3</td></tr>
+<tr><td class="rk">8</td><td class="name">Arty Dzis <span class="lvl">C</span></td><td>3.84</td><td>3.82</td><td class="dn">-0.01<span class="bar n" style="width:1px"></span></td><td>13</td><td>62</td><td>36</td><td>58%</td><td>3</td><td>8</td></tr>
+<tr><td class="rk">9</td><td class="name">Sergei SerB <span class="lvl">C</span></td><td>3.61</td><td>3.81</td><td class="up">+0.21<span class="bar" style="width:19px"></span></td><td>13</td><td>70</td><td>39</td><td>56%</td><td>1</td><td>4</td></tr>
+<tr><td class="rk">10</td><td class="name">Roman M <span class="lvl">C</span></td><td>—</td><td>3.76</td><td><span class="new">дебют лета</span></td><td>11</td><td>63</td><td>41</td><td>65%</td><td>4</td><td>5</td></tr>
+<tr><td class="rk">11</td><td class="name">Konstantin Sidorenko <span class="lvl">C- strong</span></td><td>3.35</td><td>3.75</td><td class="up">+0.39<span class="bar" style="width:35px"></span></td><td>18</td><td>87</td><td>61</td><td>70%</td><td>4</td><td>11</td></tr>
+<tr><td class="rk">12</td><td class="name">Dmytro Shevchenko <span class="lvl">C</span></td><td>—</td><td>3.73</td><td><span class="new">дебют лета</span></td><td>7</td><td>33</td><td>21</td><td>64%</td><td>1</td><td>2</td></tr>
+<tr><td class="rk">13</td><td class="name">Akullych <span class="lvl">C</span></td><td>—</td><td>3.72</td><td><span class="new">дебют лета</span></td><td>11</td><td>56</td><td>35</td><td>62%</td><td>3</td><td>7</td></tr>
+<tr><td class="rk">14</td><td class="name">Ilya Borisov <span class="lvl">C</span></td><td>3.86</td><td>3.72</td><td class="dn">-0.14<span class="bar n" style="width:13px"></span></td><td>6</td><td>38</td><td>18</td><td>47%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">15</td><td class="name">Roman E <span class="lvl">C</span></td><td>—</td><td>3.68</td><td><span class="new">дебют лета</span></td><td>17</td><td>96</td><td>55</td><td>57%</td><td>5</td><td>7</td></tr>
+<tr><td class="rk">16</td><td class="name">Vitaly DOS <span class="lvl">C</span></td><td>3.63</td><td>3.66</td><td class="up">+0.03<span class="bar" style="width:3px"></span></td><td>14</td><td>73</td><td>34</td><td>47%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">17</td><td class="name">Shamil <span class="lvl">C</span></td><td>3.29</td><td>3.62</td><td class="up">+0.32<span class="bar" style="width:29px"></span></td><td>29</td><td>151</td><td>86</td><td>57%</td><td>4</td><td>15</td></tr>
+<tr><td class="rk">18</td><td class="name">Roman Pishchulov <span class="lvl">C</span></td><td>3.50</td><td>3.60</td><td class="up">+0.10<span class="bar" style="width:9px"></span></td><td>13</td><td>79</td><td>47</td><td>60%</td><td>1</td><td>6</td></tr>
+<tr><td class="rk">19</td><td class="name">Christian <span class="lvl">C</span></td><td>3.41</td><td>3.48</td><td class="up">+0.07<span class="bar" style="width:6px"></span></td><td>5</td><td>25</td><td>14</td><td>56%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">20</td><td class="name">Rasul <span class="lvl">C</span></td><td>3.39</td><td>3.47</td><td class="up">+0.08<span class="bar" style="width:7px"></span></td><td>20</td><td>104</td><td>51</td><td>49%</td><td>2</td><td>11</td></tr>
+<tr><td class="rk">21</td><td class="name">Mark Smirnov <span class="lvl">C</span></td><td>3.47</td><td>3.46</td><td class="dn">-0.01<span class="bar n" style="width:1px"></span></td><td>16</td><td>81</td><td>40</td><td>49%</td><td>2</td><td>7</td></tr>
+<tr><td class="rk">22</td><td class="name">Ilya Petrov <span class="lvl">C</span></td><td>3.56</td><td>3.45</td><td class="dn">-0.11<span class="bar n" style="width:10px"></span></td><td>11</td><td>77</td><td>38</td><td>49%</td><td>1</td><td>2</td></tr>
+<tr><td class="rk">23</td><td class="name">Andrey Romanov <span class="lvl">C</span></td><td>3.56</td><td>3.42</td><td class="dn">-0.14<span class="bar n" style="width:13px"></span></td><td>29</td><td>160</td><td>82</td><td>51%</td><td>3</td><td>12</td></tr>
+<tr><td class="rk">24</td><td class="name">Artur Art <span class="lvl">C</span></td><td>3.37</td><td>3.40</td><td class="up">+0.02<span class="bar" style="width:2px"></span></td><td>9</td><td>55</td><td>31</td><td>56%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">25</td><td class="name">Mario <span class="lvl">C- strong</span></td><td>—</td><td>3.35</td><td><span class="new">дебют лета</span></td><td>10</td><td>60</td><td>36</td><td>60%</td><td>·</td><td>6</td></tr>
+<tr><td class="rk">26</td><td class="name">Farid <span class="lvl">C</span></td><td>3.31</td><td>3.31</td><td class="zero">0.00</td><td>10</td><td>56</td><td>27</td><td>48%</td><td>2</td><td>4</td></tr>
+<tr><td class="rk">27</td><td class="name">Dima Larin <span class="lvl">C</span></td><td>3.32</td><td>3.25</td><td class="dn">-0.07<span class="bar n" style="width:6px"></span></td><td>8</td><td>52</td><td>24</td><td>46%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">28</td><td class="name">Victoria 0808 <span class="lvl">C- strong</span></td><td>—</td><td>3.24</td><td><span class="new">дебют лета</span></td><td>11</td><td>71</td><td>43</td><td>61%</td><td>3</td><td>5</td></tr>
+<tr><td class="rk">29</td><td class="name">Vlad Smirnov <span class="lvl">C</span></td><td>3.47</td><td>3.22</td><td class="dn">-0.25<span class="bar n" style="width:22px"></span></td><td>8</td><td>48</td><td>20</td><td>42%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">30</td><td class="name">Vadim Vasilyev <span class="lvl">C- strong</span></td><td>3.05</td><td>3.21</td><td class="up">+0.16<span class="bar" style="width:14px"></span></td><td>19</td><td>120</td><td>64</td><td>53%</td><td>3</td><td>8</td></tr>
+<tr><td class="rk">31</td><td class="name">Max <span class="lvl">C- strong</span></td><td>—</td><td>3.21</td><td><span class="new">дебют лета</span></td><td>9</td><td>42</td><td>26</td><td>62%</td><td>·</td><td>8</td></tr>
+<tr><td class="rk">32</td><td class="name">Tagir Yamilov <span class="lvl">C- strong</span></td><td>—</td><td>3.19</td><td><span class="new">дебют лета</span></td><td>5</td><td>34</td><td>21</td><td>62%</td><td>1</td><td>1</td></tr>
+<tr><td class="rk">33</td><td class="name">Konstantin S <span class="lvl">C- strong</span></td><td>3.15</td><td>3.12</td><td class="dn">-0.03<span class="bar n" style="width:3px"></span></td><td>5</td><td>34</td><td>17</td><td>50%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">34</td><td class="name">Ivan Shirokov <span class="lvl">C- strong</span></td><td>2.98</td><td>3.11</td><td class="up">+0.13<span class="bar" style="width:12px"></span></td><td>5</td><td>33</td><td>18</td><td>55%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">35</td><td class="name">Arafat <span class="lvl">C- strong</span></td><td>—</td><td>3.09</td><td><span class="new">дебют лета</span></td><td>13</td><td>68</td><td>32</td><td>47%</td><td>2</td><td>6</td></tr>
+<tr><td class="rk">36</td><td class="name">Alexey P <span class="lvl">C- strong</span></td><td>2.90</td><td>3.04</td><td class="up">+0.14<span class="bar" style="width:13px"></span></td><td>6</td><td>28</td><td>16</td><td>57%</td><td>1</td><td>2</td></tr>
+<tr><td class="rk">37</td><td class="name">Ivan IV•A <span class="lvl">C</span></td><td>3.22</td><td>3.00</td><td class="dn">-0.22<span class="bar n" style="width:20px"></span></td><td>6</td><td>42</td><td>12</td><td>29%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">38</td><td class="name">Andrei MSK <span class="lvl">C</span></td><td>3.28</td><td>3.00</td><td class="dn">-0.28<span class="bar n" style="width:25px"></span></td><td>6</td><td>36</td><td>12</td><td>33%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">39</td><td class="name">Dmitriy Polkovskiy <span class="lvl">C- strong</span></td><td>—</td><td>2.97</td><td><span class="new">дебют лета</span></td><td>7</td><td>43</td><td>16</td><td>37%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">40</td><td class="name">Stas Hill <span class="lvl">C- strong</span></td><td>2.90</td><td>2.96</td><td class="up">+0.06<span class="bar" style="width:5px"></span></td><td>7</td><td>33</td><td>17</td><td>52%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">41</td><td class="name">Daniel Alimov <span class="lvl">C- strong</span></td><td>—</td><td>2.91</td><td><span class="new">дебют лета</span></td><td>15</td><td>93</td><td>45</td><td>48%</td><td>·</td><td>3</td></tr>
+<tr><td class="rk">42</td><td class="name">Liza <span class="lvl">C- strong</span></td><td>2.94</td><td>2.89</td><td class="dn">-0.05<span class="bar n" style="width:4px"></span></td><td>6</td><td>38</td><td>14</td><td>37%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">43</td><td class="name">Anatoly Pasternak <span class="lvl">C- strong</span></td><td>2.99</td><td>2.88</td><td class="dn">-0.11<span class="bar n" style="width:10px"></span></td><td>22</td><td>124</td><td>52</td><td>42%</td><td>1</td><td>9</td></tr>
+<tr><td class="rk">44</td><td class="name">Vladimir Sabylin <span class="lvl">C- strong</span></td><td>—</td><td>2.88</td><td><span class="new">дебют лета</span></td><td>9</td><td>36</td><td>22</td><td>61%</td><td>2</td><td>6</td></tr>
+<tr><td class="rk">45</td><td class="name">Egor Yolkin <span class="lvl">C- strong</span></td><td>—</td><td>2.84</td><td><span class="new">дебют лета</span></td><td>11</td><td>72</td><td>32</td><td>44%</td><td>·</td><td>2</td></tr>
+<tr><td class="rk">46</td><td class="name">Boris Batischev <span class="lvl">C- strong</span></td><td>2.94</td><td>2.81</td><td class="dn">-0.13<span class="bar n" style="width:12px"></span></td><td>24</td><td>150</td><td>73</td><td>49%</td><td>·</td><td>4</td></tr>
+<tr><td class="rk">47</td><td class="name">Sergei Eliseev <span class="lvl">C- strong</span></td><td>—</td><td>2.81</td><td><span class="new">дебют лета</span></td><td>10</td><td>54</td><td>30</td><td>56%</td><td>2</td><td>4</td></tr>
+<tr><td class="rk">48</td><td class="name">Dmitry BeMD <span class="lvl">C-</span></td><td>—</td><td>2.76</td><td><span class="new">дебют лета</span></td><td>6</td><td>31</td><td>11</td><td>36%</td><td>·</td><td>2</td></tr>
+<tr><td class="rk">49</td><td class="name">Kirill Bogdanov <span class="lvl">C- strong</span></td><td>2.78</td><td>2.75</td><td class="dn">-0.03<span class="bar n" style="width:3px"></span></td><td>9</td><td>63</td><td>28</td><td>44%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">50</td><td class="name">Nodir <span class="lvl">C- strong</span></td><td>2.97</td><td>2.74</td><td class="dn">-0.23<span class="bar n" style="width:21px"></span></td><td>28</td><td>160</td><td>64</td><td>40%</td><td>3</td><td>8</td></tr>
+<tr><td class="rk">51</td><td class="name">Mikhail Ulitin <span class="lvl">C- strong</span></td><td>2.87</td><td>2.73</td><td class="dn">-0.14<span class="bar n" style="width:13px"></span></td><td>8</td><td>56</td><td>23</td><td>41%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">52</td><td class="name">Filipp Bakushin <span class="lvl">C- strong</span></td><td>—</td><td>2.73</td><td><span class="new">дебют лета</span></td><td>8</td><td>52</td><td>21</td><td>40%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">53</td><td class="name">Artem Zubkov <span class="lvl">C- strong</span></td><td>2.99</td><td>2.71</td><td class="dn">-0.28<span class="bar n" style="width:25px"></span></td><td>9</td><td>56</td><td>21</td><td>38%</td><td>·</td><td>1</td></tr>
+<tr><td class="rk">54</td><td class="name">Artur AK <span class="lvl">C- strong</span></td><td>2.73</td><td>2.64</td><td class="dn">-0.09<span class="bar n" style="width:8px"></span></td><td>8</td><td>56</td><td>23</td><td>41%</td><td>·</td><td>·</td></tr>
+<tr><td class="rk">55</td><td class="name">Sergey Kovalev <span class="lvl">C-</span></td><td>—</td><td>2.64</td><td><span class="new">дебют лета</span></td><td>5</td><td>31</td><td>16</td><td>52%</td><td>1</td><td>1</td></tr>
+<tr><td class="rk">56</td><td class="name">Alexandra LS <span class="lvl">C-</span></td><td>—</td><td>2.56</td><td><span class="new">дебют лета</span></td><td>6</td><td>32</td><td>16</td><td>50%</td><td>1</td><td>3</td></tr>
+<tr><td class="rk">57</td><td class="name">Jegor <span class="lvl">C- strong</span></td><td>—</td><td>2.53</td><td><span class="new">дебют лета</span></td><td>11</td><td>67</td><td>26</td><td>39%</td><td>·</td><td>2</td></tr>
+</tbody></table></div>
+  </section>
+
+  <hr class="rule">
+  <footer class="foot">
+    <p class="eyebrow">Как считалось</p>
+    <p><b>Период:</b> все завершённые турниры с 1 июня по 28 августа включительно — 61 штук. Турнир 31 августа в выгрузку не вошёл, он уже за границей периода.</p>
+    <p><b>ELO:</b> значение на конец последнего турнира до указанной даты. Рейтинг пересчитывается по всей истории матчей, поэтому цифры сходятся с рейтингом в приложении.</p>
+    <p><b>Тренеры:</b> Хосе и Федерико исключены из всех подсчётов — их матчи не влияют ни на чей рейтинг, титулы и рекорды.</p>
+    <p><b>Титул</b> — первое место в турнире (по очкам, затем по победам), при равенстве титул делится. <b>Подиум</b> — место с первого по третье. Товарищеские игры в статистику лета не входят.</p>
+  </footer>
+</div>
+</body>
+</html>
