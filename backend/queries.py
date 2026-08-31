@@ -306,6 +306,7 @@ async def get_monthly_leaderboard(year: int, month: int) -> tuple[list, int]:
                JOIN players p  ON p.id = s.player_id
                WHERE t.status = 'finished'
                  AND strftime('%Y-%m', t.created_at) = ?
+                 AND p.rating_excluded = 0
                GROUP BY p.id
                ORDER BY points DESC, wins DESC""",
             (period,),
@@ -849,6 +850,15 @@ async def get_player_profile(pid: int):
 
 # ─── Club-wide aggregates (rating / pairs / records) ──────
 
+async def _excluded_ids(db) -> set:
+    """Players kept out of every club-wide ranking, record and duo list — the
+    coaches (players.rating_excluded=1). Their matches are ignored the same way
+    the ELO engine ignores them, so a coach neither wins club titles nor tilts
+    anyone's stats. (Liza 2026-08-31.)"""
+    cur = await db.execute("SELECT id FROM players WHERE rating_excluded = 1")
+    return {r["id"] for r in await cur.fetchall()}
+
+
 async def get_club_leaderboard(period: str = "all", by: str = "points"):
     """All-time or current-month club ranking. by=points|winrate|rating.
     winrate needs >=10 games; rating is the composite (all-time, ignores period).
@@ -867,6 +877,7 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
                    FROM scores s JOIN tournaments t ON t.id=s.tournament_id
                    JOIN players p ON p.id=s.player_id
                    WHERE strftime('%Y-%m', t.created_at) = ?
+                     AND p.rating_excluded = 0
                    GROUP BY s.player_id""",
                 (datetime.utcnow().strftime("%Y-%m"),),
             )
@@ -876,6 +887,7 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
                           SUM(s.points) AS pts, SUM(s.wins) AS w, SUM(s.losses) AS l,
                           COUNT(DISTINCT s.tournament_id) AS tours
                    FROM scores s JOIN players p ON p.id=s.player_id
+                   WHERE p.rating_excluded = 0
                    GROUP BY s.player_id"""
             )
         rows = await cur.fetchall()
@@ -945,7 +957,9 @@ async def get_club_rating(min_games: int = 1):
     async with conn() as db:
         cur = await db.execute("SELECT id, name, level, photo_url FROM players")
         players = {r["id"]: row_to_dict(r) for r in await cur.fetchall()}
+        # levels of ALL players (incl. coaches) still define opponent strength
         lvl = {pid: level_value(p["level"]) for pid, p in players.items()}
+        excluded = await _excluded_ids(db)
         cur = await db.execute(
             """SELECT m.p1, m.p2, m.p3, m.p4, m.winner, t.created_at, t.mode
                FROM matches m JOIN rounds r ON r.id=m.round_id
@@ -963,6 +977,8 @@ async def get_club_rating(min_games: int = 1):
     agg = {pid: {"games": 0, "wins": 0, "wg": 0.0, "ww": 0.0, "opp_sum": 0.0,
                  "rg": 0.0, "rw": 0.0} for pid in players}
     for m in matches:
+        if excluded & {m["p1"], m["p2"], m["p3"], m["p4"]}:
+            continue
         cr = m["created_at"]
         recent = bool(cr) and str(cr) >= since
         w = CASUAL_RATING_WEIGHT if m["mode"] == "casual" else 1.0
@@ -990,6 +1006,8 @@ async def get_club_rating(min_games: int = 1):
     tours = {pid: 0 for pid in players}
     by_tid = {}
     for r in score_rows:
+        if r["pid"] in excluded:
+            continue
         by_tid.setdefault(r["tid"], []).append((r["pid"], r["points"], r["wins"]))
     for rows in by_tid.values():
         distinct = sorted({(p, w) for (_, p, w) in rows}, reverse=True)
@@ -1014,6 +1032,8 @@ async def get_club_rating(min_games: int = 1):
 
     out = []
     for pid, p in players.items():
+        if pid in excluded:
+            continue
         a = agg[pid]
         g = a["games"]          # raw count (display + eligibility)
         gw = a["wg"]            # weighted (rating math)
@@ -1050,8 +1070,11 @@ async def get_club_pairs(min_games: int = 6, limit: int = 20):
             "SELECT m.p1, m.p2, m.p3, m.p4, m.winner FROM matches m WHERE m.winner IS NOT NULL"
         )
         rows = await cur.fetchall()
+        excluded = await _excluded_ids(db)
         pairs = {}  # frozenset -> [games, wins, (a,b)]
         for m in rows:
+            if excluded & {m["p1"], m["p2"], m["p3"], m["p4"]}:
+                continue
             for team, won in (((m["p1"], m["p2"]), m["winner"] == 1),
                               ((m["p3"], m["p4"]), m["winner"] == 2)):
                 k = frozenset(team)
@@ -1075,14 +1098,18 @@ async def get_club_records():
     """Headline club records + recent champions gallery."""
     from collections import defaultdict
     async with conn() as db:
+        excluded = await _excluded_ids(db)
         cur = await db.execute(
             "SELECT s.player_id AS pid, p.name, SUM(s.points) AS pts, SUM(s.wins) AS w "
-            "FROM scores s JOIN players p ON p.id=s.player_id GROUP BY s.player_id"
+            "FROM scores s JOIN players p ON p.id=s.player_id "
+            "WHERE p.rating_excluded = 0 GROUP BY s.player_id"
         )
         agg = rows_to_list(await cur.fetchall())
         cur = await db.execute(
             "SELECT s.tournament_id AS tid, s.player_id AS pid, s.points, s.wins "
-            "FROM scores s JOIN tournaments t ON t.id=s.tournament_id WHERE t.status='finished'"
+            "FROM scores s JOIN players p ON p.id=s.player_id "
+            "JOIN tournaments t ON t.id=s.tournament_id "
+            "WHERE t.status='finished' AND p.rating_excluded = 0"
         )
         srows = await cur.fetchall()
         cur = await db.execute("SELECT id, name FROM players")
@@ -1113,6 +1140,8 @@ async def get_club_records():
 
     run, best_streak = defaultdict(int), defaultdict(int)
     for m in mrows:
+        if excluded & {m["p1"], m["p2"], m["p3"], m["p4"]}:
+            continue
         win = (m["p1"], m["p2"]) if m["winner"] == 1 else (m["p3"], m["p4"])
         los = (m["p3"], m["p4"]) if m["winner"] == 1 else (m["p1"], m["p2"])
         for x in win:
@@ -2471,14 +2500,20 @@ async def recompute_club_elo(db):
     """Deterministic full recompute of every player's ELO from match history.
     Writes players.elo/verified and per-tournament elo_history. Runs inside the
     caller's transaction (no commit here)."""
-    cur = await db.execute("SELECT id, level, rating_excluded, elo_seed FROM players")
+    cur = await db.execute(
+        "SELECT id, level, rating_excluded, elo_seed, elo_min FROM players")
     prow = {r["id"]: r for r in await cur.fetchall()}
     # start from the FROZEN seed (set at creation, not the current level) so that
     # changing a player's level relabels them without re-inflating their earned
     # ELO. Floor still follows the current level. (Liza 2026-07-08.)
-    elo = {pid: (p["elo_seed"] if p["elo_seed"] is not None else elo_level_value(p["level"]))
+    # players.elo_min is an optional personal floor set by an admin — it lifts the
+    # level floor for that one player and never lowers it. (Liza 2026-08-31.)
+    flr = {pid: max(elo_floor(elo_level_value(p["level"])),
+                    p["elo_min"] if p["elo_min"] is not None else float("-inf"))
            for pid, p in prow.items()}
-    flr = {pid: elo_floor(elo_level_value(p["level"])) for pid, p in prow.items()}
+    elo = {pid: max(p["elo_seed"] if p["elo_seed"] is not None else elo_level_value(p["level"]),
+                    flr[pid])
+           for pid, p in prow.items()}
     games = {pid: 0 for pid in prow}
     excluded = {pid for pid, p in prow.items() if p["rating_excluded"]}
 
