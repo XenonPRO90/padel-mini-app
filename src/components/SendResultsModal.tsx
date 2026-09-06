@@ -25,9 +25,10 @@ export function SendResultsModal({ tid, onClose }: { tid: number; onClose: () =>
   const send = async () => {
     setStep('sending');
     try {
-      const r = await api<{ sent: number }>(
+      const r = await api<{ sent: number; podium: number }>(
         `/api/tournaments/${tid}/cards/send`, { method: 'POST' });
-      const queued = r.sent;
+      // Two messages go to each player: the personal card and the podium.
+      const queued = r.sent + (r.podium ?? 0);
       if (queued === 0) {
         setResult(t('td.sent', { n: 0 }));
         setStep('done');
@@ -40,7 +41,7 @@ export function SendResultsModal({ tid, onClose }: { tid: number; onClose: () =>
           report: { queued: number; ok: number; failed: { name: string; reason: string }[] } | null;
         }>(`/api/tournaments/${tid}/cards`);
         if (d.report) {
-          let msg = t('td.sentOf', { n: d.sent_count, total: d.linked_count });
+          let msg = t('td.sentOf', { n: d.report.ok, total: d.report.queued });
           if (d.report.failed.length) {
             msg += t('td.failed', { k: d.report.failed.length })
               + '\n' + t('td.sendReason', { r: d.report.failed[0].reason });

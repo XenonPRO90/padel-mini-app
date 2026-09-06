@@ -2318,23 +2318,25 @@ async def _share_text_schedule(t: dict) -> str:
     return "\n".join(lines)
 
 
-async def _share_text_standings(t: dict) -> str:
-    """Final standings with medals — used when sharing a finished tournament.
+# Fixed-pair modes score one row per PAIR, so a place belongs to two people
+# and their names are joined. Rotating scores individuals, so a shared place
+# is simply two rows carrying the same number (Roman, 2026-09-06).
+_PAIR_MODES = ("fixed", "americano", "groups8")
 
-    Uses pair leaderboard for fixed-mode, otherwise per-player. Dense
-    ranking by (points, wins) so ties share a place — mirrors the
-    Tournament Detail screen.
+
+async def _ranked_standings(t: dict) -> list[dict]:
+    """Final standings, dense-ranked by (points, wins) so ties share a place.
+
+    Mirrors the Tournament Detail screen. Shared by the share-text table and
+    the podium image, so the two can't drift apart.
     """
     tid = t["id"]
-    mode = t.get("mode")
-    if mode == "fixed":
+    if t.get("mode") in _PAIR_MODES:
         rows = await get_pair_leaderboard(tid)
         formatted = [
             {
                 "name": f"{r['name_a']} & {r['name_b']}",
-                "points": r["points"],
-                "wins": r["wins"],
-                "losses": r["losses"],
+                "points": r["points"], "wins": r["wins"], "losses": r["losses"],
             }
             for r in rows
         ]
@@ -2343,28 +2345,47 @@ async def _share_text_standings(t: dict) -> str:
         formatted = [
             {
                 "name": r["name"],
-                "points": r["points"],
-                "wins": r["wins"],
-                "losses": r["losses"],
+                "points": r["points"], "wins": r["wins"], "losses": r["losses"],
             }
             for r in rows
         ]
 
-    # Dense ranking with (points, wins) tiebreaker.
     last_pts: int | None = None
     last_wins: int | None = None
     place = 0
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    lines = [
-        f"🏆 *{t['name']}* — итоги",
-        "",
-    ]
     for r in formatted:
         if r["points"] != last_pts or r["wins"] != last_wins:
             place += 1
             last_pts = r["points"]
             last_wins = r["wins"]
-        prefix = medals.get(place, f"{place}.")
+        r["place"] = place
+    return formatted
+
+
+async def get_tournament_podium(tid: int, max_place: int = 3) -> dict | None:
+    """Winners of a finished tournament — the payload behind the podium image."""
+    t = await get_tournament(tid)
+    if not t:
+        return None
+    rows = await _ranked_standings(t)
+    cr = str(t.get("created_at") or "")
+    return {
+        "tournament": t["name"],
+        "date": f"{cr[8:10]}.{cr[5:7]}" if len(cr) >= 10 else cr,
+        "rows": [{"place": r["place"], "name": r["name"]}
+                 for r in rows if r["place"] <= max_place],
+    }
+
+
+async def _share_text_standings(t: dict) -> str:
+    """Final standings with medals — used when sharing a finished tournament."""
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    lines = [
+        f"🏆 *{t['name']}* — итоги",
+        "",
+    ]
+    for r in await _ranked_standings(t):
+        prefix = medals.get(r["place"], f"{r['place']}.")
         lines.append(
             f"{prefix} {r['name']} — {r['points']} pts  (W{r['wins']} L{r['losses']})"
         )
@@ -2435,6 +2456,35 @@ async def _ensure_cards_sent(db):
                sent_at       TEXT NOT NULL DEFAULT (datetime('now')),
                PRIMARY KEY (tournament_id, player_id)
            )""")
+
+
+async def _ensure_podium_sent(db):
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS podium_sent (
+               tournament_id INTEGER NOT NULL,
+               player_id     INTEGER NOT NULL,
+               sent_at       TEXT NOT NULL DEFAULT (datetime('now')),
+               PRIMARY KEY (tournament_id, player_id)
+           )""")
+
+
+async def get_podium_sent_player_ids(tid: int) -> set:
+    """Player ids that already got the tournament podium image. Tracked apart
+    from cards_sent so a re-press retries only what actually failed."""
+    async with conn() as db:
+        await _ensure_podium_sent(db)
+        cur = await db.execute(
+            "SELECT player_id FROM podium_sent WHERE tournament_id=?", (tid,))
+        return {r["player_id"] for r in await cur.fetchall()}
+
+
+async def mark_podium_sent(tid: int, player_id: int):
+    async with conn() as db:
+        await _ensure_podium_sent(db)
+        await db.execute(
+            "INSERT OR IGNORE INTO podium_sent (tournament_id, player_id) VALUES (?,?)",
+            (tid, player_id))
+        await db.commit()
 
 
 async def get_sent_card_player_ids(tid: int) -> set:
