@@ -19,12 +19,38 @@ export function SendResultsModal({ tid, onClose }: { tid: number; onClose: () =>
     return () => { cancelled = true; };
   }, [tid, t]);
 
+  // Sending renders and DMs in the background, so the POST only tells us how
+  // many were queued. Poll the real delivery state instead — reporting the
+  // queued count as success is what hid five weeks of broken rendering.
   const send = async () => {
     setStep('sending');
     try {
-      const r = await api<{ sent: number; failed: { name: string; reason: string }[] }>(
+      const r = await api<{ sent: number }>(
         `/api/tournaments/${tid}/cards/send`, { method: 'POST' });
-      setResult(t('td.sent', { n: r.sent }) + (r.failed.length ? t('td.failed', { k: r.failed.length }) : ''));
+      const queued = r.sent;
+      if (queued === 0) {
+        setResult(t('td.sent', { n: 0 }));
+        setStep('done');
+        return;
+      }
+      for (let i = 0; i < 30; i++) {
+        await new Promise((res) => setTimeout(res, 2000));
+        const d = await api<{
+          sent_count: number; linked_count: number;
+          report: { queued: number; ok: number; failed: { name: string; reason: string }[] } | null;
+        }>(`/api/tournaments/${tid}/cards`);
+        if (d.report) {
+          let msg = t('td.sentOf', { n: d.sent_count, total: d.linked_count });
+          if (d.report.failed.length) {
+            msg += t('td.failed', { k: d.report.failed.length })
+              + '\n' + t('td.sendReason', { r: d.report.failed[0].reason });
+          }
+          setResult(msg);
+          setStep('done');
+          return;
+        }
+      }
+      setResult(t('td.sendSlow'));
     } catch (e) {
       setResult(t('common.error') + ': ' + (e as Error).message);
     }
@@ -69,7 +95,10 @@ export function SendResultsModal({ tid, onClose }: { tid: number; onClose: () =>
         )}
         {step === 'done' && (
           <>
-            <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 14 }}>{result}</div>
+            <div style={{
+              fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 14,
+              whiteSpace: 'pre-line',  // the failure reason is appended on its own line
+            }}>{result}</div>
             {btn(t('common.ok'), onClose, false)}
           </>
         )}

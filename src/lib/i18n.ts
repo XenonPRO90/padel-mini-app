@@ -256,6 +256,10 @@ export const STR = {
   'td.sending': { ru: 'Отправляю карточки…', en: 'Sending cards…' },
   'td.sent': { ru: 'Отправлено: {n}', en: 'Sent: {n}' },
   'td.failed': { ru: ' · не доставлено: {k}', en: ' · not delivered: {k}' },
+  'td.sentOf': { ru: 'Доставлено {n} из {total}', en: 'Delivered {n} of {total}' },
+  'td.sendReason': { ru: 'Причина: {r}', en: 'Reason: {r}' },
+  'td.sendSlow': { ru: 'Отправка ещё идёт — загляни сюда позже.',
+                   en: 'Still sending — check back in a moment.' },
 } satisfies Record<string, Entry>;
 
 const MONTHS: Record<Lang, string[]> = {
