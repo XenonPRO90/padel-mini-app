@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useCreateTournament, useCreatePlayer, type SideValue } from '../api/players';
+import { useMe } from '../api/me';
 import { LEVEL_COLORS, T } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { MainCTA } from '../components/MainCTA';
@@ -589,6 +590,10 @@ function StepPlayers({
     queryFn: () => api('/api/players'),
   });
   const [adding, setAdding] = useState(false);
+  // Creating a player writes to the club roster, so it is a full-admin action
+  // even here inside the wizard — a host runs games, they don't grow the club.
+  const { data: me } = useMe();
+  const canAddPlayer = !!me?.is_full_admin;
 
   const items = data?.items ?? [];
   const toggle = (id: number) => {
@@ -647,6 +652,7 @@ function StepPlayers({
         </div>
       )}
 
+      {canAddPlayer && (
       <button
         onClick={() => setAdding(true)}
         style={{
@@ -660,6 +666,7 @@ function StepPlayers({
           cursor: 'pointer',
         }}
       >+ Add new player</button>
+      )}
 
       {isLoading ? (
         <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />

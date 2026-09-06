@@ -18,7 +18,8 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
   const t = useT();
   const [q, setQ] = useState('');
   const { data: me } = useMe();
-  const isAdmin = !!me?.is_admin;
+  // Roster and join requests belong to full admins; hosts only run games.
+  const isFullAdmin = !!me?.is_full_admin;
   const pending = me?.pending_requests ?? 0;
   const { data, isLoading, error, refetch } = useQuery<{ items: Player[] }>({
     queryKey: ['players'],
@@ -47,7 +48,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
           }}>{t('players.guests')}</span></div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {isAdmin && onOpenRequests && (
+        {isFullAdmin && onOpenRequests && (
           <button onClick={onOpenRequests} style={{
             background: 'transparent', color: T.gold, border: `1px solid ${T.gold}`,
             borderRadius: 999, padding: '8px 14px', cursor: 'pointer',
@@ -57,7 +58,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
             {t('admin.requests')}{pending > 0 ? ` · ${pending}` : ''}
           </button>
         )}
-        {isAdmin && onAddPlayer && (
+        {isFullAdmin && onAddPlayer && (
           <button onClick={onAddPlayer} style={{
             background: T.emerald, color: T.cream, border: 'none',
             borderRadius: 999, padding: '8px 16px',

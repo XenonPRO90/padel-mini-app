@@ -1169,10 +1169,43 @@ async def get_club_records():
 
 # ─── Admins ───────────────────────────────────────────────
 
-async def is_admin(tg_id: int) -> bool:
+# Two admin tiers (Roman, 2026-09-06). People who run the Wednesday games get
+# admin rights today, but they only need to run games — approving join
+# requests, editing the roster and setting levels are not theirs to do.
+ADMIN_FULL = "full"   # everything, including the roster and join requests
+ADMIN_HOST = "host"   # can run tournaments, nothing else
+_ADMIN_ROLES = (ADMIN_FULL, ADMIN_HOST)
+
+
+async def _ensure_admin_role(db):
+    """Add admins.role if missing. Existing admins default to 'full' so nobody
+    silently loses access on deploy — hosts are demoted deliberately."""
+    try:
+        await db.execute(
+            f"ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT '{ADMIN_FULL}'")
+        await db.commit()
+    except Exception:
+        pass  # already there
+
+
+async def get_admin_role(tg_id: int) -> str | None:
+    """'full', 'host', or None when the user is not an admin at all."""
     async with conn() as db:
-        cur = await db.execute("SELECT 1 FROM admins WHERE tg_id=?", (tg_id,))
-        return bool(await cur.fetchone())
+        await _ensure_admin_role(db)
+        cur = await db.execute("SELECT role FROM admins WHERE tg_id=?", (tg_id,))
+        row = await cur.fetchone()
+    if not row:
+        return None
+    role = (row["role"] or ADMIN_FULL).strip()
+    return role if role in _ADMIN_ROLES else ADMIN_FULL
+
+
+async def is_admin(tg_id: int) -> bool:
+    return await get_admin_role(tg_id) is not None
+
+
+async def is_full_admin(tg_id: int) -> bool:
+    return await get_admin_role(tg_id) == ADMIN_FULL
 
 
 # ─── Mutations ────────────────────────────────────────────

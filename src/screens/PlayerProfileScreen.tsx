@@ -40,7 +40,8 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
 
-  const isAdmin = !!me?.is_admin;
+  // Inviting and editing a player (level included) are full-admin actions.
+  const isFullAdmin = !!me?.is_full_admin;
   const linked = !!data?.player?.telegram_id;
   const isOwn = !!me?.player && me.player.id === pid;
   const racketM = useUpdateMyRacket();
@@ -84,14 +85,14 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               background: 'transparent', border: 'none', padding: 4, cursor: 'pointer', color: T.gold,
             }}><EShareIcon size={17} /></button>
           )}
-          {isAdmin && !linked && (
+          {isFullAdmin && !linked && (
             <button onClick={onInvite} disabled={mint.isPending} style={{
               background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 999,
               padding: '4px 10px', cursor: 'pointer', color: T.gold,
               fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
             }}>{mint.isPending ? '…' : t('profile.invite')}</button>
           )}
-          {isAdmin && (
+          {isFullAdmin && (
             <button onClick={onEdit} aria-label="Edit" style={{
               background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
               color: T.gold, display: 'flex', alignItems: 'center', gap: 4,
