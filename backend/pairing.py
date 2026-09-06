@@ -7,10 +7,15 @@ Priority order for pairings (highest first):
    player among the four). Beats every other rule.
 1. Mandatory partner change — partner this round must differ from partner last round
    (pairs containing a B+ are exempt — see MUST_CHANGE_EXEMPT_LEVELS)
-2. Court side — avoid pairing two right-handers or two left-handers
-   (pairs containing a B+ are exempt; 'both' = universal, never violates)
-3. Level balance — both teams should have similar average level, prefer mixed pairs
-4. Avoid repeated pairs across the whole tournament
+2. Court side + level balance, weighed together (see SIDE_PENALTY):
+   - Court side — avoid pairing two right-handers or two left-handers
+     (pairs containing a B+ are exempt; 'both' = universal, never violates)
+   - Level balance — both teams should have similar average level, prefer mixed pairs
+   Side normally wins, but a clearly better balance outweighs it. Concretely,
+   SIDE_PENALTY is tuned so that a side clash IS accepted when the alternative
+   would otherwise be "strong pair vs weak pair" (e.g. C+/C+ against C/C, a
+   balance gap of 2.0), and is NOT accepted for smaller balance gains.
+3. Avoid repeated pairs across the whole tournament
    (pairs containing a B+ are exempt)
 
 When a constraint is physically infeasible on a given court, the algorithm picks
@@ -23,6 +28,15 @@ LEVEL_ORDER = {"A+": 7, "A": 6, "B+": 5, "B": 4, "C+": 3, "C": 2, "C- strong": 1
 # typically rare (often only one B+ in a tournament), so forcing them to switch
 # partners every round pushes them into worse-balanced pairs.
 MUST_CHANGE_EXEMPT_LEVELS = {"B+"}
+
+# Cost of one same-side pair, added to balance_score. Tuning note: with only 3
+# possible pairings per court the side rule and the balance rule can be
+# mutually exclusive. As a hard tier, side always won and could force
+# "strong pair vs weak pair" (Liza, tournament 123 round 6: C+/C+ against C/C).
+# 1.5 sits between the two gaps that occur in practice: a balance gain of 2.0
+# (splitting a strong-pair/weak-pair court) overrides a side clash, a gain of
+# 1.0 or less does not.
+SIDE_PENALTY = 1.5
 
 
 def level_value(level: str) -> int:
@@ -125,8 +139,8 @@ def best_pairing(players: list, pair_history: dict, last_partners: dict | None =
             if any(p.get("level") in MUST_CHANGE_EXEMPT_LEVELS for p in team):
                 continue
             repeat_penalty += pair_count(pair_history, team[0]["player_id"], team[1]["player_id"])
-        # Priority: B+-weakest > must-change > side > balance > repeat
-        return (b_plus_viol, same_partner, side_viol, bal, repeat_penalty)
+        # Priority: B+-weakest > must-change > (side + balance) > repeat
+        return (b_plus_viol, same_partner, bal + SIDE_PENALTY * side_viol, repeat_penalty)
 
     best = min(options, key=option_score)
     return best[0], best[1]
