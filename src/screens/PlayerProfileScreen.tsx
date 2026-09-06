@@ -40,7 +40,8 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
 
-  // Inviting and editing a player (level included) are full-admin actions.
+  const isAdmin = !!me?.is_admin;
+  // Linking someone's Telegram is a club action; editing the card is not.
   const isFullAdmin = !!me?.is_full_admin;
   const linked = !!data?.player?.telegram_id;
   const isOwn = !!me?.player && me.player.id === pid;
@@ -92,7 +93,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
             }}>{mint.isPending ? '…' : t('profile.invite')}</button>
           )}
-          {isFullAdmin && (
+          {isAdmin && (
             <button onClick={onEdit} aria-label="Edit" style={{
               background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
               color: T.gold, display: 'flex', alignItems: 'center', gap: 4,

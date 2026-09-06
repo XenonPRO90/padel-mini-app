@@ -18,7 +18,9 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
   const t = useT();
   const [q, setQ] = useState('');
   const { data: me } = useMe();
-  // Roster and join requests belong to full admins; hosts only run games.
+  const isAdmin = !!me?.is_admin;
+  // Join requests belong to full admins. Adding and editing a player is open
+  // to hosts too — a walk-in guest on a Wednesday is theirs to handle.
   const isFullAdmin = !!me?.is_full_admin;
   const pending = me?.pending_requests ?? 0;
   const { data, isLoading, error, refetch } = useQuery<{ items: Player[] }>({
@@ -58,7 +60,7 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
             {t('admin.requests')}{pending > 0 ? ` · ${pending}` : ''}
           </button>
         )}
-        {isFullAdmin && onAddPlayer && (
+        {isAdmin && onAddPlayer && (
           <button onClick={onAddPlayer} style={{
             background: T.emerald, color: T.cream, border: 'none',
             borderRadius: 999, padding: '8px 16px',

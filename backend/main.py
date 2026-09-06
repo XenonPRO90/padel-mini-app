@@ -673,7 +673,7 @@ class PlayerBody(BaseModel):
 
 
 @app.post("/api/players")
-async def players_create(body: PlayerBody, _user=Depends(get_full_admin)):
+async def players_create(body: PlayerBody, _user=Depends(get_admin)):
     try:
         return await q.create_player(body.name, body.level, body.side)
     except ValueError as e:
@@ -681,7 +681,7 @@ async def players_create(body: PlayerBody, _user=Depends(get_full_admin)):
 
 
 @app.put("/api/players/{pid}")
-async def players_update(pid: int, body: PlayerBody, _user=Depends(get_full_admin)):
+async def players_update(pid: int, body: PlayerBody, _user=Depends(get_admin)):
     try:
         return await q.update_player(pid, body.name, body.level, body.side)
     except ValueError as e:

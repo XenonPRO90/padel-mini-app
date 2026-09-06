@@ -590,10 +590,9 @@ function StepPlayers({
     queryFn: () => api('/api/players'),
   });
   const [adding, setAdding] = useState(false);
-  // Creating a player writes to the club roster, so it is a full-admin action
-  // even here inside the wizard — a host runs games, they don't grow the club.
+  // Any admin can add a walk-in guest mid-wizard (Roman, 2026-09-06).
   const { data: me } = useMe();
-  const canAddPlayer = !!me?.is_full_admin;
+  const canAddPlayer = !!me?.is_admin;
 
   const items = data?.items ?? [];
   const toggle = (id: number) => {
