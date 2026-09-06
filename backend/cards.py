@@ -17,6 +17,15 @@ import aiohttp
 from .config import BOT_TOKEN
 
 FRONTEND_DIR = "/home/ubuntu/padel-mini-app/frontend"
+
+# Playwright lives in its own directory with a pinned version, NOT in the Vite
+# frontend. Two reasons: as a devDependency there every Vercel build would
+# download a browser, and invoking it as a bare `npx playwright` silently
+# follows the npx cache — when that cache rolled forward to a release whose
+# chromium revision was not installed, card rendering died and stayed dead
+# from 2026-07-31 to 2026-09-06 without any visible error.
+RENDER_DIR = "/home/ubuntu/padel-render"
+PLAYWRIGHT_BIN = os.path.join(RENDER_DIR, "node_modules", ".bin", "playwright")
 _RENDER_SEM = asyncio.Semaphore(3)  # cap concurrent chrome instances
 
 # ── tokens (mirror of src/lib/tokens.ts) ────────────────────────────────
@@ -159,10 +168,10 @@ async def render_png(html: str) -> bytes:
             async with aiofiles.open(hp, "w") as f:
                 await f.write(html)
             proc = await asyncio.create_subprocess_exec(
-                "npx", "playwright", "screenshot",
+                PLAYWRIGHT_BIN, "screenshot",
                 "--viewport-size=1080,1080", "--wait-for-timeout=2200",
                 f"file://{hp}", op,
-                cwd=FRONTEND_DIR,
+                cwd=RENDER_DIR,
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
             )
             _, err = await proc.communicate()

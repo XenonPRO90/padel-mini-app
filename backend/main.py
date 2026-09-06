@@ -6,6 +6,7 @@ Run from inside backend/:
     uvicorn main:app --reload --port 8001
 """
 import asyncio
+import sys
 import urllib.request
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import Response
@@ -348,15 +349,28 @@ async def tournament_cards(tid: int, _admin=Depends(get_admin)):
         raise HTTPException(404, "Турнир не найден")
     if data["tournament"]["status"] != "finished":
         raise HTTPException(400, "Турнир не завершён")
+    sent_ids = await q.get_sent_card_player_ids(tid)
     return {
         "linked_count": data["linked_count"], "total_count": data["total_count"],
+        # Actual delivery state, so the UI can report what really went out
+        # rather than what was queued — sending happens in the background.
+        "sent_count": len(sent_ids),
+        "report": _card_send_reports.get(tid),
         "items": [{"player_id": c["player_id"], "name": c["name"],
-                   "place": c["place"], "linked": bool(c["telegram_id"])}
+                   "place": c["place"], "linked": bool(c["telegram_id"]),
+                   "sent": c["player_id"] in sent_ids}
                   for c in data["cards"]],
     }
 
 
 _card_send_tasks: set = set()  # keep refs to background send tasks so they aren't GC'd
+
+# Outcome of the last background send per tournament, surfaced through
+# GET /cards. Sending is fire-and-forget, so without this the admin only ever
+# saw the queued count: card rendering was broken from 2026-07-31 to
+# 2026-09-06 (npx resolved Playwright to a release whose chromium build was
+# not installed) and every attempt still reported success.
+_card_send_reports: dict[int, dict] = {}
 
 
 @app.post("/api/tournaments/{tid}/cards/send")
@@ -377,15 +391,34 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
     already = set() if force else await q.get_sent_card_player_ids(tid)
     pending = [c for c in linked if c["player_id"] not in already]
 
+    failures: list[dict] = []
+
     async def one(c):
         c["avatar"] = await asyncio.to_thread(cards_mod.fetch_avatar_datauri, c.get("photo_url"))
-        ok, _reason = await cards_mod.render_and_send(c)
+        ok, reason = await cards_mod.render_and_send(c)
         if ok:
             await q.mark_card_sent(tid, c["player_id"])
+        else:
+            failures.append({"name": c["name"], "reason": reason or "unknown"})
+            print(f"[cards] tid={tid} player={c['player_id']} {c['name']}: {reason}",
+                  file=sys.stderr, flush=True)
 
     async def _run():
-        await asyncio.gather(*[one(c) for c in pending], return_exceptions=True)
+        res = await asyncio.gather(*[one(c) for c in pending], return_exceptions=True)
+        for r in res:
+            if isinstance(r, Exception):
+                failures.append({"name": "?", "reason": str(r)[:120]})
+                print(f"[cards] tid={tid} task crashed: {r}", file=sys.stderr, flush=True)
+        _card_send_reports[tid] = {
+            "queued": len(pending),
+            "ok": len(pending) - len(failures),
+            "failed": failures,
+        }
+        if failures:
+            print(f"[cards] tid={tid} DONE with {len(failures)}/{len(pending)} failures",
+                  file=sys.stderr, flush=True)
 
+    _card_send_reports.pop(tid, None)  # a fresh attempt invalidates the old outcome
     task = asyncio.create_task(_run())
     _card_send_tasks.add(task)
     task.add_done_callback(_card_send_tasks.discard)
