@@ -10,7 +10,10 @@ Priority order for pairings (highest first):
 2. Court side + level balance, weighed together (see SIDE_PENALTY):
    - Court side — avoid pairing two right-handers or two left-handers
      (pairs containing a B+ are exempt; 'both' = universal, never violates)
-   - Level balance — both teams should have similar average level, prefer mixed pairs
+   - Level balance — both teams should have similar average level, prefer mixed
+     pairs; ELO breaks ties between options that levels rated equally
+     (see ELO_TIEBREAK_WEIGHT), which is the common case on a court of
+     same-level players
    Side normally wins, but a clearly better balance outweighs it. Concretely,
    SIDE_PENALTY is tuned so that a side clash IS accepted when the alternative
    would otherwise be "strong pair vs weak pair" (e.g. C+/C+ against C/C, a
@@ -38,6 +41,18 @@ MUST_CHANGE_EXEMPT_LEVELS = {"B+"}
 # 1.0 or less does not.
 SIDE_PENALTY = 1.5
 
+# Levels are coarse — most of the club is C or C+ — so on a court of same-level
+# players every pairing scores identically on balance and the choice is
+# effectively arbitrary. ELO breaks that tie (Roman, 2026-09-06).
+#
+# It must never outrank a real level difference. Level values move in steps of
+# 0.5, so every level-based score (balance, and SIDE_PENALTY on top of it) is a
+# multiple of 0.25; capping this term at 0.12 keeps it strictly below the
+# smallest level-based gap. It therefore only ever separates options that were
+# already exactly equal.
+ELO_TIEBREAK_WEIGHT = 0.02
+ELO_TIEBREAK_CAP = 0.12
+
 
 def level_value(level: str) -> int:
     return LEVEL_ORDER.get(level, 2)
@@ -54,6 +69,18 @@ def balance_score(t1_levels, t2_levels) -> float:
     inter_diff = abs(t1_avg - t2_avg)
     # Reward mixed-level pairs: both teams must be mixed (use min spread)
     return inter_diff - 0.5 * (t1_spread + t2_spread)
+
+
+def _elo_tiebreak(t1, t2) -> float:
+    """Small penalty for the ELO gap between the two teams, used only to
+    separate options that levels rated equally. Returns 0 unless every player
+    on the court has an ELO, so a court with a newcomer behaves as before."""
+    vals1 = [p.get("elo") for p in t1]
+    vals2 = [p.get("elo") for p in t2]
+    if any(v is None for v in vals1 + vals2):
+        return 0.0
+    gap = abs(sum(vals1) / len(vals1) - sum(vals2) / len(vals2))
+    return min(gap * ELO_TIEBREAK_WEIGHT, ELO_TIEBREAK_CAP)
 
 
 def pair_count(pair_history: dict, a: int, b: int) -> int:
@@ -132,7 +159,7 @@ def best_pairing(players: list, pair_history: dict, last_partners: dict | None =
         bal = balance_score(
             [x["level"] for x in t1],
             [x["level"] for x in t2],
-        )
+        ) + _elo_tiebreak(t1, t2)
         # Repeat penalty — pairs containing a B+ are exempt (Liza's rule)
         repeat_penalty = 0
         for team in (t1, t2):
