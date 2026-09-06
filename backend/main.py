@@ -459,6 +459,82 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
             "linked_count": len(linked), "total_count": len(data["cards"])}
 
 
+# Round schedule notification — one rendered image of the round, DM'd to every
+# linked participant with a personal caption ("you are on court 2, with X").
+# Mainly for round 1, but works for any round.
+_notify_reports: dict[str, dict] = {}
+_notify_tasks: set = set()
+
+
+@app.get("/api/tournaments/{tid}/rounds/{rnum}/notify")
+async def round_notify_state(tid: int, rnum: int, _admin=Depends(get_admin)):
+    sched = await q.get_round_schedule(tid, rnum)
+    if not sched:
+        raise HTTPException(404, "Раунд не найден")
+    recipients = await q.get_round_recipients(tid, rnum)
+    sent = await q.get_round_notified_player_ids(tid, rnum)
+    total = sum(len(c["team1"]) + len(c["team2"]) for c in sched["courts"])
+    return {
+        "linked_count": len(recipients),
+        "total_count": total,
+        "sent_count": len(sent),
+        "report": _notify_reports.get(f"{tid}:{rnum}"),
+    }
+
+
+@app.post("/api/tournaments/{tid}/rounds/{rnum}/notify")
+async def round_notify_send(tid: int, rnum: int, force: bool = False,
+                            _admin=Depends(get_admin)):
+    """Render the round once per needed language, then DM it to each linked
+    player with their own court/partner/opponents. Runs in the background for
+    the same reason card sending does — the Telegram WebView drops long
+    requests. Idempotent: a re-press retries only who didn't get it."""
+    sched = await q.get_round_schedule(tid, rnum)
+    if not sched:
+        raise HTTPException(404, "Раунд не найден")
+    recipients = await q.get_round_recipients(tid, rnum)
+    already = set() if force else await q.get_round_notified_player_ids(tid, rnum)
+    pending = [r for r in recipients if r["player_id"] not in already]
+
+    key = f"{tid}:{rnum}"
+    failures: list[dict] = []
+
+    async def _run():
+        pngs: dict[str, bytes] = {}
+        for r in pending:
+            lang = "en" if r.get("lang") == "en" else "ru"
+            try:
+                if lang not in pngs:
+                    pngs[lang] = await cards_mod.render_schedule(sched, lang)
+                ok, j = await cards_mod.send_photo(
+                    r["telegram_id"], pngs[lang],
+                    cards_mod.schedule_caption(sched, r["player_id"], lang))
+                if ok:
+                    await q.mark_round_notified(tid, rnum, r["player_id"])
+                else:
+                    raise RuntimeError(str(j.get("description", j))[:120])
+            except Exception as e:
+                failures.append({"name": r["name"], "reason": str(e)[:120]})
+                print(f"[notify] tid={tid} r={rnum} player={r['player_id']} "
+                      f"{r['name']}: {e}", file=sys.stderr, flush=True)
+        _notify_reports[key] = {
+            "queued": len(pending),
+            "ok": len(pending) - len(failures),
+            "failed": failures,
+        }
+        if failures:
+            print(f"[notify] tid={tid} r={rnum} DONE with "
+                  f"{len(failures)}/{len(pending)} failures", file=sys.stderr, flush=True)
+
+    _notify_reports.pop(key, None)
+    task = asyncio.create_task(_run())
+    _notify_tasks.add(task)
+    task.add_done_callback(_notify_tasks.discard)
+    return {"sent": len(pending),
+            "skipped": len(recipients) - len(pending),
+            "linked_count": len(recipients)}
+
+
 @app.post("/api/players/{pid}/invite")
 async def player_invite(pid: int, admin=Depends(get_admin)):
     """Admin: mint a one-time deep-link to bind this player to a Telegram account."""

@@ -146,6 +146,89 @@ def build_card_html(c: dict) -> str:
     return _page(inner)
 
 
+# ── round schedule image + per-player "where you play" note ─────────────
+
+SCHED_L = {
+    "ru": {"round": "РАУНД {n}", "courtWord": "Корт", "vs": "против",
+           "you": "Ты играешь на корте {c}", "with": "в паре с {p}",
+           "against": "против {a} и {b}", "go": "Удачной игры! 🎾"},
+    "en": {"round": "ROUND {n}", "courtWord": "Court", "vs": "vs",
+           "you": "You are on court {c}", "with": "with {p}",
+           "against": "against {a} and {b}", "go": "Have a great game! 🎾"},
+}
+
+
+def build_schedule_html(sched: dict, lang: str = "ru") -> str:
+    """One image for the whole round — the same picture goes to every player,
+    only the caption below it is personal."""
+    L = SCHED_L.get(lang, SCHED_L["ru"])
+    n = max(len(sched["courts"]), 1)
+    name_size = 30 if n <= 4 else (26 if n == 5 else 23)
+    pad = 24 if n <= 4 else (16 if n == 5 else 11)
+
+    blocks = []
+    for c in sched["courts"]:
+        team = lambda t: " + ".join(x["name"] for x in t)
+        blocks.append(
+            f'<div style="display:flex;align-items:center;gap:22px;'
+            f'padding:{pad}px 0;border-top:1px solid {PAPEREDGE}">'
+            f'<div style="width:96px;flex:none;text-align:center">'
+            f'<div style="font-family:{DISP};font-size:12px;letter-spacing:4px;color:{GOLD};'
+            f'text-transform:uppercase">{L["courtWord"]}</div>'
+            f'<div style="font-family:{DISP};font-weight:700;font-size:44px;color:{EMER};'
+            f'line-height:1">{c["court_label"]}</div></div>'
+            f'<div style="flex:1;text-align:left">'
+            f'<div style="font-family:{DISP};font-weight:700;font-size:{name_size}px;'
+            f'color:{INK};line-height:1.25">{team(c["team1"])}</div>'
+            f'<div style="font-family:{SERIF};font-style:italic;font-size:{int(name_size*0.7)}px;'
+            f'color:{GOLD};margin:2px 0">{L["vs"]}</div>'
+            f'<div style="font-family:{DISP};font-weight:700;font-size:{name_size}px;'
+            f'color:{INK};line-height:1.25">{team(c["team2"])}</div>'
+            f'</div></div>'
+        )
+
+    inner = (
+        f'<div style="display:flex;justify-content:center;margin-bottom:4px">{_elogo(70)}</div>'
+        f'<div style="font-family:{DISP};font-size:16px;letter-spacing:9px;color:{GOLD};'
+        f'text-transform:uppercase;margin-bottom:16px">Padel Club</div>'
+        f'<div style="font-family:{DISP};font-weight:800;font-size:40px;letter-spacing:5px;'
+        f'color:{GOLDDEEP};text-transform:uppercase">{L["round"].format(n=sched["round_num"])}</div>'
+        f'<div style="font-family:{SERIF};font-style:italic;font-size:24px;color:{MUTED};'
+        f'margin:10px 0 18px;max-width:840px">{sched["tournament"]}</div>'
+        f'<div style="width:100%;max-width:860px">{"".join(blocks)}</div>'
+        f'<div style="position:absolute;bottom:64px;left:0;right:0;text-align:center;'
+        f'font-family:{DISP};font-size:13px;letter-spacing:5px;color:{MUTED};'
+        f'text-transform:uppercase">Padel Club · King of the Court</div>'
+    )
+    return _page(inner)
+
+
+def schedule_caption(sched: dict, player_id: int, lang: str = "ru") -> str:
+    """Personal note under the schedule: your court, partner and opponents."""
+    L = SCHED_L.get(lang, SCHED_L["ru"])
+    lines = [sched["tournament"], L["round"].format(n=sched["round_num"]), ""]
+    for c in sched["courts"]:
+        for mine, theirs in ((c["team1"], c["team2"]), (c["team2"], c["team1"])):
+            me = next((p for p in mine if p["player_id"] == player_id), None)
+            if not me:
+                continue
+            partner = next((p for p in mine if p["player_id"] != player_id), None)
+            lines.append(L["you"].format(c=c["court_label"]))
+            if partner:
+                lines.append(L["with"].format(p=partner["name"]))
+            if len(theirs) == 2:
+                lines.append(L["against"].format(a=theirs[0]["name"], b=theirs[1]["name"]))
+            lines.append("")
+            lines.append(L["go"])
+            return "\n".join(lines)
+    # Not on court this round (shouldn't happen — recipients come from the round).
+    return "\n".join(lines).strip()
+
+
+async def render_schedule(sched: dict, lang: str = "ru") -> bytes:
+    return await render_png(build_schedule_html(sched, lang))
+
+
 # ── podium image (one per tournament, sent to everyone) ─────────────────
 
 PODIUM_L = {

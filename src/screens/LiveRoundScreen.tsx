@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useNextRound, useUndoLastRound, useEliminate } from '../api/mutations';
+import { useNextRound, useUndoLastRound, useEliminate, useSwapPlayers } from '../api/mutations';
 import { useMe } from '../api/me';
 import { T } from '../lib/tokens';
-import { CourtCard } from '../components/CourtCard';
+import { CourtCard, type Slot } from '../components/CourtCard';
 import { MainCTA } from '../components/MainCTA';
 import { CourtSheet } from './CourtSheet';
 import { RosterSheet } from './RosterSheet';
+import { NotifyRoundModal } from '../components/NotifyRoundModal';
 import { ELabel, EShareIcon, EPeopleIcon } from '../lib/elegant';
 import { groups8CourtTag, type ActiveTournamentResponse, type Match, type MatchPlayer } from '../lib/types';
 
@@ -35,10 +36,36 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
   const [openMatch, setOpenMatch] = useState<Match | null>(null);
   const [rosterOpen, setRosterOpen] = useState(false);
   const [elimOpen, setElimOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  // Manual correction of the live round — same tap-two-players swap as the
+  // archived round screen. Mainly for fixing up the generated round 1.
+  const [editMode, setEditMode] = useState(false);
+  const [selected, setSelected] = useState<{ matchId: number; slot: Slot } | null>(null);
+  const swap = useSwapPlayers();
   const nextRound = useNextRound();
   const undoRound = useUndoLastRound();
   const { data: me } = useMe();
   const isAdmin = !!me?.is_admin;
+
+  const exitEdit = () => { setEditMode(false); setSelected(null); };
+
+  const onPlayerTap = (match: Match, slot: Slot) => {
+    if (swap.isPending) return;
+    if (!selected) { setSelected({ matchId: match.match_id, slot }); return; }
+    if (selected.matchId === match.match_id && selected.slot === slot) {
+      setSelected(null);
+      return;
+    }
+    const a = selected;
+    const b = { matchId: match.match_id, slot };
+    setSelected(null);
+    try {
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('light');
+    } catch { /* ignore */ }
+    swap.mutate({ a, b }, {
+      onError: (e) => alert((e as Error).message || 'Не удалось поменять игроков'),
+    });
+  };
 
   if (isLoading) {
     return (
@@ -115,6 +142,15 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {isAdmin && (
+            <button onClick={() => (editMode ? exitEdit() : setEditMode(true))} style={{
+              background: editMode ? T.emerald : 'transparent',
+              border: `1px solid ${editMode ? T.emerald : T.gold}`,
+              borderRadius: 999, padding: '5px 10px', marginRight: 2, cursor: 'pointer',
+              color: editMode ? T.cream : T.gold,
+              fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 600, letterSpacing: 1,
+            }}>{editMode ? 'Готово' : 'Править'}</button>
+          )}
+          {isAdmin && !editMode && (
             <button onClick={() => setRosterOpen(true)} aria-label="Roster" style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               padding: 4, color: T.gold,
@@ -138,7 +174,17 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
         // which mis-measures viewport height when safe-area insets vary.
         padding: '14px 16px 36px',
         display: 'flex', flexDirection: 'column', gap: 12,
+        opacity: swap.isPending ? 0.6 : 1, transition: 'opacity 150ms',
+        pointerEvents: swap.isPending ? 'none' : 'auto',
       }}>
+        {editMode && (
+          <div style={{ textAlign: 'center', marginBottom: 2 }}>
+            <ELabel color={T.gold}>
+              {selected ? 'Выберите второго игрока для обмена'
+                        : 'Тапните игрока, затем второго — поменять местами'}
+            </ELabel>
+          </div>
+        )}
         {round.matches.map((m) => {
           const tag = isGroups8 ? groups8CourtTag(round.round_num, m.court_num) : undefined;
           const medal = !isGroups8 && m.court_num <= 3 ? (m.court_num as 1 | 2 | 3) : undefined;
@@ -146,9 +192,12 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
             <CourtCard
               key={m.match_id}
               match={m}
-              onClick={isAdmin ? () => setOpenMatch(m) : undefined}
+              onClick={isAdmin && !editMode ? () => setOpenMatch(m) : undefined}
               medal={medal}
               tag={tag}
+              editable={editMode}
+              selectedSlot={selected?.matchId === m.match_id ? selected.slot : null}
+              onPlayerTap={(slot) => onPlayerTap(m, slot)}
             />
           );
         })}
@@ -190,6 +239,14 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
                 },
               })}
             />
+            {!editMode && (
+              <button onClick={() => setNotifyOpen(true)} style={{
+                width: '100%', marginTop: 8, padding: '11px',
+                background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 12,
+                cursor: 'pointer', color: T.goldDeep,
+                fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+              }}>📤 Отправить расписание игрокам</button>
+            )}
             {allDone && t.mode === 'rotating' && !isLastRound && t.num_courts > 1 && (
               <button onClick={() => setElimOpen(true)} style={{
                 width: '100%', marginTop: 8, padding: '11px',
@@ -223,6 +280,9 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
       )}
       {elimOpen && (
         <EliminationModal tid={t.id} matches={round.matches} onClose={() => setElimOpen(false)} />
+      )}
+      {notifyOpen && (
+        <NotifyRoundModal tid={t.id} roundNum={round.round_num} onClose={() => setNotifyOpen(false)} />
       )}
     </div>
   );

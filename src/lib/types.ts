@@ -70,7 +70,7 @@ export interface Tournament {
   name: string;
   num_courts: number;
   mode: 'fixed' | 'rotating' | 'americano' | 'groups8';
-  initial_order: 'keep' | 'random';
+  initial_order: 'keep' | 'random' | 'smart';
   initial_points: number;
   start_round: number;
   status: 'setup' | 'active' | 'finished';
