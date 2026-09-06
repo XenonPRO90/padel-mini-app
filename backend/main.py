@@ -391,6 +391,12 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
     already = set() if force else await q.get_sent_card_player_ids(tid)
     pending = [c for c in linked if c["player_id"] not in already]
 
+    # The podium image goes out to everyone as a second message (Roman,
+    # 2026-09-06): the personal card says how you did, the podium says who won.
+    podium = await q.get_tournament_podium(tid)
+    podium_already = set() if force else await q.get_podium_sent_player_ids(tid)
+    podium_pending = [c for c in linked if c["player_id"] not in podium_already]
+
     failures: list[dict] = []
 
     async def one(c):
@@ -403,19 +409,42 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
             print(f"[cards] tid={tid} player={c['player_id']} {c['name']}: {reason}",
                   file=sys.stderr, flush=True)
 
+    async def _send_podium():
+        """Render once per language actually needed, then reuse the PNG."""
+        if not podium or not podium["rows"] or not podium_pending:
+            return
+        pngs: dict[str, bytes] = {}
+        for c in podium_pending:
+            lang = "en" if c.get("lang") == "en" else "ru"
+            try:
+                if lang not in pngs:
+                    pngs[lang] = await cards_mod.render_podium(podium, lang)
+                ok, j = await cards_mod.send_photo(
+                    c["telegram_id"], pngs[lang], cards_mod.podium_caption(podium, lang))
+                if ok:
+                    await q.mark_podium_sent(tid, c["player_id"])
+                else:
+                    raise RuntimeError(str(j.get("description", j))[:120])
+            except Exception as e:
+                failures.append({"name": f"{c['name']} (подиум)", "reason": str(e)[:120]})
+                print(f"[podium] tid={tid} player={c['player_id']} {c['name']}: {e}",
+                      file=sys.stderr, flush=True)
+
     async def _run():
         res = await asyncio.gather(*[one(c) for c in pending], return_exceptions=True)
+        await _send_podium()
         for r in res:
             if isinstance(r, Exception):
                 failures.append({"name": "?", "reason": str(r)[:120]})
                 print(f"[cards] tid={tid} task crashed: {r}", file=sys.stderr, flush=True)
+        total = len(pending) + len(podium_pending)
         _card_send_reports[tid] = {
-            "queued": len(pending),
-            "ok": len(pending) - len(failures),
+            "queued": total,
+            "ok": total - len(failures),
             "failed": failures,
         }
         if failures:
-            print(f"[cards] tid={tid} DONE with {len(failures)}/{len(pending)} failures",
+            print(f"[cards] tid={tid} DONE with {len(failures)}/{total} failures",
                   file=sys.stderr, flush=True)
 
     _card_send_reports.pop(tid, None)  # a fresh attempt invalidates the old outcome
@@ -425,7 +454,7 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
 
     # Returns immediately; "sent" = queued count. Delivery finishes in the
     # background within seconds. Failures stay unmarked → a re-press retries them.
-    return {"sent": len(pending), "failed": [],
+    return {"sent": len(pending), "podium": len(podium_pending), "failed": [],
             "skipped": len(linked) - len(pending),
             "linked_count": len(linked), "total_count": len(data["cards"])}
 

@@ -146,6 +146,78 @@ def build_card_html(c: dict) -> str:
     return _page(inner)
 
 
+# ── podium image (one per tournament, sent to everyone) ─────────────────
+
+PODIUM_L = {
+    "ru": {"title": "ПОЗДРАВЛЯЕМ ПОБЕДИТЕЛЕЙ ТУРНИРА!", "place": "{n} место",
+           "caption_title": "🏆 ПОЗДРАВЛЯЕМ ПОБЕДИТЕЛЕЙ ТУРНИРА!"},
+    "en": {"title": "CONGRATULATIONS TO THE WINNERS!", "place": "{n} place",
+           "caption_title": "🏆 CONGRATULATIONS TO THE WINNERS!"},
+}
+_MEDAL_EMOJI = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def build_podium_html(p: dict, lang: str = "ru") -> str:
+    """p: {tournament, date, rows: [{place, name}]} — rows already dense-ranked,
+    so a shared place appears as several rows carrying the same number."""
+    L = PODIUM_L.get(lang, PODIUM_L["ru"])
+    rows = p["rows"]
+    # Ties can push this past three lines; shrink so it still fits the square.
+    n = max(len(rows), 1)
+    name_size = 54 if n <= 3 else (46 if n == 4 else 40)
+    gap = 30 if n <= 3 else (22 if n == 4 else 16)
+    medal_size = 62 if n <= 3 else 52
+
+    # One fixed-width medal column so every row's text starts at the same x —
+    # centering each row on its own made the medals wander with name length.
+    lines = []
+    for i, r in enumerate(rows):
+        mb = 0 if i == len(rows) - 1 else gap
+        medal = _emedal(r["place"], medal_size) if r["place"] in (1, 2, 3) else ""
+        lines.append(
+            f'<div style="display:flex;align-items:center;gap:22px;margin-bottom:{mb}px">'
+            f'<div style="width:{medal_size}px;flex:none;display:flex;justify-content:center">{medal}</div>'
+            f'<div style="text-align:left">'
+            f'<div style="font-family:{DISP};font-size:{int(name_size*0.42)}px;letter-spacing:4px;'
+            f'color:{GOLD};text-transform:uppercase">{L["place"].format(n=r["place"])}</div>'
+            f'<div style="font-family:{DISP};font-weight:700;font-size:{name_size}px;color:{INK};'
+            f'line-height:1.1">{r["name"]}</div>'
+            f'</div></div>'
+        )
+
+    # Tournament names already carry their date ("... PAUS CLUB 04.09"), and
+    # created_at is often the evening before, so appending it produced
+    # "RALLY PADEL 02.09 · 01.09". The name alone is the subtitle.
+    sub = p["tournament"]
+    inner = (
+        f'<div style="display:flex;justify-content:center;margin-bottom:6px">{_elogo(78)}</div>'
+        f'<div style="font-family:{DISP};font-size:17px;letter-spacing:9px;color:{GOLD};'
+        f'text-transform:uppercase;margin-bottom:22px">Padel Club</div>'
+        f'<div style="font-family:{DISP};font-weight:800;font-size:32px;letter-spacing:2px;'
+        f'color:{GOLDDEEP};text-transform:uppercase;line-height:1.3;max-width:820px">{L["title"]}</div>'
+        f'<div style="font-family:{SERIF};font-style:italic;font-size:26px;color:{MUTED};'
+        f'margin:14px 0 44px;max-width:840px">{sub}</div>'
+        f'<div style="display:inline-block">{"".join(lines)}</div>'
+        f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;'
+        f'font-family:{DISP};font-size:14px;letter-spacing:5px;color:{MUTED};'
+        f'text-transform:uppercase">Padel Club · King of the Court</div>'
+    )
+    return _page(inner)
+
+
+def podium_caption(p: dict, lang: str = "ru") -> str:
+    L = PODIUM_L.get(lang, PODIUM_L["ru"])
+    lines = [p["tournament"], L["caption_title"], ""]
+    for r in p["rows"]:
+        medal = _MEDAL_EMOJI.get(r["place"], "")
+        lines.append(f'{medal} {L["place"].format(n=r["place"])} — {r["name"]}'.strip())
+    return "\n".join(lines)
+
+
+async def render_podium(p: dict, lang: str = "ru") -> bytes:
+    return await render_png(build_podium_html(p, lang))
+
+
 def fetch_avatar_datauri(photo_url):
     """Download a player's photo and inline as data-URI so chrome renders it offline."""
     if not photo_url:
