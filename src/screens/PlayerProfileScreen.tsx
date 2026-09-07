@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { T } from '../lib/tokens';
+import { T, BRAND_CLUB } from '../lib/tokens';
 import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon, EShareIcon } from '../lib/elegant';
 import { ProfileCardModal } from './ProfileCardModal';
 import { Ring } from '../components/Ring';
@@ -52,7 +52,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
       const { deep_link } = await mint.mutateAsync(pid);
       const tg = window.Telegram?.WebApp;
       const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(deep_link)
-        + '&text=' + encodeURIComponent(t('profile.inviteText'));
+        + '&text=' + encodeURIComponent(t('profile.inviteText', { club: BRAND_CLUB }));
       if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
       else setShareLink(deep_link);
     } catch (e) {

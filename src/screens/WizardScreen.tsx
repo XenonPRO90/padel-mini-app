@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useCreateTournament, useCreatePlayer, type SideValue } from '../api/players';
-import { LEVEL_COLORS, T } from '../lib/tokens';
+import { LEVEL_COLORS, T, BRAND_NAME } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { MainCTA } from '../components/MainCTA';
 import { Avatar } from './PlayersScreen';
@@ -36,7 +36,7 @@ export function WizardScreen({ onClose }: Props) {
 
   const [step, setStep] = useState(1);
   const [s, setS] = useState<State>({
-    name: `PADEL MASTERS · ${dd}.${mm}`,
+    name: `${BRAND_NAME} · ${dd}.${mm}`,
     num_courts: 4,
     mode: 'rotating',
     initial_order: 'keep',

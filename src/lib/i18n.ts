@@ -111,7 +111,7 @@ export const STR = {
   'profile.frequentPartners': { ru: 'Частые партнёры', en: 'Frequent partners' },
   'profile.noTournaments': { ru: 'Пока нет сыгранных турниров', en: 'No tournaments played yet' },
   'profile.gamesWr': { ru: '{games} игр · {wr}%', en: '{games} games · {wr}%' },
-  'profile.inviteText': { ru: 'Открой свой профиль в Padel Club', en: 'Open your profile in Padel Club' },
+  'profile.inviteText': { ru: 'Открой свой профиль в {club}', en: 'Open your profile in {club}' },
   'profile.inviteFail': { ru: 'Не удалось создать приглашение', en: 'Could not create invite' },
 
   // achievement labels (by backend id)
