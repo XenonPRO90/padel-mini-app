@@ -12,9 +12,10 @@ interface PlayersScreenProps {
   onOpenPlayer?: (p: Player) => void;
   onAddPlayer?: () => void;
   onOpenRequests?: () => void;
+  onOpenAdmins?: () => void;
 }
 
-export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: PlayersScreenProps = {}) {
+export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests, onOpenAdmins }: PlayersScreenProps = {}) {
   const t = useT();
   const [q, setQ] = useState('');
   const { data: me } = useMe();
@@ -50,6 +51,13 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests }: Pla
           }}>{t('players.guests')}</span></div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {isFullAdmin && onOpenAdmins && (
+          <button onClick={onOpenAdmins} style={{
+            background: 'transparent', color: T.gold, border: `1px solid ${T.gold}`,
+            borderRadius: 999, padding: '8px 14px', cursor: 'pointer',
+            fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, letterSpacing: 1,
+          }}>{t('admins.title')}</button>
+        )}
         {isFullAdmin && onOpenRequests && (
           <button onClick={onOpenRequests} style={{
             background: 'transparent', color: T.gold, border: `1px solid ${T.gold}`,

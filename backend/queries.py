@@ -1260,6 +1260,97 @@ async def get_admin_role(tg_id: int) -> str | None:
     return role if role in _ADMIN_ROLES else ADMIN_FULL
 
 
+async def list_admins() -> list[dict]:
+    """Admins with their role, resolved to a player where one is linked.
+    An admin can exist without a player row — the roster and the admin list
+    are separate things — so name/username may be None.
+    """
+    async with conn() as db:
+        await _ensure_admin_role(db)
+        cur = await db.execute(
+            """SELECT a.tg_id, a.role, a.added_at,
+                      p.id AS player_id, p.name, p.username, p.photo_url
+               FROM admins a
+               LEFT JOIN players p ON p.telegram_id = a.tg_id
+               ORDER BY (a.role <> ?), COALESCE(p.name, CAST(a.tg_id AS TEXT))""",
+            (ADMIN_FULL,),
+        )
+        rows = rows_to_list(await cur.fetchall())
+    for r in rows:
+        role = (r.get("role") or ADMIN_FULL).strip()
+        r["role"] = role if role in _ADMIN_ROLES else ADMIN_FULL
+    return rows
+
+
+async def _count_full_admins(db, excluding: int | None = None) -> int:
+    cur = await db.execute(
+        "SELECT COUNT(*) AS n FROM admins WHERE role=? AND tg_id <> COALESCE(?, -1)",
+        (ADMIN_FULL, excluding),
+    )
+    return (await cur.fetchone())["n"]
+
+
+async def set_admin_role(tg_id: int, role: str, actor_tg_id: int) -> dict:
+    """Change an admin's role. Refuses to strip the last full admin, and
+    refuses to demote yourself — locking yourself out of the club would need
+    someone with server access to undo."""
+    if role not in _ADMIN_ROLES:
+        raise ValueError("Неизвестная роль")
+    async with conn() as db:
+        await _ensure_admin_role(db)
+        cur = await db.execute("SELECT role FROM admins WHERE tg_id=?", (tg_id,))
+        row = await cur.fetchone()
+        if not row:
+            raise ValueError("Такого администратора нет")
+        if role != ADMIN_FULL:
+            if tg_id == actor_tg_id:
+                raise ValueError("Нельзя снять полные права с самого себя — попроси другого администратора")
+            if await _count_full_admins(db, excluding=tg_id) == 0:
+                raise ValueError("Это последний администратор с полными правами — сначала назначь другого")
+        await db.execute("UPDATE admins SET role=? WHERE tg_id=?", (role, tg_id))
+        await db.commit()
+    return {"ok": True, "tg_id": tg_id, "role": role}
+
+
+async def add_admin(player_id: int, role: str, _actor_tg_id: int) -> dict:
+    """Grant admin rights to a linked player. Only linked players can be added
+    from the app: without a Telegram id there is nothing to authorise."""
+    if role not in _ADMIN_ROLES:
+        raise ValueError("Неизвестная роль")
+    async with conn() as db:
+        await _ensure_admin_role(db)
+        cur = await db.execute(
+            "SELECT id, name, telegram_id FROM players WHERE id=?", (player_id,))
+        p = await cur.fetchone()
+        if not p:
+            raise ValueError("Игрок не найден")
+        if not p["telegram_id"]:
+            raise ValueError(f"{p['name']} ещё не привязал Telegram — сначала пришли приглашение")
+        cur = await db.execute("SELECT 1 FROM admins WHERE tg_id=?", (p["telegram_id"],))
+        if await cur.fetchone():
+            raise ValueError(f"{p['name']} уже администратор")
+        await db.execute(
+            "INSERT INTO admins(tg_id, role) VALUES(?,?)", (p["telegram_id"], role))
+        await db.commit()
+    return {"ok": True, "tg_id": p["telegram_id"], "role": role}
+
+
+async def remove_admin(tg_id: int, actor_tg_id: int) -> dict:
+    async with conn() as db:
+        await _ensure_admin_role(db)
+        cur = await db.execute("SELECT role FROM admins WHERE tg_id=?", (tg_id,))
+        row = await cur.fetchone()
+        if not row:
+            raise ValueError("Такого администратора нет")
+        if tg_id == actor_tg_id:
+            raise ValueError("Нельзя снять права с самого себя — попроси другого администратора")
+        if (row["role"] or ADMIN_FULL) == ADMIN_FULL and await _count_full_admins(db, excluding=tg_id) == 0:
+            raise ValueError("Это последний администратор с полными правами — сначала назначь другого")
+        await db.execute("DELETE FROM admins WHERE tg_id=?", (tg_id,))
+        await db.commit()
+    return {"ok": True}
+
+
 async def is_admin(tg_id: int) -> bool:
     return await get_admin_role(tg_id) is not None
 

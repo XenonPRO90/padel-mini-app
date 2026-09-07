@@ -8,6 +8,7 @@ import { LiveRoundScreen } from './screens/LiveRoundScreen';
 import { PlayerEditScreen } from './screens/PlayerEditScreen';
 import { PlayerProfileScreen } from './screens/PlayerProfileScreen';
 import { AdminRequestsScreen } from './screens/AdminRequestsScreen';
+import { AdminsScreen } from './screens/AdminsScreen';
 import { ClubScreen } from './screens/ClubScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { PlayerHome } from './screens/PlayerHome';
@@ -35,6 +36,7 @@ type Screen =
   | { name: 'playerProfile'; player: Player }
   | { name: 'myProfile' }
   | { name: 'adminRequests' }
+  | { name: 'admins' }
   | { name: 'tournamentDetail'; tid: number }
   | { name: 'roundDetail'; tid: number; roundNum: number; mode?: string }
   | { name: 'celebration'; tid: number }
@@ -138,6 +140,7 @@ export default function App() {
               onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onAddPlayer={() => push({ name: 'playerEdit', player: null })}
               onOpenRequests={() => push({ name: 'adminRequests' })}
+              onOpenAdmins={() => push({ name: 'admins' })}
             />
           )}
           {top.name === 'home' && tab === 'club' && (
@@ -176,6 +179,9 @@ export default function App() {
           )}
           {top.name === 'adminRequests' && (
             <AdminRequestsScreen onBack={pop} />
+          )}
+          {top.name === 'admins' && (
+            <AdminsScreen onBack={pop} />
           )}
           {top.name === 'playerProfile' && (
             <PlayerProfileScreen
