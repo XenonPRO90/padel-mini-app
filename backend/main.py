@@ -553,6 +553,48 @@ async def round_notify_send(tid: int, rnum: int, force: bool = False,
             "linked_count": len(recipients)}
 
 
+# ── Admin management (full admins only) ────────────────────────────────
+# Liza asked to hand out and take back rights herself instead of asking for a
+# server-side SQL edit every time the club needs another host.
+
+class AdminRoleBody(BaseModel):
+    role: str
+
+
+class AddAdminBody(BaseModel):
+    player_id: int
+    role: str = "host"
+
+
+@app.get("/api/admins")
+async def admins_list(_admin=Depends(get_full_admin)):
+    return {"items": await q.list_admins(), "roles": [q.ADMIN_FULL, q.ADMIN_HOST]}
+
+
+@app.post("/api/admins")
+async def admins_add(body: AddAdminBody, user=Depends(get_full_admin)):
+    try:
+        return await q.add_admin(body.player_id, body.role, user["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/admins/{tg_id}")
+async def admins_set_role(tg_id: int, body: AdminRoleBody, user=Depends(get_full_admin)):
+    try:
+        return await q.set_admin_role(tg_id, body.role, user["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/admins/{tg_id}")
+async def admins_remove(tg_id: int, user=Depends(get_full_admin)):
+    try:
+        return await q.remove_admin(tg_id, user["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/players/{pid}/invite")
 async def player_invite(pid: int, admin=Depends(get_full_admin)):
     """Admin: mint a one-time deep-link to bind this player to a Telegram account."""
