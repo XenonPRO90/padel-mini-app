@@ -14,7 +14,7 @@ import urllib.request
 import aiofiles
 import aiohttp
 
-from .config import BOT_TOKEN
+from .config import BOT_TOKEN, BRAND
 
 FRONTEND_DIR = "/home/ubuntu/padel-mini-app/frontend"
 
@@ -29,11 +29,41 @@ PLAYWRIGHT_BIN = os.path.join(RENDER_DIR, "node_modules", ".bin", "playwright")
 _RENDER_SEM = asyncio.Semaphore(3)  # cap concurrent chrome instances
 
 # ── tokens (mirror of src/lib/tokens.ts) ────────────────────────────────
-CREAM = "#f5efe4"; CREAM2 = "#ede4d2"; PAPER = "#fbf7ee"; PAPEREDGE = "#e7dcc4"
-GOLD = "#a6864d"; GOLDDEEP = "#8a6a35"; RULE = "#c9b48a"
-EMER = "#2f4a3a"; EMERDEEP = "#1d3327"; INK = "#1f2a24"; MUTED = "#7a7062"
-DISP = "'Playfair Display','Cormorant Garamond',Georgia,serif"
-SERIF = "'Cormorant Garamond','Playfair Display',Georgia,serif"
+# Everything sent to Telegram is rendered here, so these images carry the
+# brand as much as the app does. Names stay identical across brands (GOLD is
+# "the accent", EMER is "the primary") so the builders below need no changes.
+_THEMES = {
+    "padel": dict(
+        CREAM="#f5efe4", CREAM2="#ede4d2", PAPER="#fbf7ee", PAPEREDGE="#e7dcc4",
+        GOLD="#a6864d", GOLDDEEP="#8a6a35", RULE="#c9b48a",
+        EMER="#2f4a3a", EMERDEEP="#1d3327", INK="#1f2a24", MUTED="#7a7062",
+        DISP="'Playfair Display','Cormorant Garamond',Georgia,serif",
+        SERIF="'Cormorant Garamond','Playfair Display',Georgia,serif",
+        MONO="'Playfair Display',Georgia,serif",
+        FONTS="family=Playfair+Display:wght@600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500",
+        EYEBROW="Padel Club", FOOTER="Padel Club · King of the Court",
+    ),
+    # First Crypto Exchange: white ground, deep navy ink, one blue accent,
+    # sharp edges and hairlines. The house style is type-led, so the crown and
+    # rackets give way to a monospace wordmark rather than a second emblem.
+    "fce": dict(
+        CREAM="#ffffff", CREAM2="#eef3fa", PAPER="#f7fafd", PAPEREDGE="#e2e8f2",
+        GOLD="#1e78f0", GOLDDEEP="#0f5fd6", RULE="#cbd5e5",
+        EMER="#091a38", EMERDEEP="#1f2d4d", INK="#091a38", MUTED="#6b7a95",
+        DISP="'Manrope',system-ui,sans-serif",
+        SERIF="'Inter',system-ui,sans-serif",
+        MONO="'JetBrains Mono',ui-monospace,monospace",
+        FONTS="family=Manrope:wght@500;700;800&family=Inter:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@500",
+        EYEBROW="First Crypto Exchange", FOOTER="FCE Padel League",
+    ),
+}
+_TH = _THEMES.get(BRAND, _THEMES["padel"])
+CREAM = _TH["CREAM"]; CREAM2 = _TH["CREAM2"]; PAPER = _TH["PAPER"]; PAPEREDGE = _TH["PAPEREDGE"]
+GOLD = _TH["GOLD"]; GOLDDEEP = _TH["GOLDDEEP"]; RULE = _TH["RULE"]
+EMER = _TH["EMER"]; EMERDEEP = _TH["EMERDEEP"]; INK = _TH["INK"]; MUTED = _TH["MUTED"]
+DISP = _TH["DISP"]; SERIF = _TH["SERIF"]; MONO = _TH["MONO"]
+BRAND_EYEBROW = _TH["EYEBROW"]; BRAND_FOOTER = _TH["FOOTER"]
+_IS_FCE = BRAND == "fce"
 
 
 def _elogo(size, color=GOLD):
@@ -66,9 +96,16 @@ def _emedal(place, size):
 
 
 def _corner(pos):
-    tf = {"tl": "", "tr": "scaleX(-1)", "bl": "scaleY(-1)", "br": "scale(-1,-1)"}[pos]
     p = {"tl": "top:34px;left:34px", "tr": "top:34px;right:34px",
          "bl": "bottom:34px;left:34px", "br": "bottom:34px;right:34px"}[pos]
+    if _IS_FCE:
+        # Corner ticks from the FCE kit: two hairlines meeting at a right
+        # angle. No flourish — the house style has none.
+        tf = {"tl": "", "tr": "scaleX(-1)", "bl": "scaleY(-1)", "br": "scale(-1,-1)"}[pos]
+        return (f'<svg width="64" height="64" viewBox="0 0 40 40" fill="none" '
+                f'style="position:absolute;{p};transform:{tf}">'
+                f'<path d="M0 14 L0 0 L14 0" stroke="{RULE}" stroke-width="1.2"/></svg>')
+    tf = {"tl": "", "tr": "scaleX(-1)", "bl": "scaleY(-1)", "br": "scale(-1,-1)"}[pos]
     return f'''<svg width="120" height="120" viewBox="0 0 70 70" fill="none" style="position:absolute;{p};opacity:0.7;transform:{tf}">
 <g stroke="{GOLD}" fill="none" stroke-width="0.7" stroke-linecap="round">
 <path d="M6 18 Q6 6 18 6"/><path d="M10 22 Q10 10 22 10"/><circle cx="14" cy="14" r="1.2" fill="{GOLD}"/>
@@ -92,13 +129,36 @@ def _hero(initials, avatar_datauri, medal, size=230):
             f'box-sizing:border-box;background:{CREAM2}">{face}</div>{badge}</div>')
 
 
+def _brandhead(logo_size=84, gap=6):
+    """Top-of-card brand block. Padel leads with the crown-and-rackets emblem;
+    FCE is type-led, so its wordmark stands alone."""
+    if _IS_FCE:
+        return (f'<div style="font-family:{MONO};font-size:15px;letter-spacing:6px;'
+                f'color:{GOLD};text-transform:uppercase;margin-bottom:20px">'
+                f'{BRAND_EYEBROW}</div>')
+    return (f'<div style="display:flex;justify-content:center;margin-bottom:{gap}px">{_elogo(logo_size)}</div>'
+            f'<div style="font-family:{DISP};font-size:18px;letter-spacing:9px;color:{GOLD};'
+            f'text-transform:uppercase;margin-bottom:6px">{BRAND_EYEBROW}</div>')
+
+
+def _footer():
+    fam = MONO if _IS_FCE else DISP
+    return (f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;'
+            f'font-family:{fam};font-size:14px;letter-spacing:5px;color:{MUTED};'
+            f'text-transform:uppercase">{BRAND_FOOTER}</div>')
+
+
 def _page(inner):
+    ground = (f'{CREAM}' if _IS_FCE
+              else f'linear-gradient(180deg,{PAPER} 0%,{CREAM} 100%)')
+    frame_w = "1px" if _IS_FCE else "1px"
+    radius = "0" if _IS_FCE else "8px"
     return f'''<!doctype html><html><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?{_TH["FONTS"]}&display=swap" rel="stylesheet">
 <style>*{{margin:0;padding:0;box-sizing:border-box}} html,body{{width:1080px;height:1080px;overflow:hidden}}</style></head>
-<body><div style="position:relative;width:1080px;height:1080px;background:linear-gradient(180deg,{PAPER} 0%,{CREAM} 100%);font-family:{SERIF}">
-<div style="position:absolute;inset:26px;border:1px solid {PAPEREDGE};border-radius:8px"></div>
+<body><div style="position:relative;width:1080px;height:1080px;background:{ground};font-family:{SERIF}">
+<div style="position:absolute;inset:26px;border:{frame_w} solid {PAPEREDGE};border-radius:{radius}"></div>
 {_corner('tl')}{_corner('tr')}{_corner('bl')}{_corner('br')}
 <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:90px;text-align:center">
 {inner}</div></div></body></html>'''
@@ -133,15 +193,14 @@ def build_card_html(c: dict) -> str:
         partner_line = (f'<div style="font-family:{SERIF};font-style:italic;font-size:24px;'
                         f'color:{MUTED};margin-top:8px">{L["with"]} <span style="color:{INK}">{c["partner"]}</span></div>')
     inner = (
-        f'<div style="display:flex;justify-content:center;margin-bottom:8px">{_elogo(84)}</div>'
-        f'<div style="font-family:{DISP};font-size:18px;letter-spacing:9px;color:{GOLD};text-transform:uppercase;margin-bottom:6px">Padel Club</div>'
+        _brandhead() +
         f'<div style="margin:20px 0 8px;display:flex;justify-content:center">{_hero(c["initials"], c.get("avatar"), c.get("medal"))}</div>'
         f'<div style="font-family:{DISP};font-weight:800;font-size:46px;letter-spacing:6px;color:{title_color};text-transform:uppercase;margin-top:18px">{title}</div>'
         f'<div style="font-family:{DISP};font-weight:700;font-size:60px;color:{INK};line-height:1.05;margin-top:8px">{c["name"]}</div>'
         f'<div style="font-family:{SERIF};font-style:italic;font-size:26px;color:{MUTED};margin-top:12px">{sub}</div>'
         f'{partner_line}'
         f'<div style="font-family:{DISP};font-weight:600;font-size:30px;color:{GOLDDEEP};margin-top:26px">{line}</div>'
-        f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;font-family:{DISP};font-size:14px;letter-spacing:5px;color:{MUTED};text-transform:uppercase">Padel Club · King of the Court</div>'
+        + _footer()
     )
     return _page(inner)
 
@@ -188,17 +247,13 @@ def build_schedule_html(sched: dict, lang: str = "ru") -> str:
         )
 
     inner = (
-        f'<div style="display:flex;justify-content:center;margin-bottom:4px">{_elogo(70)}</div>'
-        f'<div style="font-family:{DISP};font-size:16px;letter-spacing:9px;color:{GOLD};'
-        f'text-transform:uppercase;margin-bottom:16px">Padel Club</div>'
+        _brandhead() +
         f'<div style="font-family:{DISP};font-weight:800;font-size:40px;letter-spacing:5px;'
         f'color:{GOLDDEEP};text-transform:uppercase">{L["round"].format(n=sched["round_num"])}</div>'
         f'<div style="font-family:{SERIF};font-style:italic;font-size:24px;color:{MUTED};'
         f'margin:10px 0 18px;max-width:840px">{sched["tournament"]}</div>'
         f'<div style="width:100%;max-width:860px">{"".join(blocks)}</div>'
-        f'<div style="position:absolute;bottom:64px;left:0;right:0;text-align:center;'
-        f'font-family:{DISP};font-size:13px;letter-spacing:5px;color:{MUTED};'
-        f'text-transform:uppercase">Padel Club · King of the Court</div>'
+        + _footer()
     )
     return _page(inner)
 
@@ -273,17 +328,13 @@ def build_podium_html(p: dict, lang: str = "ru") -> str:
     # "RALLY PADEL 02.09 · 01.09". The name alone is the subtitle.
     sub = p["tournament"]
     inner = (
-        f'<div style="display:flex;justify-content:center;margin-bottom:6px">{_elogo(78)}</div>'
-        f'<div style="font-family:{DISP};font-size:17px;letter-spacing:9px;color:{GOLD};'
-        f'text-transform:uppercase;margin-bottom:22px">Padel Club</div>'
+        _brandhead() +
         f'<div style="font-family:{DISP};font-weight:800;font-size:32px;letter-spacing:2px;'
         f'color:{GOLDDEEP};text-transform:uppercase;line-height:1.3;max-width:820px">{L["title"]}</div>'
         f'<div style="font-family:{SERIF};font-style:italic;font-size:26px;color:{MUTED};'
         f'margin:14px 0 44px;max-width:840px">{sub}</div>'
         f'<div style="display:inline-block">{"".join(lines)}</div>'
-        f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;'
-        f'font-family:{DISP};font-size:14px;letter-spacing:5px;color:{MUTED};'
-        f'text-transform:uppercase">Padel Club · King of the Court</div>'
+        + _footer()
     )
     return _page(inner)
 
