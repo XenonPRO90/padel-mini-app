@@ -1895,17 +1895,63 @@ async def update_player(pid: int, name: str, level: str, side: str) -> dict:
 
 
 async def delete_player(pid: int):
+    """Remove a player, refusing with a reason whenever their history makes it
+    unsafe. Every refusal must arrive as a message: a bare DELETE used to hit
+    a FOREIGN KEY error, which escaped as a 500 without CORS headers and
+    reached the admin as an unexplained "Failed to fetch" (Liza, 2026-09-07).
+    """
     async with conn() as db:
-        # Block delete if player is in an active tournament
         cur = await db.execute(
-            """SELECT 1 FROM tournament_players tp
+            """SELECT t.name FROM tournament_players tp
                JOIN tournaments t ON t.id=tp.tournament_id
                WHERE tp.player_id=? AND t.status IN ('setup','active') LIMIT 1""",
             (pid,),
         )
-        if await cur.fetchone():
-            raise ValueError("Player is part of an active tournament")
-        await db.execute("DELETE FROM players WHERE id=?", (pid,))
+        row = await cur.fetchone()
+        if row:
+            raise ValueError(f"Игрок участвует в идущем турнире «{row['name']}»")
+
+        cur = await db.execute("SELECT COUNT(*) AS n FROM scores WHERE player_id=?", (pid,))
+        if (await cur.fetchone())["n"]:
+            raise ValueError(
+                "У игрока есть результаты сыгранных турниров — удалить нельзя, "
+                "иначе история клуба развалится."
+            )
+
+        # A match row holds exactly four players, so anyone standing in one
+        # can't be removed even when that round was never played. The fix in
+        # that case is to delete the abandoned tournament, not the player.
+        cur = await db.execute(
+            """SELECT t.name FROM matches m
+               JOIN rounds r ON r.id=m.round_id
+               JOIN tournaments t ON t.id=r.tournament_id
+               WHERE ? IN (m.p1, m.p2, m.p3, m.p4) LIMIT 1""",
+            (pid,),
+        )
+        row = await cur.fetchone()
+        if row:
+            raise ValueError(
+                f"Игрок стоит в составе турнира «{row['name']}». "
+                "Этот турнир не доигран — удалите сначала его."
+            )
+
+        # Nothing played: clear the harmless leftovers a mis-added player
+        # collects, then remove them.
+        for sql in (
+            "DELETE FROM tournament_players WHERE player_id=?",
+            "DELETE FROM pair_history WHERE player_a=? OR player_b=?",
+            "DELETE FROM player_invites WHERE player_id=?",
+            "DELETE FROM elo_history WHERE player_id=?",
+            "DELETE FROM cards_sent WHERE player_id=?",
+        ):
+            await db.execute(sql, (pid, pid) if "player_a" in sql else (pid,))
+        try:
+            await db.execute("DELETE FROM players WHERE id=?", (pid,))
+        except Exception as e:
+            await db.rollback()
+            # Safety net: a reference we didn't anticipate must still reach the
+            # admin as a sentence, never as a 500.
+            raise ValueError(f"Не удалось удалить игрока — на него ещё есть ссылки ({e})")
         await db.commit()
     return {"ok": True}
 
