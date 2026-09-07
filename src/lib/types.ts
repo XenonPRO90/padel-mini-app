@@ -17,6 +17,7 @@ export interface Player {
   linkedin?: string | null;
   company?: string | null;
   position?: string | null;
+  about?: string | null;
 }
 
 export interface ScoredPlayer extends Player {

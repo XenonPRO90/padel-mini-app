@@ -45,6 +45,7 @@ export interface MyProfilePatch {
   linkedin?: string;
   company?: string;
   position?: string;
+  about?: string;
 }
 
 // The endpoint replaces the whole self-editable profile, so every call must

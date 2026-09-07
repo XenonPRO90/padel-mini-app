@@ -28,18 +28,20 @@ function LinkedInMark({ size = 15 }: { size?: number }) {
 export function SocialProfile({ player, isOwn }: { player: Player; isOwn: boolean }) {
   const t = useT();
   const save = useUpdateMyProfile();
-  const [draft, setDraft] = useState<{ company: string; position: string; linkedin: string } | null>(null);
+  const [draft, setDraft] = useState<
+    { company: string; position: string; linkedin: string; about: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const company = player.company ?? '';
   const position = player.position ?? '';
   const linkedin = player.linkedin ?? '';
-  const hasAny = !!(company || position || linkedin);
+  const about = player.about ?? '';
+  const hasAny = !!(company || position || linkedin || about);
 
   if (!isOwn && !hasAny) return null;
 
   const card: React.CSSProperties = {
-    width: '100%', maxWidth: 340, marginTop: 14, padding: '12px 14px',
+    width: '100%', marginBottom: 18, padding: '14px 16px',
     background: T.paper, border: `1px solid ${T.paperEdge}`, borderRadius: 14,
     textAlign: 'left',
   };
@@ -58,11 +60,24 @@ export function SocialProfile({ player, isOwn }: { player: Player; isOwn: boolea
     return (
       <div style={card}>
         <div style={label}>{t('social.title')}</div>
-        {(company || position) && (
-          <div style={{ fontFamily: T.fontDisplay, fontSize: 14, color: T.ink, lineHeight: 1.45 }}>
-            {position}{position && company ? ' · ' : ''}
-            <span style={{ fontWeight: 600 }}>{company}</span>
-          </div>
+        {company && (
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 700,
+            color: T.ink, lineHeight: 1.3,
+          }}>{company}</div>
+        )}
+        {position && (
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 14, color: T.muted,
+            lineHeight: 1.4, marginTop: company ? 2 : 0,
+          }}>{position}</div>
+        )}
+        {about && (
+          <div style={{
+            fontFamily: T.fontSerif, fontSize: 14, color: T.ink2,
+            lineHeight: 1.55, marginTop: (company || position) ? 9 : 0,
+            whiteSpace: 'pre-line',
+          }}>{about}</div>
         )}
         {!hasAny && (
           <div style={{ fontFamily: T.fontSerif, fontSize: 13, color: T.muted }}>
@@ -79,7 +94,7 @@ export function SocialProfile({ player, isOwn }: { player: Player; isOwn: boolea
             }}><LinkedInMark /> LinkedIn</button>
           )}
           {isOwn && (
-            <button onClick={() => { setError(null); setDraft({ company, position, linkedin }); }} style={{
+            <button onClick={() => { setError(null); setDraft({ company, position, linkedin, about }); }} style={{
               background: 'transparent', color: T.gold, border: `1px solid ${T.gold}`,
               borderRadius: 999, padding: '7px 13px', cursor: 'pointer',
               fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600,
@@ -104,6 +119,16 @@ export function SocialProfile({ player, isOwn }: { player: Player; isOwn: boolea
       <input style={input} maxLength={80} value={draft.position}
         placeholder={t('social.positionPh')}
         onChange={(e) => setDraft({ ...draft, position: e.target.value })} />
+
+      <div style={label}>{t('social.about')}</div>
+      <textarea style={{ ...input, minHeight: 88, resize: 'vertical', lineHeight: 1.5 }}
+        maxLength={400} value={draft.about}
+        placeholder={t('social.aboutPh')}
+        onChange={(e) => setDraft({ ...draft, about: e.target.value })} />
+      <div style={{
+        marginTop: -6, marginBottom: 10, textAlign: 'right',
+        fontFamily: T.fontDisplay, fontSize: 11, color: T.muted,
+      }}>{draft.about.length} / 400</div>
 
       <div style={label}>LinkedIn</div>
       <input style={input} maxLength={160} value={draft.linkedin}

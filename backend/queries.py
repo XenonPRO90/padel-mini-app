@@ -351,7 +351,7 @@ async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
-            "elo, verified, linkedin, company, position FROM players WHERE id=?",
+            "elo, verified, linkedin, company, position, about FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
@@ -362,7 +362,7 @@ async def get_player_by_tg(tg_id: int):
     async with conn() as db:
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
-            "linkedin, company, position FROM players WHERE telegram_id=?",
+            "linkedin, company, position, about FROM players WHERE telegram_id=?",
             (tg_id,),
         )
         return row_to_dict(await cur.fetchone())
@@ -511,7 +511,7 @@ async def reject_join_request(req_id: int, reviewed_by: int):
 # Social profile fields (FCE, 2026-09-07). Self-declared and optional: the
 # instance doubles as a networking surface, so a player can say who they are
 # and where they work. Only the player edits these — never an admin.
-_SOCIAL_COLUMNS = ("linkedin TEXT", "company TEXT", "position TEXT")
+_SOCIAL_COLUMNS = ("linkedin TEXT", "company TEXT", "position TEXT", "about TEXT")
 
 
 async def _ensure_social_columns(db):
@@ -557,7 +557,7 @@ def normalize_linkedin(raw: str | None) -> str | None:
 
 
 async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
-                             position=None, social: bool = False):
+                             position=None, about=None, social: bool = False):
     """Self-edit: a linked participant updates their own racket, and — where
     the instance enables it — their social profile."""
     async with conn() as db:
@@ -572,10 +572,11 @@ async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
         if social:
             await _ensure_social_columns(db)
             await db.execute(
-                "UPDATE players SET linkedin=?, company=?, position=? WHERE id=?",
+                "UPDATE players SET linkedin=?, company=?, position=?, about=? WHERE id=?",
                 (normalize_linkedin(linkedin),
                  (company or "").strip()[:80] or None,
                  (position or "").strip()[:80] or None,
+                 " ".join((about or "").split())[:400] or None,
                  p["id"]),
             )
         await db.commit()

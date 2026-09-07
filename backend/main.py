@@ -311,6 +311,7 @@ class OwnProfileBody(BaseModel):
     linkedin: str | None = None
     company: str | None = None
     position: str | None = None
+    about: str | None = None
 
 
 @app.put("/api/me/profile")
@@ -322,7 +323,7 @@ async def update_me_profile(body: OwnProfileBody, user=Depends(get_tg_user)):
     try:
         return await q.update_own_profile(
             user["id"], body.racket, body.linkedin, body.company, body.position,
-            social=FEATURES["social"])
+            body.about, social=FEATURES["social"])
     except ValueError as e:
         raise HTTPException(400, str(e))
 
