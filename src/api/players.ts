@@ -72,7 +72,7 @@ export function useCreateTournament() {
       name: string;
       num_courts: number;
       mode: 'rotating' | 'fixed' | 'americano' | 'groups8';
-      initial_order: 'keep' | 'random';
+      initial_order: 'keep' | 'random' | 'smart';
       initial_points: number;
       start_round: number;
       court_points: Record<number, number>;

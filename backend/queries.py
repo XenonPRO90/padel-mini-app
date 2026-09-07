@@ -1229,10 +1229,43 @@ async def get_club_records():
 
 # ─── Admins ───────────────────────────────────────────────
 
-async def is_admin(tg_id: int) -> bool:
+# Two admin tiers (Roman, 2026-09-06). People who run the Wednesday games get
+# admin rights today, but they only need to run games — approving join
+# requests, editing the roster and setting levels are not theirs to do.
+ADMIN_FULL = "full"   # everything, including the roster and join requests
+ADMIN_HOST = "host"   # can run tournaments, nothing else
+_ADMIN_ROLES = (ADMIN_FULL, ADMIN_HOST)
+
+
+async def _ensure_admin_role(db):
+    """Add admins.role if missing. Existing admins default to 'full' so nobody
+    silently loses access on deploy — hosts are demoted deliberately."""
+    try:
+        await db.execute(
+            f"ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT '{ADMIN_FULL}'")
+        await db.commit()
+    except Exception:
+        pass  # already there
+
+
+async def get_admin_role(tg_id: int) -> str | None:
+    """'full', 'host', or None when the user is not an admin at all."""
     async with conn() as db:
-        cur = await db.execute("SELECT 1 FROM admins WHERE tg_id=?", (tg_id,))
-        return bool(await cur.fetchone())
+        await _ensure_admin_role(db)
+        cur = await db.execute("SELECT role FROM admins WHERE tg_id=?", (tg_id,))
+        row = await cur.fetchone()
+    if not row:
+        return None
+    role = (row["role"] or ADMIN_FULL).strip()
+    return role if role in _ADMIN_ROLES else ADMIN_FULL
+
+
+async def is_admin(tg_id: int) -> bool:
+    return await get_admin_role(tg_id) is not None
+
+
+async def is_full_admin(tg_id: int) -> bool:
+    return await get_admin_role(tg_id) == ADMIN_FULL
 
 
 # ─── Mutations ────────────────────────────────────────────
@@ -1474,7 +1507,7 @@ async def get_previous_round_partners(tid: int) -> dict:
 async def get_tournament_players(tid: int):
     async with conn() as db:
         cur = await db.execute(
-            """SELECT tp.*, p.name, p.level, p.side
+            """SELECT tp.*, p.name, p.level, p.side, p.elo
                FROM tournament_players tp JOIN players p ON p.id=tp.player_id
                WHERE tp.tournament_id=? ORDER BY tp.position""",
             (tid,),
@@ -1922,17 +1955,63 @@ async def update_player(pid: int, name: str, level: str, side: str) -> dict:
 
 
 async def delete_player(pid: int):
+    """Remove a player, refusing with a reason whenever their history makes it
+    unsafe. Every refusal must arrive as a message: a bare DELETE used to hit
+    a FOREIGN KEY error, which escaped as a 500 without CORS headers and
+    reached the admin as an unexplained "Failed to fetch" (Liza, 2026-09-07).
+    """
     async with conn() as db:
-        # Block delete if player is in an active tournament
         cur = await db.execute(
-            """SELECT 1 FROM tournament_players tp
+            """SELECT t.name FROM tournament_players tp
                JOIN tournaments t ON t.id=tp.tournament_id
                WHERE tp.player_id=? AND t.status IN ('setup','active') LIMIT 1""",
             (pid,),
         )
-        if await cur.fetchone():
-            raise ValueError("Player is part of an active tournament")
-        await db.execute("DELETE FROM players WHERE id=?", (pid,))
+        row = await cur.fetchone()
+        if row:
+            raise ValueError(f"Игрок участвует в идущем турнире «{row['name']}»")
+
+        cur = await db.execute("SELECT COUNT(*) AS n FROM scores WHERE player_id=?", (pid,))
+        if (await cur.fetchone())["n"]:
+            raise ValueError(
+                "У игрока есть результаты сыгранных турниров — удалить нельзя, "
+                "иначе история клуба развалится."
+            )
+
+        # A match row holds exactly four players, so anyone standing in one
+        # can't be removed even when that round was never played. The fix in
+        # that case is to delete the abandoned tournament, not the player.
+        cur = await db.execute(
+            """SELECT t.name FROM matches m
+               JOIN rounds r ON r.id=m.round_id
+               JOIN tournaments t ON t.id=r.tournament_id
+               WHERE ? IN (m.p1, m.p2, m.p3, m.p4) LIMIT 1""",
+            (pid,),
+        )
+        row = await cur.fetchone()
+        if row:
+            raise ValueError(
+                f"Игрок стоит в составе турнира «{row['name']}». "
+                "Этот турнир не доигран — удалите сначала его."
+            )
+
+        # Nothing played: clear the harmless leftovers a mis-added player
+        # collects, then remove them.
+        for sql in (
+            "DELETE FROM tournament_players WHERE player_id=?",
+            "DELETE FROM pair_history WHERE player_a=? OR player_b=?",
+            "DELETE FROM player_invites WHERE player_id=?",
+            "DELETE FROM elo_history WHERE player_id=?",
+            "DELETE FROM cards_sent WHERE player_id=?",
+        ):
+            await db.execute(sql, (pid, pid) if "player_a" in sql else (pid,))
+        try:
+            await db.execute("DELETE FROM players WHERE id=?", (pid,))
+        except Exception as e:
+            await db.rollback()
+            # Safety net: a reference we didn't anticipate must still reach the
+            # admin as a sentence, never as a 500.
+            raise ValueError(f"Не удалось удалить игрока — на него ещё есть ссылки ({e})")
         await db.commit()
     return {"ok": True}
 
@@ -2149,6 +2228,28 @@ async def _groups8_finish(db, tid: int):
 
 # ─── Tournament create ────────────────────────────────────
 
+async def _seeding_strength(player_ids: list[int]) -> dict[int, float]:
+    """Playing strength per player for the smart round-1 seed.
+
+    ELO where we have it (it is earned from results and separates players
+    inside one level, which matters because most of the club is C and C+),
+    the level's ELO value otherwise — a newcomer with no ELO still seeds at
+    their declared level rather than at zero. Both live on the same scale
+    (ELO_SCALE), so they are directly comparable.
+    """
+    if not player_ids:
+        return {}
+    qmarks = ",".join("?" * len(player_ids))
+    async with conn() as db:
+        cur = await db.execute(
+            f"SELECT id, level, elo FROM players WHERE id IN ({qmarks})",
+            tuple(player_ids))
+        rows = await cur.fetchall()
+    return {r["id"]: (r["elo"] if r["elo"] is not None else elo_level_value(r["level"]))
+            for r in rows}
+
+
+
 async def create_tournament(
     name: str,
     num_courts: int,
@@ -2170,8 +2271,8 @@ async def create_tournament(
 
     if mode not in ("rotating", "fixed", "americano", "groups8"):
         raise ValueError("mode must be 'rotating', 'fixed', 'americano' or 'groups8'")
-    if initial_order not in ("keep", "random"):
-        raise ValueError("initial_order must be 'keep' or 'random'")
+    if initial_order not in ("keep", "random", "smart"):
+        raise ValueError("initial_order must be 'keep', 'random' or 'smart'")
     if len(player_ids) % 4 != 0:
         raise ValueError("player count must be divisible by 4")
 
@@ -2202,7 +2303,27 @@ async def create_tournament(
 
     # Apply ordering
     ordered = list(player_ids)
-    if initial_order == "random":
+    if initial_order == "smart":
+        # Seed by playing strength, strongest first, so court 1 gets the
+        # strongest four (Roman, 2026-09-06). This order also becomes each
+        # player's position and starting court, which is what rounds 2+ read.
+        strength = await _seeding_strength(ordered)
+        if mode == "rotating":
+            ordered.sort(key=lambda pid: -strength[pid])
+        else:
+            # Fixed-pair modes: partners sit at adjacent positions and must stay
+            # together, so rank whole pairs by their combined strength.
+            pairs = [ordered[i:i + 2] for i in range(0, len(ordered) - len(ordered) % 2, 2)]
+            rest = ordered[len(pairs) * 2:]
+            pairs.sort(key=lambda pr: -sum(strength[p] for p in pr))
+            if mode == "groups8":
+                # Groups A (pairs 0-3) and B (4-7) come straight off this order,
+                # so seeding them strongest-first would stack every strong pair
+                # into A. Snake instead — A takes seeds 1,4,5,8 and B 2,3,6,7 —
+                # so the two groups are of comparable strength.
+                pairs = [pairs[i] for i in (0, 3, 4, 7, 1, 2, 5, 6)]
+            ordered = [p for pr in pairs for p in pr] + rest
+    elif initial_order == "random":
         if mode == "rotating":
             # KotC — individual seeding, shuffle players.
             random.shuffle(ordered)
@@ -2420,6 +2541,78 @@ async def _ranked_standings(t: dict) -> list[dict]:
             last_wins = r["wins"]
         r["place"] = place
     return formatted
+
+
+async def get_round_schedule(tid: int, round_num: int) -> dict | None:
+    """Who plays where in a given round — the payload behind the schedule
+    image and the per-player "you are on court N" notification."""
+    t = await get_tournament(tid)
+    if not t:
+        return None
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id FROM rounds WHERE tournament_id=? AND round_num=?", (tid, round_num))
+        row = await cur.fetchone()
+    if not row:
+        return None
+    courts = []
+    for m in await get_round_matches(row["id"]):
+        courts.append({
+            "court_num": m["court_num"],
+            "court_label": m["court_label"] or str(m["court_num"]),
+            "team1": [{"player_id": p["player_id"], "name": p["name"], "level": p["level"]}
+                      for p in m["team1"]],
+            "team2": [{"player_id": p["player_id"], "name": p["name"], "level": p["level"]}
+                      for p in m["team2"]],
+        })
+    return {"tournament": t["name"], "round_num": round_num, "courts": courts}
+
+
+async def _ensure_round_notify_sent(db):
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS round_notify_sent (
+               tournament_id INTEGER NOT NULL,
+               round_num     INTEGER NOT NULL,
+               player_id     INTEGER NOT NULL,
+               sent_at       TEXT NOT NULL DEFAULT (datetime('now')),
+               PRIMARY KEY (tournament_id, round_num, player_id)
+           )""")
+
+
+async def get_round_notified_player_ids(tid: int, round_num: int) -> set:
+    async with conn() as db:
+        await _ensure_round_notify_sent(db)
+        cur = await db.execute(
+            "SELECT player_id FROM round_notify_sent WHERE tournament_id=? AND round_num=?",
+            (tid, round_num))
+        return {r["player_id"] for r in await cur.fetchall()}
+
+
+async def mark_round_notified(tid: int, round_num: int, player_id: int):
+    async with conn() as db:
+        await _ensure_round_notify_sent(db)
+        await db.execute(
+            "INSERT OR IGNORE INTO round_notify_sent (tournament_id, round_num, player_id) "
+            "VALUES (?,?,?)", (tid, round_num, player_id))
+        await db.commit()
+
+
+async def get_round_recipients(tid: int, round_num: int) -> list[dict]:
+    """Linked players taking part in this round, with the language to write in."""
+    sched = await get_round_schedule(tid, round_num)
+    if not sched:
+        return []
+    ids = [p["player_id"] for c in sched["courts"] for p in c["team1"] + c["team2"]]
+    if not ids:
+        return []
+    qmarks = ",".join("?" * len(ids))
+    async with conn() as db:
+        cur = await db.execute(
+            f"SELECT id, name, telegram_id, lang FROM players "
+            f"WHERE id IN ({qmarks}) AND telegram_id IS NOT NULL", tuple(ids))
+        rows = await cur.fetchall()
+    return [{"player_id": r["id"], "name": r["name"],
+             "telegram_id": r["telegram_id"], "lang": r["lang"]} for r in rows]
 
 
 async def get_tournament_podium(tid: int, max_place: int = 3) -> dict | None:

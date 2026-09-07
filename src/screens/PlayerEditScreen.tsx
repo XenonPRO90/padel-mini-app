@@ -5,6 +5,7 @@ import { MainCTA, SecondaryCTA } from '../components/MainCTA';
 import { Avatar } from './PlayersScreen';
 import { ELabel, EOrnRule } from '../lib/elegant';
 import { useCreatePlayer, useUpdatePlayer, useDeletePlayer, type SideValue } from '../api/players';
+import { useMe } from '../api/me';
 
 const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'C- strong', 'C-', 'D'];
 const SIDES: { id: SideValue; label: string }[] = [
@@ -29,6 +30,10 @@ export function PlayerEditScreen({ player, onClose }: Props) {
   const create = useCreatePlayer();
   const update = useUpdatePlayer(player?.id ?? 0);
   const del = useDeletePlayer();
+  // Hosts may add and edit players, but removing one from the club is not
+  // theirs — the backend refuses it too.
+  const { data: me } = useMe();
+  const canDelete = !!me?.is_full_admin;
 
   const busy = create.isPending || update.isPending || del.isPending;
   const canSave = !busy && name.trim().length > 0;
@@ -154,7 +159,7 @@ export function PlayerEditScreen({ player, onClose }: Props) {
           </div>
         </div>
 
-        {!isNew && (
+        {!isNew && canDelete && (
           <div style={{ marginTop: 22 }}>
             <button
               onClick={onDelete}

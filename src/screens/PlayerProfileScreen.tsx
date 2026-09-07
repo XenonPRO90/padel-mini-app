@@ -42,6 +42,8 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
   const [cardOpen, setCardOpen] = useState(false);
 
   const isAdmin = !!me?.is_admin;
+  // Linking someone's Telegram is a club action; editing the card is not.
+  const isFullAdmin = !!me?.is_full_admin;
   const linked = !!data?.player?.telegram_id;
   const isOwn = !!me?.player && me.player.id === pid;
   const racketM = useUpdateMyRacket();
@@ -85,7 +87,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               background: 'transparent', border: 'none', padding: 4, cursor: 'pointer', color: T.gold,
             }}><EShareIcon size={17} /></button>
           )}
-          {isAdmin && !linked && (
+          {isFullAdmin && !linked && (
             <button onClick={onInvite} disabled={mint.isPending} style={{
               background: 'transparent', border: `1px solid ${T.gold}`, borderRadius: 999,
               padding: '4px 10px', cursor: 'pointer', color: T.gold,

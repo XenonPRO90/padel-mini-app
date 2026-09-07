@@ -2,12 +2,19 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useCreateTournament, useCreatePlayer, type SideValue } from '../api/players';
+import { useMe } from '../api/me';
 import { LEVEL_COLORS, T, BRAND_NAME } from '../lib/tokens';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { MainCTA } from '../components/MainCTA';
 import { Avatar } from './PlayersScreen';
 import { ELabel, EGoldFrame, EDivider } from '../lib/elegant';
 import type { Player } from '../lib/types';
+
+// The wizard is admin-only and stays in English, like the rest of its steps.
+const ORDER_LABEL: Record<'keep' | 'random' | 'smart', string> = {
+  keep: 'By entry', random: 'Random', smart: 'Smart (by ELO)',
+};
+const orderLabel = (v: 'keep' | 'random' | 'smart') => ORDER_LABEL[v];
 
 interface Props {
   onClose: () => void;
@@ -19,7 +26,7 @@ interface State {
   name: string;
   num_courts: number;
   mode: Mode;
-  initial_order: 'keep' | 'random';
+  initial_order: 'keep' | 'random' | 'smart';
   initial_points: number;
   start_round: number;
   court_points: Record<number, number>;
@@ -39,7 +46,7 @@ export function WizardScreen({ onClose }: Props) {
     name: `${BRAND_NAME} · ${dd}.${mm}`,
     num_courts: 4,
     mode: 'rotating',
-    initial_order: 'keep',
+    initial_order: 'smart',
     initial_points: 1,
     start_round: 4,
     court_points: { 1: 3, 2: 2, 3: 1, 4: 1 },
@@ -351,14 +358,22 @@ function StepMode({ value, onChange }: { value: Mode; onChange: (v: Mode) => voi
   );
 }
 
-function StepOrder({ value, onChange }: { value: 'keep' | 'random'; onChange: (v: 'keep' | 'random') => void }) {
+type OrderValue = 'keep' | 'random' | 'smart';
+
+function StepOrder({ value, onChange }: { value: OrderValue; onChange: (v: OrderValue) => void }) {
   return (
     <>
       <StepTitle title="Initial Court Order" subtitle="Where everyone starts" />
       <CardChoice
+        active={value === 'smart'}
+        title="Smart (by ELO)"
+        desc="Seed by playing strength — Court 1 gets the strongest four."
+        onClick={() => onChange('smart')}
+      />
+      <CardChoice
         active={value === 'keep'}
         title="By Entry"
-        desc="Place strongest players on Court 1."
+        desc="Court 1 gets the first four you added, in that order."
         onClick={() => onChange('keep')}
       />
       <CardChoice
@@ -575,6 +590,9 @@ function StepPlayers({
     queryFn: () => api('/api/players'),
   });
   const [adding, setAdding] = useState(false);
+  // Any admin can add a walk-in guest mid-wizard (Roman, 2026-09-06).
+  const { data: me } = useMe();
+  const canAddPlayer = !!me?.is_admin;
 
   const items = data?.items ?? [];
   const toggle = (id: number) => {
@@ -633,6 +651,7 @@ function StepPlayers({
         </div>
       )}
 
+      {canAddPlayer && (
       <button
         onClick={() => setAdding(true)}
         style={{
@@ -646,6 +665,7 @@ function StepPlayers({
           cursor: 'pointer',
         }}
       >+ Add new player</button>
+      )}
 
       {isLoading ? (
         <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
@@ -722,7 +742,7 @@ function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
     ? [
         { label: 'Name',    value: s.name },
         { label: 'Mode',    value: modeLabel },
-        { label: 'Order',   value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
+        { label: 'Order',   value: orderLabel(s.initial_order) },
         { label: 'Pairs',   value: String(Math.floor(s.player_ids.length / 2)) },
         { label: 'Courts',  value: String(Math.floor(s.player_ids.length / 4)) },
         { label: 'Rounds',  value: String(Math.max(0, Math.floor(s.player_ids.length / 2) - 1)) },
@@ -733,7 +753,7 @@ function StepConfirm({ s, cp }: { s: State; cp: Record<number, number> }) {
         { label: 'Name',            value: s.name },
         { label: 'Courts',          value: String(s.num_courts) },
         { label: 'Mode',            value: modeLabel },
-        { label: 'Order',           value: s.initial_order === 'keep' ? 'By entry' : 'Random' },
+        { label: 'Order',           value: orderLabel(s.initial_order) },
         { label: 'Initial points',  value: `${s.initial_points} pt` },
         { label: 'Start round',     value: `Round ${s.start_round}` },
         { label: 'Court points',    value: Array.from({ length: s.num_courts }, (_, i) => cp[i + 1]).join(' / ') },

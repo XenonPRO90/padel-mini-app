@@ -19,12 +19,23 @@ from . import cards as cards_mod
 
 
 async def get_admin(user=Depends(get_tg_user)):
-    """Admin-only dependency. Under dev-mode auth (off) it's a no-op; with real
-    auth it requires the Telegram id to be in `admins` (else 403)."""
+    """Any admin — full or host. Guards everything involved in RUNNING a
+    tournament. Under dev-mode auth (off) it's a no-op."""
     if user.get("_dev_mode"):
         return user
     if not await q.is_admin(user["id"]):
         raise HTTPException(403, "admin only")
+    return user
+
+
+async def get_full_admin(user=Depends(get_tg_user)):
+    """Full admins only. Guards the club itself — the roster, join requests,
+    levels and Telegram links — which the people who merely run games on a
+    Wednesday should not touch (Roman, 2026-09-06)."""
+    if user.get("_dev_mode"):
+        return user
+    if not await q.is_full_admin(user["id"]):
+        raise HTTPException(403, "full admin only")
     return user
 
 app = FastAPI(
@@ -270,12 +281,12 @@ async def join_request_create(body: JoinReqBody, user=Depends(get_tg_user)):
 
 
 @app.get("/api/join-requests")
-async def join_requests_list(status: str = "pending", _admin=Depends(get_admin)):
+async def join_requests_list(status: str = "pending", _admin=Depends(get_full_admin)):
     return {"items": await q.list_join_requests(status)}
 
 
 @app.post("/api/join-requests/{rid}/approve")
-async def join_request_approve(rid: int, admin=Depends(get_admin)):
+async def join_request_approve(rid: int, admin=Depends(get_full_admin)):
     try:
         return await q.approve_join_request(rid, admin["id"])
     except ValueError as e:
@@ -283,12 +294,12 @@ async def join_request_approve(rid: int, admin=Depends(get_admin)):
 
 
 @app.post("/api/join-requests/{rid}/reject")
-async def join_request_reject(rid: int, admin=Depends(get_admin)):
+async def join_request_reject(rid: int, admin=Depends(get_full_admin)):
     return await q.reject_join_request(rid, admin["id"])
 
 
 @app.get("/api/level-suggestions")
-async def level_suggestions(_admin=Depends(get_admin)):
+async def level_suggestions(_admin=Depends(get_full_admin)):
     """ELO-driven level changes to propose to the admin (assign/promote/demote)."""
     return {"items": await q.get_level_suggestions()}
 
@@ -298,7 +309,7 @@ class SetLevelBody(BaseModel):
 
 
 @app.post("/api/players/{pid}/level")
-async def set_level(pid: int, body: SetLevelBody, _admin=Depends(get_admin)):
+async def set_level(pid: int, body: SetLevelBody, _admin=Depends(get_full_admin)):
     """Admin confirms a level (from a suggestion): sets level + verified, recomputes ELO."""
     try:
         return await q.set_player_level(pid, body.level)
@@ -466,8 +477,84 @@ async def tournament_cards_send(tid: int, force: bool = False, _admin=Depends(ge
             "linked_count": len(linked), "total_count": len(data["cards"])}
 
 
+# Round schedule notification — one rendered image of the round, DM'd to every
+# linked participant with a personal caption ("you are on court 2, with X").
+# Mainly for round 1, but works for any round.
+_notify_reports: dict[str, dict] = {}
+_notify_tasks: set = set()
+
+
+@app.get("/api/tournaments/{tid}/rounds/{rnum}/notify")
+async def round_notify_state(tid: int, rnum: int, _admin=Depends(get_admin)):
+    sched = await q.get_round_schedule(tid, rnum)
+    if not sched:
+        raise HTTPException(404, "Раунд не найден")
+    recipients = await q.get_round_recipients(tid, rnum)
+    sent = await q.get_round_notified_player_ids(tid, rnum)
+    total = sum(len(c["team1"]) + len(c["team2"]) for c in sched["courts"])
+    return {
+        "linked_count": len(recipients),
+        "total_count": total,
+        "sent_count": len(sent),
+        "report": _notify_reports.get(f"{tid}:{rnum}"),
+    }
+
+
+@app.post("/api/tournaments/{tid}/rounds/{rnum}/notify")
+async def round_notify_send(tid: int, rnum: int, force: bool = False,
+                            _admin=Depends(get_admin)):
+    """Render the round once per needed language, then DM it to each linked
+    player with their own court/partner/opponents. Runs in the background for
+    the same reason card sending does — the Telegram WebView drops long
+    requests. Idempotent: a re-press retries only who didn't get it."""
+    sched = await q.get_round_schedule(tid, rnum)
+    if not sched:
+        raise HTTPException(404, "Раунд не найден")
+    recipients = await q.get_round_recipients(tid, rnum)
+    already = set() if force else await q.get_round_notified_player_ids(tid, rnum)
+    pending = [r for r in recipients if r["player_id"] not in already]
+
+    key = f"{tid}:{rnum}"
+    failures: list[dict] = []
+
+    async def _run():
+        pngs: dict[str, bytes] = {}
+        for r in pending:
+            lang = "en" if r.get("lang") == "en" else "ru"
+            try:
+                if lang not in pngs:
+                    pngs[lang] = await cards_mod.render_schedule(sched, lang)
+                ok, j = await cards_mod.send_photo(
+                    r["telegram_id"], pngs[lang],
+                    cards_mod.schedule_caption(sched, r["player_id"], lang))
+                if ok:
+                    await q.mark_round_notified(tid, rnum, r["player_id"])
+                else:
+                    raise RuntimeError(str(j.get("description", j))[:120])
+            except Exception as e:
+                failures.append({"name": r["name"], "reason": str(e)[:120]})
+                print(f"[notify] tid={tid} r={rnum} player={r['player_id']} "
+                      f"{r['name']}: {e}", file=sys.stderr, flush=True)
+        _notify_reports[key] = {
+            "queued": len(pending),
+            "ok": len(pending) - len(failures),
+            "failed": failures,
+        }
+        if failures:
+            print(f"[notify] tid={tid} r={rnum} DONE with "
+                  f"{len(failures)}/{len(pending)} failures", file=sys.stderr, flush=True)
+
+    _notify_reports.pop(key, None)
+    task = asyncio.create_task(_run())
+    _notify_tasks.add(task)
+    task.add_done_callback(_notify_tasks.discard)
+    return {"sent": len(pending),
+            "skipped": len(recipients) - len(pending),
+            "linked_count": len(recipients)}
+
+
 @app.post("/api/players/{pid}/invite")
-async def player_invite(pid: int, admin=Depends(get_admin)):
+async def player_invite(pid: int, admin=Depends(get_full_admin)):
     """Admin: mint a one-time deep-link to bind this player to a Telegram account."""
     try:
         return await q.mint_player_invite(pid, admin["id"])
@@ -476,7 +563,7 @@ async def player_invite(pid: int, admin=Depends(get_admin)):
 
 
 @app.delete("/api/players/{pid}/link")
-async def player_unlink(pid: int, admin=Depends(get_admin)):
+async def player_unlink(pid: int, admin=Depends(get_full_admin)):
     """Admin: clear a player's Telegram link (to re-invite / fix a mistake)."""
     return await q.unlink_player(pid)
 
@@ -609,7 +696,7 @@ async def players_update(pid: int, body: PlayerBody, _user=Depends(get_admin)):
 
 
 @app.delete("/api/players/{pid}")
-async def players_delete(pid: int, _user=Depends(get_admin)):
+async def players_delete(pid: int, _user=Depends(get_full_admin)):
     try:
         return await q.delete_player(pid)
     except ValueError as e:
@@ -704,8 +791,12 @@ async def share_text(tid: int, _user=Depends(get_tg_user)):
 async def me(user=Depends(get_tg_user)):
     """Current Telegram user + admin flag + linked player (identity) + join status."""
     if user.get("_dev_mode"):
-        return {"user": user, "features": FEATURES, "is_admin": True, "player": None, "join_status": None, "pending_requests": 0}
-    is_adm = await q.is_admin(user["id"])
+        return {"user": user, "features": FEATURES, "is_admin": True,
+                "admin_role": q.ADMIN_FULL, "is_full_admin": True, "player": None,
+                "join_status": None, "pending_requests": 0}
+    role = await q.get_admin_role(user["id"])
+    is_adm = role is not None
+    is_full = role == q.ADMIN_FULL
     player = await q.get_player_by_tg(user["id"])
     # Auto-populate avatar from Telegram initData (photo_url) once linked.
     if player and user.get("photo_url") and player.get("photo_url") != user["photo_url"]:
@@ -718,8 +809,9 @@ async def me(user=Depends(get_tg_user)):
             await q.set_player_lang(player["id"], want)
             player["lang"] = want
     join_status = None if player else await q.get_join_status(user["id"])
-    pending = await q.count_pending_join_requests() if is_adm else 0
+    pending = await q.count_pending_join_requests() if is_full else 0
     return {
-        "user": user, "features": FEATURES, "is_admin": is_adm, "player": player,
+        "user": user, "features": FEATURES, "is_admin": is_adm,
+        "admin_role": role, "is_full_admin": is_full, "player": player,
         "join_status": join_status, "pending_requests": pending,
     }
