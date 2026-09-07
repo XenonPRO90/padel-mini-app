@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { T } from '../lib/tokens';
+import { T, BRAND_CLUB } from '../lib/tokens';
+import { SocialProfile } from '../components/SocialProfile';
 import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon, EShareIcon } from '../lib/elegant';
 import { ProfileCardModal } from './ProfileCardModal';
 import { Ring } from '../components/Ring';
@@ -54,7 +55,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
       const { deep_link } = await mint.mutateAsync(pid);
       const tg = window.Telegram?.WebApp;
       const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(deep_link)
-        + '&text=' + encodeURIComponent(t('profile.inviteText'));
+        + '&text=' + encodeURIComponent(t('profile.inviteText', { club: BRAND_CLUB }));
       if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
       else setShareLink(deep_link);
     } catch (e) {
@@ -182,8 +183,10 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                 )}
               </div>
 
-              {/* Racket — visible to all; editable on your own profile */}
-              {isOwn ? (
+              {/* Racket — visible to all; editable on your own profile.
+                  Instances that run as a business network drop it: the club
+                  cares what you play with, a league of colleagues does not. */}
+              {!me?.features?.social && (isOwn ? (
                 <div style={{ display: 'flex', gap: 6, marginTop: 12, width: '100%', maxWidth: 320 }}>
                   <input
                     value={racketVal}
@@ -211,8 +214,14 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   marginTop: 10, fontFamily: T.fontSerif, fontStyle: 'italic',
                   fontSize: 13, color: T.muted,
                 }}>🎾 {data.player.racket}</div>
-              ) : null}
+              ) : null)}
             </div>
+
+            {/* Work profile sits outside the centred header so it spans the
+                same width as the stat grid below it. */}
+            {me?.features?.social && (
+              <SocialProfile player={data.player} isOwn={isOwn} />
+            )}
 
             {/* Achievements / stat grid */}
             <div style={{

@@ -29,3 +29,8 @@ build/
 
 # logs
 *.log
+
+# Live instance database — never commit, it holds real player data
+*.db
+*.db-wal
+*.db-shm

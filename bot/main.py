@@ -29,8 +29,14 @@ DB_PATH = os.getenv("DB_PATH", "/home/ubuntu/padel-mini-app/padel-dev.db")
 # corner ornaments, gold rule, italic tagline). Lives in frontend/assets/
 # and is tracked in the repo. Resolved relative to this file so the
 # image follows the bot regardless of WorkingDirectory.
+BRAND = os.getenv("BRAND", "padel")
+
+# The padel welcome banner is gold serif reading "WELCOME TO PADEL CLUB", so it
+# belongs to that brand only. Other brands fall back to a text-only welcome
+# until they have artwork of their own.
 WELCOME_IMAGE_PATH = (
     Path(__file__).resolve().parent.parent / "assets" / "padel-club-welcome.png"
+    if BRAND == "padel" else Path("/nonexistent")
 )
 
 # HTML parse mode (passed per-message in send_welcome) — only < > & need escaping,
@@ -58,6 +64,29 @@ WELCOME = (
     "организатор подтвердит, и откроется твой личный кабинет. "
     "Если тебе прислали ссылку-приглашение — просто перейди по ней."
 )
+
+FCE_WELCOME = (
+    "<b>FCE PADEL</b>\n"
+    "<i>Corporate padel &amp; league</i>\n"
+    "\n"
+    "Приложение лиги: турниры, результаты и личная статистика "
+    "каждого участника.\n"
+    "\n"
+    "<b>Для игроков:</b>\n"
+    "• личный кабинет — турниры, победы, % побед, серии\n"
+    "• места и медали за призовые\n"
+    "• рейтинг и уровень, который растёт по результатам\n"
+    "\n"
+    "<b>Форматы:</b>\n"
+    "• <b>King of the Court</b> — пары меняются каждый раунд\n"
+    "• <b>Team Americano</b> — каждая пара играет с каждой\n"
+    "• <b>Mini Tournament</b> — 8 команд, группы + плей-офф\n"
+    "\n"
+    "Открой <b>«Управление»</b> слева от поля ввода, чтобы начать."
+)
+
+if BRAND == "fce":
+    WELCOME = FCE_WELCOME
 
 bot = Bot(
     token=BOT_TOKEN,

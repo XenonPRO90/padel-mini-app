@@ -3,7 +3,7 @@
 // (Hero, AppHeader, GoldFrame, Paper, Btn, Label, Divider).
 // All consume tokens from lib/tokens.
 
-import { T } from './tokens';
+import { T , BRAND_NAME } from './tokens';
 import type { CSSProperties, ReactNode, MouseEvent } from 'react';
 
 // ───────── LOGO (crown + crossed rackets) ─────────
@@ -265,7 +265,7 @@ export function ELabel({
 
 // ───────── PAGE HEADER (logo + ornamental title) ─────────
 export function EHero({
-  title = 'PADEL MASTERS', kicker, date, compact = false,
+  title = BRAND_NAME, kicker, date, compact = false,
 }: { title?: string; kicker?: string; date?: string; compact?: boolean }) {
   return (
     <div style={{ textAlign: 'center', padding: compact ? '8px 16px 12px' : '16px 16px 14px' }}>

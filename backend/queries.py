@@ -351,7 +351,7 @@ async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
-            "elo, verified FROM players WHERE id=?",
+            "elo, verified, linkedin, company, position, about FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
@@ -361,8 +361,8 @@ async def get_player_by_tg(tg_id: int):
     """The player row linked to a Telegram account, or None (identity)."""
     async with conn() as db:
         cur = await db.execute(
-            "SELECT id, name, level, side, telegram_id, username, photo_url, racket "
-            "FROM players WHERE telegram_id=?",
+            "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
+            "linkedin, company, position, about FROM players WHERE telegram_id=?",
             (tg_id,),
         )
         return row_to_dict(await cur.fetchone())
@@ -508,8 +508,58 @@ async def reject_join_request(req_id: int, reviewed_by: int):
     return {"ok": True}
 
 
-async def update_own_profile(tg_id: int, racket):
-    """Self-edit: a linked participant updates their own racket."""
+# Social profile fields (FCE, 2026-09-07). Self-declared and optional: the
+# instance doubles as a networking surface, so a player can say who they are
+# and where they work. Only the player edits these — never an admin.
+_SOCIAL_COLUMNS = ("linkedin TEXT", "company TEXT", "position TEXT", "about TEXT")
+
+
+async def _ensure_social_columns(db):
+    for col in _SOCIAL_COLUMNS:
+        try:
+            await db.execute(f"ALTER TABLE players ADD COLUMN {col}")
+        except Exception:
+            pass  # already there
+    await db.commit()
+
+
+def normalize_linkedin(raw: str | None) -> str | None:
+    """Accept whatever a person pastes and store one canonical profile URL.
+
+    Handles the full URL, the bare host, a leading /in/, or just the handle.
+    Returns None for empty input, raises for a link that is not LinkedIn — a
+    silently-dropped field would look like the app lost their data.
+    """
+    v = (raw or "").strip()
+    if not v:
+        return None
+    v = v.split("?")[0].rstrip("/")
+    low = v.lower()
+    for prefix in ("https://", "http://"):
+        if low.startswith(prefix):
+            v, low = v[len(prefix):], low[len(prefix):]
+    if low.startswith("www."):
+        v, low = v[4:], low[4:]
+    if low.startswith("linkedin.com/"):
+        handle = v[len("linkedin.com/"):]
+    elif low.startswith("in/"):
+        handle = v
+    elif "/" not in v and "." not in v:
+        handle = f"in/{v}"          # bare handle
+    else:
+        raise ValueError("Это не похоже на ссылку LinkedIn")
+    handle = handle.strip("/")
+    if not handle.lower().startswith(("in/", "company/")):
+        handle = f"in/{handle}"
+    if len(handle) > 120:
+        raise ValueError("Слишком длинная ссылка")
+    return f"https://www.linkedin.com/{handle}"
+
+
+async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
+                             position=None, about=None, social: bool = False):
+    """Self-edit: a linked participant updates their own racket, and — where
+    the instance enables it — their social profile."""
     async with conn() as db:
         cur = await db.execute("SELECT id FROM players WHERE telegram_id=?", (tg_id,))
         p = await cur.fetchone()
@@ -519,6 +569,16 @@ async def update_own_profile(tg_id: int, racket):
             "UPDATE players SET racket=? WHERE id=?",
             ((racket or "").strip() or None, p["id"]),
         )
+        if social:
+            await _ensure_social_columns(db)
+            await db.execute(
+                "UPDATE players SET linkedin=?, company=?, position=?, about=? WHERE id=?",
+                (normalize_linkedin(linkedin),
+                 (company or "").strip()[:80] or None,
+                 (position or "").strip()[:80] or None,
+                 " ".join((about or "").split())[:400] or None,
+                 p["id"]),
+            )
         await db.commit()
     return {"ok": True}
 

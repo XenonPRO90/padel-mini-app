@@ -14,6 +14,10 @@ export interface Player {
   racket?: string | null;
   elo?: number | null;
   verified?: number | boolean | null;
+  linkedin?: string | null;
+  company?: string | null;
+  position?: string | null;
+  about?: string | null;
 }
 
 export interface ScoredPlayer extends Player {

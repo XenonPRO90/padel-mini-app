@@ -40,6 +40,28 @@ export function useReviewJoinRequest() {
   });
 }
 
+export interface MyProfilePatch {
+  racket?: string;
+  linkedin?: string;
+  company?: string;
+  position?: string;
+  about?: string;
+}
+
+// The endpoint replaces the whole self-editable profile, so every call must
+// send all fields it wants to keep — a partial body would blank the rest.
+export function useUpdateMyProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: MyProfilePatch) =>
+      api('/api/me/profile', { method: 'PUT', body: JSON.stringify(patch) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+
 export function useUpdateMyRacket() {
   const qc = useQueryClient();
   return useMutation({

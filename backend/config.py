@@ -41,3 +41,11 @@ CORS_ORIGIN_REGEX = os.getenv(
 # Validate Telegram initData. Disabled in dev so we can hit endpoints from
 # curl/browser without a real Telegram session. In production set to "1".
 REQUIRE_TELEGRAM_AUTH = os.getenv("REQUIRE_TELEGRAM_AUTH", "0") == "1"
+
+# Brand of this instance. Beyond colours it selects which optional features are
+# on: FCE doubles as a networking surface for the league, the padel club does
+# not need social profiles.
+BRAND = os.getenv("BRAND", "padel")
+FEATURES = {
+    "social": BRAND == "fce",
+}
