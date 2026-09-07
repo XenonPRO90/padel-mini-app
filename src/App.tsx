@@ -54,6 +54,9 @@ declare global {
         HapticFeedback?: { impactOccurred?: (style: string) => void };
         showConfirm?: (message: string, cb: (ok: boolean) => void) => void;
         openTelegramLink?: (url: string) => void;
+        // External (non-Telegram) URLs — opens the real browser instead of
+        // trapping the user inside the in-app WebView.
+        openLink?: (url: string, opts?: { try_instant_view?: boolean }) => void;
         BackButton?: {
           show: () => void;
           hide: () => void;

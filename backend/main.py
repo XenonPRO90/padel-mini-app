@@ -12,7 +12,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
+from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX, FEATURES
 from .auth import get_tg_user
 from . import queries as q
 from . import cards as cards_mod
@@ -308,15 +308,21 @@ async def set_level(pid: int, body: SetLevelBody, _admin=Depends(get_admin)):
 
 class OwnProfileBody(BaseModel):
     racket: str | None = None
+    linkedin: str | None = None
+    company: str | None = None
+    position: str | None = None
 
 
 @app.put("/api/me/profile")
 async def update_me_profile(body: OwnProfileBody, user=Depends(get_tg_user)):
-    """Self-edit: a linked participant updates their own racket."""
+    """Self-edit: a linked participant updates their own racket, and their
+    social profile where this instance enables it."""
     if user.get("_dev_mode"):
         raise HTTPException(400, "dev mode")
     try:
-        return await q.update_own_profile(user["id"], body.racket)
+        return await q.update_own_profile(
+            user["id"], body.racket, body.linkedin, body.company, body.position,
+            social=FEATURES["social"])
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -697,7 +703,7 @@ async def share_text(tid: int, _user=Depends(get_tg_user)):
 async def me(user=Depends(get_tg_user)):
     """Current Telegram user + admin flag + linked player (identity) + join status."""
     if user.get("_dev_mode"):
-        return {"user": user, "is_admin": True, "player": None, "join_status": None, "pending_requests": 0}
+        return {"user": user, "features": FEATURES, "is_admin": True, "player": None, "join_status": None, "pending_requests": 0}
     is_adm = await q.is_admin(user["id"])
     player = await q.get_player_by_tg(user["id"])
     # Auto-populate avatar from Telegram initData (photo_url) once linked.
@@ -713,6 +719,6 @@ async def me(user=Depends(get_tg_user)):
     join_status = None if player else await q.get_join_status(user["id"])
     pending = await q.count_pending_join_requests() if is_adm else 0
     return {
-        "user": user, "is_admin": is_adm, "player": player,
+        "user": user, "features": FEATURES, "is_admin": is_adm, "player": player,
         "join_status": join_status, "pending_requests": pending,
     }

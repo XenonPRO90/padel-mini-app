@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { T, BRAND_CLUB } from '../lib/tokens';
+import { SocialProfile } from '../components/SocialProfile';
 import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon, EShareIcon } from '../lib/elegant';
 import { ProfileCardModal } from './ProfileCardModal';
 import { Ring } from '../components/Ring';
@@ -210,6 +211,10 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   fontSize: 13, color: T.muted,
                 }}>🎾 {data.player.racket}</div>
               ) : null}
+
+              {me?.features?.social && (
+                <SocialProfile player={data.player} isOwn={isOwn} />
+              )}
             </div>
 
             {/* Achievements / stat grid */}
