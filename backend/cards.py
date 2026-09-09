@@ -16,8 +16,6 @@ import aiohttp
 
 from .config import BOT_TOKEN, BRAND
 
-FRONTEND_DIR = "/home/ubuntu/padel-mini-app/frontend"
-
 # Playwright lives in its own directory with a pinned version, NOT in the Vite
 # frontend. Two reasons: as a devDependency there every Vercel build would
 # download a browser, and invoking it as a bare `npx playwright` silently
@@ -26,7 +24,11 @@ FRONTEND_DIR = "/home/ubuntu/padel-mini-app/frontend"
 # from 2026-07-31 to 2026-09-06 without any visible error.
 RENDER_DIR = "/home/ubuntu/padel-render"
 PLAYWRIGHT_BIN = os.path.join(RENDER_DIR, "node_modules", ".bin", "playwright")
-_RENDER_SEM = asyncio.Semaphore(3)  # cap concurrent chrome instances
+# Cap on concurrent chrome instances. Each costs 200-300 MB, and a finished
+# tournament renders ~16 cards back to back, so this is the setting that
+# decides whether rendering fits the machine. Tunable per host without a
+# code change — a small VPS wants a lower number than this box.
+_RENDER_SEM = asyncio.Semaphore(int(os.getenv("RENDER_CONCURRENCY", "3")))
 
 # ── tokens (mirror of src/lib/tokens.ts) ────────────────────────────────
 # Everything sent to Telegram is rendered here, so these images carry the
