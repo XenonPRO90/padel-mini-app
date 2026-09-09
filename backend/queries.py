@@ -483,7 +483,7 @@ async def approve_join_request(req_id: int, reviewed_by: int):
             raise ValueError("Этот Telegram уже привязан к игроку")
         # New players join WITHOUT a confirmed level: seed a provisional 'C' (so
         # pairing/balancing can place them) and verified=0. After a calibration
-        # window (elo_games ≥ ELO_CAL_GAMES) the admin gets a level suggestion.
+        # window (ELO_CAL_TOURNAMENTS tournaments) the admin gets a level suggestion.
         cur = await db.execute(
             "INSERT INTO players(name, level, side, telegram_id, username, verified, elo_seed) "
             "VALUES(?, 'C', 'both', ?, ?, 0, 3.5)",
@@ -872,8 +872,14 @@ async def get_player_profile(pid: int):
         {"id": "total_points", "label": "Очков за карьеру", "value": total_points, "unit": ""},
     ]
 
+    # Same rule as the club leaderboard: a level is trusted only after
+    # ELO_CAL_TOURNAMENTS tournaments, regardless of the admin's verified flag.
+    async with conn() as db:
+        validating = await is_validating(db, pid)
+
     return {
         "player": player,
+        "validating": validating,
         "elo_level": (elo_to_level(player["elo"]) if player.get("elo") is not None else None),
         "stats": {
             "tournaments": tournaments_all,
@@ -974,7 +980,9 @@ async def get_elo_leaderboard():
     async with conn() as db:
         cur = await db.execute(
             """SELECT p.id AS pid, p.name, p.level, p.photo_url, p.elo, p.verified,
-                      p.elo_games, COALESCE(SUM(s.wins), 0) AS w, COALESCE(SUM(s.losses), 0) AS l
+                      p.elo_games,
+                      (SELECT COUNT(*) FROM elo_history h WHERE h.player_id = p.id) AS rated_t,
+                      COALESCE(SUM(s.wins), 0) AS w, COALESCE(SUM(s.losses), 0) AS l
                FROM players p LEFT JOIN scores s ON s.player_id = p.id
                WHERE p.elo IS NOT NULL AND p.rating_excluded = 0
                GROUP BY p.id""")
@@ -986,7 +994,8 @@ async def get_elo_leaderboard():
             "player_id": r["pid"], "name": r["name"], "level": r["level"],
             "photo_url": r["photo_url"], "elo": round(r["elo"], 2),
             "elo_level": elo_to_level(r["elo"]), "verified": bool(r["verified"]),
-            "elo_games": r["elo_games"], "validating": r["elo_games"] < ELO_CAL_GAMES,
+            "elo_games": r["elo_games"], "tournaments": r["rated_t"],
+            "validating": r["rated_t"] < ELO_CAL_TOURNAMENTS,
             "games": g, "win_rate": round(r["w"] / g, 3) if g else 0.0,
         })
     # players still on validation (too few rated games) sink to the bottom
@@ -2037,9 +2046,8 @@ async def update_player(pid: int, name: str, level: str, side: str) -> dict:
     side = _normalize_side(side)
     async with conn() as db:
         await db.execute(
-            "UPDATE players SET name=?, level=?, side=?, verified=1 WHERE id=?",
-            (name.strip(), level, side, pid),
-        )
+            "UPDATE players SET name=?, side=? WHERE id=?", (name.strip(), side, pid))
+        await _apply_level(db, pid, level)
         await recompute_club_elo(db)
         await db.commit()
     return {"id": pid, "name": name, "level": level, "side": side}
@@ -2861,7 +2869,12 @@ ELO_SCALE = {"D": 1.0, "D+": 1.5, "D+strong": 2.0, "D+ strong": 2.0, "C-": 2.5,
 _ELO_STEPS = sorted(set(ELO_SCALE.values()))
 ELO_S = 1.5           # logistic scale: one level step (0.5) ≈ 68% expected
 ELO_K = 0.05          # per-match step (tunable)
-ELO_CAL_GAMES = 6     # games to become "verified" (~first tournament)
+# Calibration is measured in TOURNAMENTS, not games (Liza, 2026-09-09): a
+# tournament is usually ~7 rounds, so a games threshold of 6 was satisfied by a
+# single evening. Three tournaments is what she considers enough to trust a
+# level. One row per (player, tournament) lands in elo_history, so that table
+# is the count.
+ELO_CAL_TOURNAMENTS = 3
 
 
 def elo_level_value(level: str) -> float:
@@ -2987,7 +3000,8 @@ async def get_level_suggestions():
       - demote  : ... a clear step below."""
     async with conn() as db:
         cur = await db.execute(
-            "SELECT id, name, level, photo_url, elo, elo_games, verified "
+            "SELECT id, name, level, photo_url, elo, elo_games, verified, "
+            "(SELECT COUNT(*) FROM elo_history h WHERE h.player_id = players.id) AS rated_t "
             "FROM players WHERE elo IS NOT NULL AND rating_excluded=0")
         rows = await cur.fetchall()
     out = []
@@ -2998,7 +3012,7 @@ async def get_level_suggestions():
                 "photo_url": r["photo_url"], "elo": round(elo, 2),
                 "elo_level": implied, "games": r["elo_games"]}
         if not r["verified"]:
-            if r["elo_games"] >= ELO_CAL_GAMES:
+            if r["rated_t"] >= ELO_CAL_TOURNAMENTS:
                 out.append({**base, "kind": "assign", "suggested": implied})
             continue
         # Band-based (Liza): promote once ELO reaches the NEXT level's threshold;
@@ -3015,14 +3029,45 @@ async def get_level_suggestions():
     return out
 
 
+async def _rated_tournaments(db, pid: int) -> int:
+    """How many finished tournaments have contributed to this player's ELO."""
+    cur = await db.execute(
+        "SELECT COUNT(*) AS n FROM elo_history WHERE player_id=?", (pid,))
+    return (await cur.fetchone())["n"]
+
+
+async def is_validating(db, pid: int) -> bool:
+    """True while the player has not played enough tournaments for their rating
+    — and therefore their level — to be trusted."""
+    return await _rated_tournaments(db, pid) < ELO_CAL_TOURNAMENTS
+
+
+async def _apply_level(db, pid: int, level: str):
+    """Set a level and, while the player is still validating, move the frozen
+    ELO start-seed with it.
+
+    The seed normally stays put so that re-labelling someone doesn't inflate a
+    rating they earned. But before validation there is nothing earned to
+    protect, and the seed IS essentially the whole rating — so a level typed by
+    mistake freezes forever. That is exactly what happened to Denis E, entered
+    as B on 2026-09-01, corrected to C+, and left sitting first in the club on a
+    B-sized anchor after ten games (Liza, 2026-09-09).
+    """
+    if await is_validating(db, pid):
+        await db.execute(
+            "UPDATE players SET level=?, verified=1, elo_seed=? WHERE id=?",
+            (level, elo_level_value(level), pid))
+    else:
+        await db.execute(
+            "UPDATE players SET level=?, verified=1 WHERE id=?", (level, pid))
+
+
 async def set_player_level(pid: int, level: str):
     """Admin confirms/changes a player's level (from a suggestion or manually):
-    set level + verified=1, then recompute ELO. Floor and start-seed follow the
-    new level; for a well-played player ELO barely moves (results dominate), for a
-    new/unverified one it effectively re-seeds — matching the agreed rule."""
+    set level + verified=1, then recompute ELO."""
     level = _normalize_level(level)
     async with conn() as db:
-        await db.execute("UPDATE players SET level=?, verified=1 WHERE id=?", (level, pid))
+        await _apply_level(db, pid, level)
         await recompute_club_elo(db)
         await db.commit()
     return {"ok": True, "player_id": pid, "level": level}

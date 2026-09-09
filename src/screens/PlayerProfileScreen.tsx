@@ -165,7 +165,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
                     color: T.cream, background: T.emerald, borderRadius: 999, padding: '2px 9px',
-                  }}>{(!data.player.verified || data.stats.tournaments === 0) ? t('club.validating') : `ELO ${data.player.elo.toFixed(2)}`}</span>
+                  }}>{data.validating ? t('club.validating') : `ELO ${data.player.elo.toFixed(2)}`}</span>
                 )}
                 {data.stats.club_rank && (
                   <span style={{
