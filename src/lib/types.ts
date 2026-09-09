@@ -153,6 +153,8 @@ export interface ProfileCourt {
 export interface PlayerProfile {
   player: Player;
   elo_level?: string | null;
+  // Level not yet trusted: fewer than ELO_CAL_TOURNAMENTS rated tournaments.
+  validating?: boolean;
   stats: {
     tournaments: number;
     games: number;
