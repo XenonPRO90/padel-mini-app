@@ -148,14 +148,17 @@ function AddAdmin({ onDone, existing }: { onDone: () => void; existing: (number 
   const t = useT();
   const add = useAddAdmin();
   const [q, setQ] = useState('');
+  // /api/players does not return telegram_id, so filtering this list on it
+  // silently matched nobody and the picker was always empty. /api/players/linked
+  // already means "has a linked Telegram", which is exactly the requirement.
   const { data, isLoading } = useQuery<{ items: Player[] }>({
-    queryKey: ['players'],
-    queryFn: () => api('/api/players'),
+    queryKey: ['players-linked'],
+    queryFn: () => api('/api/players/linked'),
   });
 
   const taken = new Set(existing.filter((x): x is number => x !== null));
   const candidates = (data?.items ?? [])
-    .filter((p) => p.telegram_id && !taken.has(p.id))
+    .filter((p) => !taken.has(p.id))
     .filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (

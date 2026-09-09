@@ -158,7 +158,8 @@ async def players_list(_user=Depends(get_tg_user)):
 
 @app.get("/api/players/linked")
 async def players_linked(_user=Depends(get_tg_user)):
-    """Linked players only — used to pick participants for a casual game."""
+    """Linked players only — picking casual-game participants, and picking who
+    to grant admin rights to (both need a Telegram account to exist)."""
     return {"items": await q.get_linked_players()}
 
 
