@@ -32,14 +32,18 @@ LEVEL_ORDER = {"A+": 7, "A": 6, "B+": 5, "B": 4, "C+": 3, "C": 2, "C- strong": 1
 # partners every round pushes them into worse-balanced pairs.
 MUST_CHANGE_EXEMPT_LEVELS = {"B+"}
 
-# Cost of one same-side pair, added to balance_score. Tuning note: with only 3
-# possible pairings per court the side rule and the balance rule can be
-# mutually exclusive. As a hard tier, side always won and could force
-# "strong pair vs weak pair" (Liza, tournament 123 round 6: C+/C+ against C/C).
-# 1.5 sits between the two gaps that occur in practice: a balance gain of 2.0
-# (splitting a strong-pair/weak-pair court) overrides a side clash, a gain of
-# 1.0 or less does not.
-SIDE_PENALTY = 1.5
+# Cost of one same-side pair, added to balance_score. With only 3 possible
+# pairings per court the side rule and the balance rule can be mutually
+# exclusive, so this number decides which one yields.
+#
+# It sat at 1.5 from 2026-09-06, which let side outweigh every balance gain
+# short of 2.0 — and on 2026-09-18 that put the court's two strongest players
+# together (Roman Erm + Sasha Shibanov) purely to avoid pairing two
+# left-handers, when the even split was available. Lowered to 0.4: a balance
+# gain of 0.5 (a level step between the teams) now wins, a gain of 0.25 does
+# not. Measured over the last 20 tournaments (620 courts): courts pairing the
+# two strongest fall from 26 to 18, same-side pairs rise from 5 to 14.
+SIDE_PENALTY = 0.4
 
 # Levels are coarse — most of the club is C or C+ — so on a court of same-level
 # players every pairing scores identically on balance and the choice is
