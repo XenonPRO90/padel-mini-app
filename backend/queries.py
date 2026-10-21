@@ -2002,6 +2002,55 @@ async def finish_tournament(tid: int):
     return {"ok": True}
 
 
+async def delete_tournament(tid: int) -> dict:
+    """Remove a tournament and everything hanging off it.
+
+    The side tables are discovered from the schema rather than hard-coded, so a
+    table added later can't be silently left behind holding orphan rows (dev and
+    prod already differ here — `podium_sent` exists only on prod).
+    """
+    async with conn() as db:
+        cur = await db.execute("SELECT name, status FROM tournaments WHERE id=?", (tid,))
+        t = await cur.fetchone()
+        if not t:
+            raise ValueError("Турнир не найден")
+
+        cur = await db.execute(
+            """SELECT COUNT(*) AS n FROM matches m JOIN rounds r ON r.id=m.round_id
+               WHERE r.tournament_id=? AND m.winner IS NOT NULL""",
+            (tid,),
+        )
+        played = (await cur.fetchone())["n"]
+
+        cur = await db.execute(
+            """SELECT m.name FROM sqlite_master m, pragma_table_info(m.name) i
+               WHERE m.type='table' AND i.name='tournament_id'"""
+        )
+        tables = [r["name"] for r in await cur.fetchall()]
+
+        await db.execute("BEGIN")
+        try:
+            # Matches hang off rounds, not off the tournament directly.
+            await db.execute(
+                "DELETE FROM matches WHERE round_id IN "
+                "(SELECT id FROM rounds WHERE tournament_id=?)",
+                (tid,),
+            )
+            for tbl in tables:
+                await db.execute(f"DELETE FROM {tbl} WHERE tournament_id=?", (tid,))
+            await db.execute("DELETE FROM tournaments WHERE id=?", (tid,))
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    # Club ELO is derived from match history, so dropping played matches makes
+    # every rating downstream of them stale. Recompute is deterministic.
+    if played:
+        await rebuild_elo()
+    return {"ok": True, "name": t["name"], "played": played}
+
+
 # ─── Player CRUD ───────────────────────────────────────────
 
 VALID_LEVELS = {"A+", "A", "B+", "B", "C+", "C", "C- strong", "C-strong", "C-", "D"}

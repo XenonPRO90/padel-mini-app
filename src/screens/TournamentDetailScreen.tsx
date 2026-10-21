@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useMe } from '../api/me';
 import { useT } from '../lib/i18n';
@@ -185,6 +185,13 @@ export function TournamentDetailScreen({ tid, onBack, onOpenRound }: Props) {
             </div>
           ))}
         </div>
+
+        <DeleteTournamentButton
+          tid={tid}
+          name={t.name}
+          played={rounds.reduce((n, r) => n + (r.matches_recorded ?? 0), 0)}
+          onDone={onBack}
+        />
       </div>
     </div>
   );
@@ -256,5 +263,86 @@ function SendResultsButton({ tid }: { tid: number }) {
   }
   return <div style={{ textAlign: 'center', marginBottom: 18 }}>
     {btn(t('td.sendResults'), openConfirm)}
+  </div>;
+}
+
+
+// Liza, 2026-10-13: she sets a tournament up, the group then decides to play
+// without scoring, and the empty tournament is stuck in history forever.
+// Full admins only — a host runs tournaments but must not erase club history.
+function DeleteTournamentButton(
+  { tid, name, played, onDone }: { tid: number; name: string; played: number; onDone: () => void },
+) {
+  const t = useT();
+  const qc = useQueryClient();
+  const { data: me } = useMe();
+  const [step, setStep] = useState<'idle' | 'confirm' | 'deleting' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  if (!me?.is_full_admin) return null;
+
+  const remove = async () => {
+    setStep('deleting');
+    try {
+      await api(`/api/tournaments/${tid}`, { method: 'DELETE' });
+      // The tournament is gone, so its own cache entry must go too — leaving it
+      // would re-render this screen against a 404 on the way out.
+      qc.removeQueries({ queryKey: ['tournament', tid] });
+      await qc.invalidateQueries();
+      onDone();
+    } catch (e) {
+      setError((e as Error).message);
+      setStep('error');
+    }
+  };
+
+  const wrap: React.CSSProperties = {
+    margin: '24px 0 4px', padding: '12px 14px', borderRadius: 14,
+    background: T.paper, border: `1px solid ${T.paperEdge}`, textAlign: 'center',
+  };
+
+  if (step === 'deleting') {
+    return <div style={wrap}>
+      <div style={{ fontFamily: T.fontSerif, fontStyle: 'italic', color: T.muted }}>{t('td.deleting')}</div>
+    </div>;
+  }
+  if (step === 'error') {
+    return <div style={wrap}>
+      <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 8 }}>
+        {t('common.error')}: {error}
+      </div>
+      <button onClick={() => { setStep('idle'); setError(null); }} style={{
+        padding: '10px 18px', borderRadius: 999, cursor: 'pointer', border: 'none',
+        background: 'transparent', color: T.muted,
+        fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600,
+      }}>{t('common.ok')}</button>
+    </div>;
+  }
+  if (step === 'confirm') {
+    return <div style={wrap}>
+      <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink, marginBottom: 10, lineHeight: 1.4 }}>
+        {played
+          ? t('td.deleteConfirmPlayed', { name, n: played })
+          : t('td.deleteConfirm', { name })}
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+        <button onClick={remove} style={{
+          padding: '10px 18px', borderRadius: 999, cursor: 'pointer', border: 'none',
+          background: T.burgundy, color: T.cream,
+          fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+        }}>{t('td.delete')}</button>
+        <button onClick={() => setStep('idle')} style={{
+          padding: '10px 18px', borderRadius: 999, cursor: 'pointer', border: 'none',
+          background: 'transparent', color: T.muted,
+          fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 600,
+        }}>{t('common.cancel')}</button>
+      </div>
+    </div>;
+  }
+  return <div style={{ textAlign: 'center', margin: '24px 0 4px' }}>
+    <button onClick={() => setStep('confirm')} style={{
+      padding: '9px 16px', borderRadius: 999, cursor: 'pointer',
+      background: 'transparent', border: `1px solid ${T.paperEdge}`, color: T.muted,
+      fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
+    }}>{t('td.delete')}</button>
   </div>;
 }

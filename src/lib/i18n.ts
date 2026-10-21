@@ -290,6 +290,13 @@ export const STR = {
   'td.sendReason': { ru: 'Причина: {r}', en: 'Reason: {r}' },
   'td.sendSlow': { ru: 'Отправка ещё идёт — загляни сюда позже.',
                    en: 'Still sending — check back in a moment.' },
+  'td.delete': { ru: 'Удалить турнир', en: 'Delete tournament' },
+  'td.deleteConfirm': { ru: 'Удалить «{name}» навсегда? Результатов нет, рейтинг клуба не изменится.',
+    en: 'Delete «{name}» for good? No results recorded, club ratings stay as they are.' },
+  'td.deleteConfirmPlayed': { ru: 'Удалить «{name}» навсегда? Пропадут {n} сыгранных матчей, рейтинг клуба пересчитается. Отменить это будет нельзя.',
+    en: 'Delete «{name}» for good? {n} played matches will be lost and club ratings recomputed. This cannot be undone.' },
+  'td.deleting': { ru: 'Удаляю…', en: 'Deleting…' },
+  'td.deleted': { ru: 'Турнир удалён', en: 'Tournament deleted' },
 } satisfies Record<string, Entry>;
 
 const MONTHS: Record<Lang, string[]> = {
