@@ -746,6 +746,16 @@ async def players_delete(pid: int, _user=Depends(get_full_admin)):
         raise HTTPException(400, str(e))
 
 
+@app.delete("/api/tournaments/{tid}")
+async def tournament_delete(tid: int, _user=Depends(get_full_admin)):
+    """Full admins only: drop an abandoned or mistaken tournament for good.
+    Hosts can run a tournament but must not be able to erase club history."""
+    try:
+        return await q.delete_tournament(tid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 # ─── Tournament create ────────────────────────────────────
 
 class TournamentCreateBody(BaseModel):
