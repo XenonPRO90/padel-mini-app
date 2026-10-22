@@ -3,6 +3,8 @@
 We don't import from /home/ubuntu/padel-bot/db/queries.py directly because the
 bot module loads BOT_TOKEN at import time, which would fail here. Instead we
 mirror the queries we need."""
+import re
+
 from .db import conn, rows_to_list, row_to_dict
 
 
@@ -351,7 +353,7 @@ async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
-            "elo, verified, linkedin, company, position, about FROM players WHERE id=?",
+            "elo, verified, linkedin, company, position, about, instagram FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
@@ -556,10 +558,35 @@ def normalize_linkedin(raw: str | None) -> str | None:
     return f"https://www.linkedin.com/{handle}"
 
 
+def normalize_instagram(raw: str | None) -> str | None:
+    """Accept @handle, a bare handle or a profile URL; store the bare handle.
+    Raises for something that is not an Instagram username, so a typo is
+    reported instead of silently dropped."""
+    v = (raw or "").strip()
+    if not v:
+        return None
+    v = v.split("?")[0].rstrip("/")
+    low = v.lower()
+    for prefix in ("https://", "http://"):
+        if low.startswith(prefix):
+            v, low = v[len(prefix):], low[len(prefix):]
+    if low.startswith("www."):
+        v, low = v[4:], low[4:]
+    if low.startswith(("instagram.com/", "instagr.am/")):
+        v = v.split("/", 1)[1]
+    v = v.lstrip("@")
+    if not re.fullmatch(r"[A-Za-z0-9._]{1,30}", v):
+        raise ValueError("Это не похоже на ник Instagram")
+    return v
+
+
 async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
-                             position=None, about=None, social: bool = False):
+                             position=None, about=None, social: bool = False,
+                             instagram=None, set_instagram: bool = False):
     """Self-edit: a linked participant updates their own racket, and — where
-    the instance enables it — their social profile."""
+    the instance enables it — their social profile. Instagram is only touched
+    when the request carries it (set_instagram), so the older clients that send
+    just the racket do not blank it."""
     async with conn() as db:
         cur = await db.execute("SELECT id FROM players WHERE telegram_id=?", (tg_id,))
         p = await cur.fetchone()
@@ -569,6 +596,9 @@ async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
             "UPDATE players SET racket=? WHERE id=?",
             ((racket or "").strip() or None, p["id"]),
         )
+        if set_instagram:
+            await db.execute("UPDATE players SET instagram=? WHERE id=?",
+                             (normalize_instagram(instagram), p["id"]))
         if social:
             await _ensure_social_columns(db)
             await db.execute(
@@ -3290,3 +3320,223 @@ async def get_casual_my(player_id: int, limit: int = 10):
             s["participants"] = r["total"] or 0
             s["games"] = await _casual_games_with_names(db, s["id"])
         return sessions
+
+
+# ─── Schema added after launch ───────────────────────────────────────────
+# Run once at API startup, before anything selects these columns.
+async def ensure_schema():
+    async with conn() as db:
+        try:
+            await db.execute("ALTER TABLE players ADD COLUMN instagram TEXT")
+        except Exception:
+            pass  # already there
+        # One row per (month, player) a recap went out to — makes the monthly
+        # send idempotent across restarts and retries.
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS recap_sent (
+                   month TEXT NOT NULL, player_id INTEGER NOT NULL,
+                   sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+                   PRIMARY KEY (month, player_id))""")
+        # Club ELO rank at the end of each month, so a recap can say "↑3".
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS rank_snapshots (
+                   month TEXT NOT NULL, player_id INTEGER NOT NULL,
+                   rank INTEGER NOT NULL, elo REAL NOT NULL,
+                   PRIMARY KEY (month, player_id))""")
+        await db.commit()
+
+
+def elo_bands():
+    return [{"level": lvl, "elo": thr} for lvl, thr in _ELO_BANDS]
+
+
+def next_band(value: float):
+    """The next level up and its threshold, or None at the top."""
+    for lvl, thr in _ELO_BANDS:
+        if thr > value + 1e-9:
+            return {"level": lvl, "elo": thr}
+    return None
+
+
+# ─── ELO history (profile chart) ─────────────────────────────────────────
+async def get_player_elo_history(pid: int):
+    """Every rated tournament of a player, oldest first, with ELO before and
+    after. `start` is the rating the history begins from (the seed)."""
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT h.tournament_id AS tid, t.name, substr(t.created_at, 1, 10) AS date,
+                      h.elo_before, h.elo_after
+               FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id
+               WHERE h.player_id = ? ORDER BY t.created_at, t.id""", (pid,))
+        rows = rows_to_list(await cur.fetchall())
+        cur = await db.execute("SELECT elo, rating_excluded FROM players WHERE id=?", (pid,))
+        p = await cur.fetchone()
+    if not p or p["elo"] is None or p["rating_excluded"]:
+        return {"points": [], "start": None, "elo": None, "next": None, "bands": elo_bands()}
+    for r in rows:
+        r["elo_before"] = round(r["elo_before"], 4)
+        r["elo_after"] = round(r["elo_after"], 4)
+    return {
+        "points": rows,
+        "start": rows[0]["elo_before"] if rows else None,
+        "elo": round(p["elo"], 4),
+        "level": elo_to_level(p["elo"]),
+        "next": next_band(p["elo"]),
+        "bands": elo_bands(),
+    }
+
+
+# ─── Monthly recap ───────────────────────────────────────────────────────
+def month_bounds(month: str):
+    """'2026-09' → ('2026-09-01', '2026-10-01')."""
+    y, m = map(int, month.split("-"))
+    ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+    return f"{y:04d}-{m:02d}-01", f"{ny:04d}-{nm:02d}-01"
+
+
+def prev_month(month: str) -> str:
+    y, m = map(int, month.split("-"))
+    return f"{y - 1:04d}-12" if m == 1 else f"{y:04d}-{m - 1:02d}"
+
+
+async def snapshot_ranks(month: str):
+    """Store the current club ELO rank of every rated (non-calibrating)
+    player under `month`. Called when that month's recap goes out."""
+    board = [x for x in await get_elo_leaderboard() if not x["validating"]]
+    async with conn() as db:
+        await db.execute("DELETE FROM rank_snapshots WHERE month=?", (month,))
+        for i, x in enumerate(board, 1):
+            await db.execute(
+                "INSERT INTO rank_snapshots(month, player_id, rank, elo) VALUES(?,?,?,?)",
+                (month, x["player_id"], i, x["elo"]))
+        await db.commit()
+
+
+async def get_month_recaps(month: str):
+    """One recap per linked, rated player who finished at least one
+    tournament in `month`. Casual games and the coach are left out."""
+    start, end = month_bounds(month)
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT COUNT(*) FROM tournaments
+               WHERE status='finished' AND mode!='casual' AND created_at>=? AND created_at<?""",
+            (start, end))
+        club_tournaments = (await cur.fetchone())[0]
+
+        # dense place per player per tournament, same rule as _player_placements
+        cur = await db.execute(
+            """WITH r AS (
+                 SELECT s.tournament_id AS tid, s.player_id AS pid, s.wins, s.losses,
+                        DENSE_RANK() OVER (PARTITION BY s.tournament_id
+                                           ORDER BY s.points DESC, s.wins DESC) AS place,
+                        COUNT(*) OVER (PARTITION BY s.tournament_id) AS field,
+                        substr(t.created_at, 1, 10) AS date, t.created_at
+                 FROM scores s JOIN tournaments t ON t.id = s.tournament_id
+                 WHERE t.status='finished' AND t.mode!='casual'
+                   AND t.created_at>=? AND t.created_at<?)
+               SELECT r.*, p.name, p.level, p.telegram_id, p.photo_url, p.instagram, p.lang, p.elo
+               FROM r JOIN players p ON p.id = r.pid
+               WHERE p.telegram_id IS NOT NULL AND p.rating_excluded = 0
+               ORDER BY r.created_at, r.tid""", (start, end))
+        rows = await cur.fetchall()
+
+        cur = await db.execute(
+            """SELECT h.player_id AS pid, substr(t.created_at, 1, 7) AS month,
+                      SUM(h.elo_after - h.elo_before) AS delta
+               FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id
+               GROUP BY h.player_id, month""")
+        month_deltas: dict[int, dict[str, float]] = {}
+        for r in await cur.fetchall():
+            month_deltas.setdefault(r["pid"], {})[r["month"]] = r["delta"]
+
+        cur = await db.execute(
+            """SELECT h.player_id AS pid, h.elo_before, h.elo_after
+               FROM elo_history h JOIN tournaments t ON t.id = h.tournament_id
+               WHERE t.created_at>=? AND t.created_at<? ORDER BY t.created_at, t.id""",
+            (start, end))
+        elo_series: dict[int, list[float]] = {}
+        for r in await cur.fetchall():
+            ser = elo_series.setdefault(r["pid"], [r["elo_before"]])
+            ser.append(r["elo_after"])
+
+        cur = await db.execute(
+            """SELECT m.p1, m.p2, m.p3, m.p4, m.winner
+               FROM matches m JOIN rounds rd ON rd.id = m.round_id
+               JOIN tournaments t ON t.id = rd.tournament_id
+               WHERE t.status='finished' AND t.mode!='casual' AND m.winner IS NOT NULL
+                 AND t.created_at>=? AND t.created_at<?""", (start, end))
+        partner_stats: dict[int, dict[int, list[int]]] = {}
+        for m in await cur.fetchall():
+            for a, b, side in ((m["p1"], m["p2"], 1), (m["p2"], m["p1"], 1),
+                               (m["p3"], m["p4"], 2), (m["p4"], m["p3"], 2)):
+                st = partner_stats.setdefault(a, {}).setdefault(b, [0, 0])
+                st[0] += 1 if m["winner"] == side else 0
+                st[1] += 1
+
+        cur = await db.execute("SELECT id, name FROM players")
+        names = {r["id"]: r["name"] for r in await cur.fetchall()}
+        cur = await db.execute("SELECT player_id, rank FROM rank_snapshots WHERE month=?",
+                               (prev_month(month),))
+        prev_rank = {r["player_id"]: r["rank"] for r in await cur.fetchall()}
+
+    by_player: dict[int, dict] = {}
+    for r in rows:
+        x = by_player.setdefault(r["pid"], {
+            "player_id": r["pid"], "name": r["name"], "level": r["level"],
+            "telegram_id": r["telegram_id"], "photo_url": r["photo_url"],
+            "instagram": r["instagram"], "lang": r["lang"] or "ru", "elo": r["elo"],
+            "tournaments": 0, "wins": 0, "losses": 0, "titles": 0, "best": None,
+        })
+        x["tournaments"] += 1
+        x["wins"] += r["wins"]; x["losses"] += r["losses"]
+        if r["place"] == 1:
+            x["titles"] += 1
+        if x["best"] is None or r["place"] < x["best"]["place"] or (
+                r["place"] == x["best"]["place"] and r["field"] > x["best"]["field"]):
+            x["best"] = {"place": r["place"], "field": r["field"], "date": r["date"]}
+
+    board = [x for x in await get_elo_leaderboard() if not x["validating"]]
+    cur_rank = {x["player_id"]: i for i, x in enumerate(board, 1)}
+
+    out = []
+    for pid, x in by_player.items():
+        g = x["wins"] + x["losses"]
+        x["win_rate"] = round(x["wins"] / g, 3) if g else 0.0
+        x["club_tournaments"] = club_tournaments
+        ser = elo_series.get(pid) or []
+        x["elo_series"] = [round(v, 4) for v in ser]
+        x["elo_delta"] = round(ser[-1] - ser[0], 4) if len(ser) > 1 else 0.0
+        x["elo_end"] = round(ser[-1], 4) if ser else (round(x["elo"], 4) if x["elo"] else None)
+        x["next"] = next_band(x["elo_end"]) if x["elo_end"] is not None else None
+        # "best month since …": the latest earlier month that did at least as well
+        x["best_since"] = None
+        hist = month_deltas.get(pid, {})
+        if x["elo_delta"] > 0:
+            earlier = sorted((mo for mo in hist if mo < month), reverse=True)
+            beat = next((mo for mo in earlier if hist[mo] >= x["elo_delta"] - 1e-9), None)
+            if beat is None and len(earlier) >= 3:
+                x["best_since"] = "ever"
+            elif beat is not None and beat < prev_month(month):
+                x["best_since"] = beat
+        partners = partner_stats.get(pid, {})
+        best = max(partners.items(), key=lambda kv: (kv[1][0], kv[1][0] / kv[1][1]), default=None)
+        x["best_partner"] = ({"name": names.get(best[0], "?"), "wins": best[1][0], "games": best[1][1]}
+                             if best and best[1][0] > 0 else None)
+        x["rank"] = cur_rank.get(pid)
+        x["rank_prev"] = prev_rank.get(pid)
+        out.append(x)
+    out.sort(key=lambda x: x["name"])
+    return out
+
+
+async def get_recap_sent_ids(month: str) -> set:
+    async with conn() as db:
+        cur = await db.execute("SELECT player_id FROM recap_sent WHERE month=?", (month,))
+        return {r["player_id"] for r in await cur.fetchall()}
+
+
+async def mark_recap_sent(month: str, player_id: int):
+    async with conn() as db:
+        await db.execute("INSERT OR IGNORE INTO recap_sent(month, player_id) VALUES(?,?)",
+                         (month, player_id))
+        await db.commit()

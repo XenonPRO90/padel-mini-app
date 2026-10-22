@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { T, BRAND_CLUB } from '../lib/tokens';
 import { SocialProfile } from '../components/SocialProfile';
+import { EloChart } from '../components/EloChart';
+import { InstagramLine } from '../components/InstagramLine';
 import { EGoldFrame, ELabel, EMedal, EPlace, EEditIcon, EShareIcon } from '../lib/elegant';
 import { ProfileCardModal } from './ProfileCardModal';
 import { Ring } from '../components/Ring';
@@ -216,6 +218,11 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                 }}>🎾 {data.player.racket}</div>
               ) : null)}
             </div>
+
+            {/* Instagram — clickable for everyone, editable on your own profile */}
+            <InstagramLine player={data.player} isOwn={isOwn} />
+
+            <EloChart pid={pid} />
 
             {/* Work profile sits outside the centred header so it spans the
                 same width as the stat grid below it. */}

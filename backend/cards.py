@@ -428,3 +428,157 @@ async def render_and_send(card: dict):
         return False, str(j.get("description", j))[:120]
     except Exception as e:
         return False, str(e)[:120]
+
+
+# ── monthly recap card ──────────────────────────────────────────────────
+
+MONTHS = {
+    "ru": ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август",
+           "сентябрь", "октябрь", "ноябрь", "декабрь"],
+    # genitive, for "лучший месяц с июня" / "итоги сентября"
+    "ru_gen": ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
+               "сентября", "октября", "ноября", "декабря"],
+    "en": ["January", "February", "March", "April", "May", "June", "July", "August",
+           "September", "October", "November", "December"],
+}
+
+RECAP_L = {
+    "ru": {"eyebrow": "Итоги месяца", "tourn": "турниров", "matches": "матчи", "wr": "побед",
+           "titles": "титул", "titles0": "титулов", "played": "сыграл {n} из {m} турниров клуба",
+           "elo": "Рейтинг ELO", "to_next": "до {lvl} осталось {d}", "top": "высший уровень",
+           "since": "лучший месяц с {m}", "ever": "лучший месяц за всё время",
+           "partner": "Лучший партнёр — <b>{n}</b>: {w} из {g}",
+           "best": "Лучший вечер — <b>{p}-е место</b> из {f}, {d}",
+           "rank": "{r}-е место в рейтинге клуба", "level": "уровень {l}"},
+    "en": {"eyebrow": "Monthly recap", "tourn": "tournaments", "matches": "matches", "wr": "won",
+           "titles": "title", "titles0": "titles", "played": "played {n} of {m} club tournaments",
+           "elo": "ELO rating", "to_next": "{d} to {lvl}", "top": "top level",
+           "since": "best month since {m}", "ever": "best month ever",
+           "partner": "Best partner — <b>{n}</b>: {w} of {g}",
+           "best": "Best night — <b>place {p}</b> of {f}, {d}",
+           "rank": "#{r} in the club rating", "level": "level {l}"},
+}
+
+
+def _spark(vals, w, h, line, fill):
+    """Small filled line chart for the recap card."""
+    if len(vals) < 2:
+        vals = (vals or [0]) * 2
+    lo, hi = min(vals), max(vals)
+    span = max(hi - lo, 0.04)
+    lo -= span * 0.15; hi += span * 0.15
+    pad = 14
+    X = lambda i: pad + (w - 2 * pad) * i / (len(vals) - 1)
+    Y = lambda v: pad + (h - 2 * pad) * (hi - v) / (hi - lo)
+    pts = " ".join(f'{"M" if i == 0 else "L"}{X(i):.1f},{Y(v):.1f}' for i, v in enumerate(vals))
+    area = pts + f" L{X(len(vals) - 1):.1f},{h} L{X(0):.1f},{h} Z"
+    return (f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" style="display:block">'
+            f'<path d="{area}" fill="{fill}" fill-opacity="0.16"/>'
+            f'<path d="{pts}" fill="none" stroke="{fill}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle cx="{X(len(vals) - 1):.1f}" cy="{Y(vals[-1]):.1f}" r="9" fill="{fill}" stroke="{line}" stroke-width="3"/></svg>')
+
+
+def build_recap_html(r: dict, month: str) -> str:
+    """r: one item of queries.get_month_recaps(); month: 'YYYY-MM'."""
+    lang = r.get("lang", "ru") if r.get("lang") in RECAP_L else "ru"
+    L = RECAP_L[lang]
+    mi = int(month[5:7]) - 1
+    title = MONTHS[lang][mi].capitalize() if lang == "ru" else MONTHS["en"][mi]
+    dd = lambda d: f"{d[8:10]}.{d[5:7]}"
+
+    sub = [L["level"].format(l=r["level"])]
+    if r.get("rank"):
+        mv = ""
+        if r.get("rank_prev"):
+            diff = r["rank_prev"] - r["rank"]
+            mv = f' <span style="color:{"#2f6b45" if diff > 0 else "#8a3a3a"}">{"↑" if diff > 0 else "↓"}{abs(diff)}</span>' if diff else ""
+        sub.append(L["rank"].format(r=r["rank"]) + mv)
+    else:
+        sub.append(L["played"].format(n=r["tournaments"], m=r["club_tournaments"]))
+
+    tiles = [
+        (str(r["tournaments"]), L["tourn"]),
+        (f'{r["wins"]}–{r["losses"]}', L["matches"]),
+        (f'{round(r["win_rate"] * 100)}%', L["wr"]),
+        (str(r["titles"]), L["titles"] if r["titles"] == 1 else L["titles0"]),
+    ]
+    tile_html = "".join(
+        f'<div style="flex:1;border:1.5px solid {PAPEREDGE};background:{CREAM};padding:16px 4px 12px">'
+        f'<div style="font-family:{DISP};font-weight:800;font-size:46px;color:{EMERDEEP};line-height:1">{v}</div>'
+        f'<div style="font-size:21px;color:{MUTED};margin-top:4px">{lbl}</div></div>'
+        for v, lbl in tiles)
+
+    d = r["elo_delta"]
+    dcol = "#9fd3a8" if d > 0 else ("#e3a3a3" if d < 0 else "#cfc6b3")
+    notes = []
+    if r.get("next") and r.get("elo_end") is not None:
+        notes.append(L["to_next"].format(lvl=f'<b style="color:#fff">{r["next"]["level"]}</b>',
+                                         d=f'<b style="color:#fff">{r["next"]["elo"] - r["elo_end"]:.2f}</b>'))
+    elif r.get("elo_end") is not None:
+        notes.append(L["top"])
+    if r.get("best_since") == "ever":
+        notes.append(L["ever"])
+    elif r.get("best_since"):
+        bm = int(r["best_since"][5:7]) - 1
+        notes.append(L["since"].format(m=MONTHS["ru_gen" if lang == "ru" else "en"][bm]))
+    elo_block = ""
+    if r.get("elo_end") is not None:
+        elo_block = (
+            f'<div style="width:100%;margin-top:26px;background:{EMERDEEP};padding:22px 30px 16px;text-align:left">'
+            f'<div style="display:flex;justify-content:space-between;align-items:baseline">'
+            f'<div style="font-family:{DISP};font-weight:700;font-size:17px;letter-spacing:6px;text-transform:uppercase;color:#d9bf86">{L["elo"]}</div>'
+            f'<div style="font-family:{DISP};font-weight:800;font-size:44px;color:#fff">{r["elo_end"]:.3f}'
+            f'<span style="color:{dcol};font-size:32px;margin-left:12px">{d:+.2f}</span></div></div>'
+            f'{_spark(r["elo_series"], 840, 150, EMERDEEP, "#d9bf86")}'
+            f'<div style="font-size:24px;color:#cfc6b3;margin-top:6px">{" · ".join(notes)}</div></div>')
+
+    lines = []
+    if r.get("best_partner"):
+        bp = r["best_partner"]
+        lines.append(L["partner"].format(n=bp["name"], w=bp["wins"], g=bp["games"]))
+    if r.get("best"):
+        b = r["best"]
+        lines.append(L["best"].format(p=b["place"], f=b["field"], d=dd(b["date"])))
+    lines_html = "<br>".join(lines)
+
+    ig = ""
+    if r.get("instagram"):
+        ig = (f'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;'
+              f'font-size:24px;color:{MUTED}">'
+              f'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{GOLD}" stroke-width="2">'
+              f'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/>'
+              f'<circle cx="17.5" cy="6.5" r="1" fill="{GOLD}"/></svg>@{r["instagram"]}</div>')
+
+    inner = (
+        _brandhead(logo_size=58, gap=2) +
+        f'<div style="font-family:{DISP};font-weight:700;font-size:16px;letter-spacing:6px;color:{MUTED};text-transform:uppercase">{L["eyebrow"]}</div>'
+        f'<div style="font-family:{DISP};font-weight:800;font-size:66px;color:{EMERDEEP};line-height:1;margin-top:8px">{title}</div>'
+        f'<div style="font-family:{DISP};font-weight:700;font-size:38px;color:{INK};margin-top:14px">{r["name"]}</div>'
+        f'{ig}'
+        f'<div style="font-family:{SERIF};font-style:italic;font-size:24px;color:{MUTED};margin-top:4px">{" · ".join(sub)}</div>'
+        f'<div style="display:flex;gap:12px;width:100%;margin-top:22px">{tile_html}</div>'
+        f'{elo_block}'
+        f'<div style="font-family:{SERIF};font-size:26px;color:{INK};line-height:1.5;margin-top:20px">{lines_html}</div>'
+    )
+    return _page(inner)
+
+
+def recap_caption(r: dict, month: str) -> str:
+    lang = r.get("lang", "ru")
+    mi = int(month[5:7]) - 1
+    if lang == "en":
+        return f"Your {MONTHS['en'][mi]} at the club 🎾 Thanks for playing — see you on court!"
+    return f"Твои итоги {MONTHS['ru_gen'][mi]} в клубе 🎾 Спасибо за игры — до встречи на корте!"
+
+
+async def render_and_send_recap(r: dict, month: str):
+    """Render one recap and DM it. Returns (ok, reason)."""
+    try:
+        r = {**r, "avatar": None}
+        png = await render_png(build_recap_html(r, month))
+        ok, j = await send_photo(r["telegram_id"], png, recap_caption(r, month))
+        if ok:
+            return True, None
+        return False, str(j.get("description", j))[:120]
+    except Exception as e:
+        return False, str(e)[:120]
