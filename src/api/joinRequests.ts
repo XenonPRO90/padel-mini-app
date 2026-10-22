@@ -46,6 +46,7 @@ export interface MyProfilePatch {
   company?: string;
   position?: string;
   about?: string;
+  instagram?: string;
 }
 
 // The endpoint replaces the whole self-editable profile, so every call must
@@ -55,6 +56,19 @@ export function useUpdateMyProfile() {
   return useMutation({
     mutationFn: (patch: MyProfilePatch) =>
       api('/api/me/profile', { method: 'PUT', body: JSON.stringify(patch) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+
+// Racket rides along because the endpoint always rewrites it.
+export function useUpdateMyInstagram() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ racket, instagram }: { racket: string; instagram: string }) =>
+      api('/api/me/profile', { method: 'PUT', body: JSON.stringify({ racket, instagram }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profile'] });
       qc.invalidateQueries({ queryKey: ['me'] });

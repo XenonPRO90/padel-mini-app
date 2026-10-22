@@ -18,6 +18,26 @@ export interface Player {
   company?: string | null;
   position?: string | null;
   about?: string | null;
+  instagram?: string | null;
+}
+
+export interface EloPoint {
+  tid: number;
+  name: string;
+  date: string;          // YYYY-MM-DD
+  elo_before: number;
+  elo_after: number;
+}
+
+export interface EloBand { level: string; elo: number }
+
+export interface EloHistory {
+  points: EloPoint[];
+  start: number | null;  // rating the history begins from (the seed)
+  elo: number | null;
+  level?: string;
+  next: EloBand | null;  // next level up, null at the top
+  bands: EloBand[];
 }
 
 export interface ScoredPlayer extends Player {

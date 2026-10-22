@@ -16,6 +16,7 @@ from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX, FEATURES
 from .auth import get_tg_user
 from . import queries as q
 from . import cards as cards_mod
+from . import recap as recap_mod
 
 
 async def get_admin(user=Depends(get_tg_user)):
@@ -54,6 +55,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+_recap_task: asyncio.Task | None = None
+
+
+@app.on_event("startup")
+async def startup():
+    global _recap_task
+    await q.ensure_schema()
+    if recap_mod.auto_enabled():
+        _recap_task = asyncio.create_task(recap_mod.auto_loop())
 
 
 @app.get("/api/health")
@@ -237,6 +249,13 @@ async def player_detail(pid: int, _user=Depends(get_tg_user)):
     return {"player": p, "stats": stats}
 
 
+@app.get("/api/players/{pid}/elo-history")
+async def player_elo_history(pid: int, _user=Depends(get_tg_user)):
+    """Per-tournament ELO for the profile chart. Visible to everyone, like the
+    rest of the profile stats."""
+    return await q.get_player_elo_history(pid)
+
+
 @app.get("/api/players/{pid}/avatar")
 async def player_avatar(pid: int, _user=Depends(get_tg_user)):
     """Proxy the player's Telegram avatar so it can be drawn into a shareable
@@ -324,6 +343,7 @@ class OwnProfileBody(BaseModel):
     company: str | None = None
     position: str | None = None
     about: str | None = None
+    instagram: str | None = None
 
 
 @app.put("/api/me/profile")
@@ -335,7 +355,8 @@ async def update_me_profile(body: OwnProfileBody, user=Depends(get_tg_user)):
     try:
         return await q.update_own_profile(
             user["id"], body.racket, body.linkedin, body.company, body.position,
-            body.about, social=FEATURES["social"])
+            body.about, social=FEATURES["social"], instagram=body.instagram,
+            set_instagram="instagram" in body.model_fields_set)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
