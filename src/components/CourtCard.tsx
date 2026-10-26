@@ -143,9 +143,18 @@ function TeamRow({
   selectedSlot?: Slot | null;
   onPlayerTap?: (slot: Slot) => void;
 }) {
+  // Edit mode stacks the pair vertically, one full-width row per player.
+  // Side by side, two names plus two level badges plus the "и" share whatever
+  // is left after the 86px court column — on a phone each name is clipped to
+  // "Konsta…" and the tap target ends up ~28px tall. With six courts that is
+  // unusable, which is exactly what Katerina ran into (2026-10-26). Reading
+  // mode keeps the compact one-line layout.
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
+      display: 'flex',
+      flexDirection: editable ? 'column' : 'row',
+      alignItems: editable ? 'stretch' : 'center',
+      gap: editable ? 6 : 6,
       opacity: dim && !editable ? 0.45 : 1, minWidth: 0,
     }}>
       {team.map((p, i) => {
@@ -153,7 +162,7 @@ function TeamRow({
         const selected = editable && selectedSlot === slot;
         return (
           <div key={i} style={{ display: 'contents' }}>
-            {i > 0 && (
+            {i > 0 && !editable && (
               <span style={{
                 color: T.gold, fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
               }}>и</span>
@@ -161,24 +170,35 @@ function TeamRow({
             <div
               onClick={editable ? () => onPlayerTap?.(slot) : undefined}
               style={{
-                display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexShrink: 1,
+                display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+                flexShrink: editable ? 0 : 1,
                 cursor: editable ? 'pointer' : 'default',
-                borderRadius: 999,
-                padding: editable ? '4px 8px' : 0,
-                margin: editable ? '2px 0' : 0,
+                // A finger needs ~44px; the reading layout stays untouched.
+                minHeight: editable ? 44 : undefined,
+                borderRadius: editable ? 12 : 999,
+                padding: editable ? '6px 12px' : 0,
                 border: editable
                   ? `1.5px solid ${selected ? T.gold : T.paperEdge}`
                   : 'none',
-                background: selected ? '#f9f1de' : 'transparent',
+                background: selected ? '#f9f1de' : editable ? T.cream : 'transparent',
                 boxShadow: selected ? '0 0 0 4px rgba(166,134,77,0.18)' : 'none',
                 transition: 'all 160ms',
+                // Telegram's WebView otherwise double-tap-zooms and selects the
+                // name text while the host is trying to pick two players.
+                touchAction: editable ? 'manipulation' : undefined,
+                WebkitUserSelect: editable ? 'none' : undefined,
+                userSelect: editable ? 'none' : undefined,
+                WebkitTapHighlightColor: 'transparent',
               }}>
               <span style={{
                 fontFamily: T.fontDisplay, fontSize: 14,
                 fontWeight: highlight ? 600 : 500,
                 color: highlight ? T.win : T.ink,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                maxWidth: 110,
+                // Edit mode owns the full row, so the name gets the real width
+                // instead of a 110px stub.
+                flex: editable ? 1 : undefined,
+                maxWidth: editable ? undefined : 110,
               }}>{p.name}</span>
               <LevelBadge level={p.level} size="sm" />
             </div>
