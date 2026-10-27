@@ -31,6 +31,13 @@ export function CourtCard({
   return (
     <div onClick={editable ? undefined : onClick} style={{
       display: 'flex', borderRadius: 18, overflow: 'hidden',
+      // Both screens stack these cards in a column flex container that scrolls.
+      // `overflow: hidden` above resets this card's automatic minimum height to
+      // zero, so without an explicit flex-shrink the container SQUASHES the
+      // cards to fit instead of scrolling — and the rounded corners then clip
+      // the second player right out of the card. Harmless while the cards were
+      // short; six courts in edit mode made it visible (Katerina, 2026-10-27).
+      flexShrink: 0,
       border: `1px solid ${recorded ? T.emerald : T.paperEdge}`,
       background: T.paper,
       boxShadow: recorded ? '0 0 0 1px rgba(47,74,58,0.08), 0 2px 8px -4px rgba(47,74,58,0.18)' : 'none',
