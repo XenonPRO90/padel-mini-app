@@ -3176,8 +3176,8 @@ async def is_validating(db, pid: int) -> bool:
 
 
 async def _apply_level(db, pid: int, level: str):
-    """Set a level and, while the player is still validating, move the frozen
-    ELO start-seed with it.
+    """Set a level, moving the frozen ELO start-seed with it while the player
+    is still validating — or whenever the new level is BELOW the seed.
 
     The seed normally stays put so that re-labelling someone doesn't inflate a
     rating they earned. But before validation there is nothing earned to
@@ -3186,10 +3186,29 @@ async def _apply_level(db, pid: int, level: str):
     as B on 2026-09-01, corrected to C+, and left sitting first in the club on a
     B-sized anchor after ten games (Liza, 2026-09-09).
     """
+    new_val = elo_level_value(level)
     if await is_validating(db, pid):
         await db.execute(
             "UPDATE players SET level=?, verified=1, elo_seed=? WHERE id=?",
-            (level, elo_level_value(level), pid))
+            (level, new_val, pid))
+        return
+
+    cur = await db.execute("SELECT elo_seed FROM players WHERE id=?", (pid,))
+    row = await cur.fetchone()
+    seed = row[0] if row is not None else None
+    if seed is not None and new_val < seed:
+        # A DEMOTION has to reach the numbers. Leaving the anchor above the new
+        # level keeps the old, inflated rating alive: the player is relabelled
+        # but still counted from where they never belonged, so the correction
+        # does nothing. That is what happened to Aman M — C- strong (3.0) on a
+        # 3.5 anchor, and the demotion never showed up in his rating until the
+        # seed was pulled down by hand (Liza, 2026-11-23).
+        #
+        # A PROMOTION is deliberately left alone: there the frozen anchor is
+        # what stops a new label from handing out rating nobody earned.
+        await db.execute(
+            "UPDATE players SET level=?, verified=1, elo_seed=? WHERE id=?",
+            (level, new_val, pid))
     else:
         await db.execute(
             "UPDATE players SET level=?, verified=1 WHERE id=?", (level, pid))
