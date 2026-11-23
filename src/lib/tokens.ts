@@ -116,6 +116,8 @@ const PADEL_LEVELS: Record<string, LevelStyle> = {
   'B+':        { bg: '#2f4a3a', fg: '#f5efe4', label: 'B+' },
   'B':         { bg: '#2f4a3a', fg: '#f5efe4', label: 'B'  },
   'C+':        { bg: '#a6864d', fg: '#1f2a24', label: 'C+' },
+  'C strong':  { bg: '#8a6a35', fg: '#f5efe4', label: 'Cs'  },
+  'Cstrong':   { bg: '#8a6a35', fg: '#f5efe4', label: 'Cs'  },
   'C-strong':  { bg: '#a6864d', fg: '#1f2a24', label: 'C-s' },
   'C- strong': { bg: '#a6864d', fg: '#1f2a24', label: 'C-s' }, // legacy alias
   'C':         { bg: '#d9c08a', fg: '#1f2a24', label: 'C'  },
@@ -130,6 +132,8 @@ const FCE_LEVELS: Record<string, LevelStyle> = {
   'B+':        { bg: '#1f2d4d', fg: '#ffffff', label: 'B+' },
   'B':         { bg: '#1f2d4d', fg: '#ffffff', label: 'B'  },
   'C+':        { bg: '#1e78f0', fg: '#ffffff', label: 'C+' },
+  'C strong':  { bg: '#2f6fd0', fg: '#ffffff', label: 'Cs'  },
+  'Cstrong':   { bg: '#2f6fd0', fg: '#ffffff', label: 'Cs'  },
   'C-strong':  { bg: '#5b9bf5', fg: '#ffffff', label: 'C-s' },
   'C- strong': { bg: '#5b9bf5', fg: '#ffffff', label: 'C-s' },
   'C':         { bg: '#e8f0fe', fg: '#0f5fd6', label: 'C'  },

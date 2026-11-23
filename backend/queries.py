@@ -885,7 +885,8 @@ async def get_player_profile(pid: int):
     # Uniform ladder (C-strong sits between C- and C), so e.g. C- beating C
     # (2 steps via C-strong) or C-strong beating C+ counts; half-steps don't.
     GK_LADDER = {"D": 1, "C-": 2, "C- strong": 3, "C-strong": 3, "C": 4,
-                 "C+": 5, "B": 6, "B+": 7, "A": 8, "A+": 9}
+                 "C strong": 5, "Cstrong": 5, "C+": 6, "B": 7, "B+": 8,
+                 "A": 9, "A+": 10}
     def gk_step(lvl):
         return GK_LADDER.get(lvl, 4)  # default ~C
     my_step = gk_step(player["level"])
@@ -2092,7 +2093,8 @@ async def delete_tournament(tid: int) -> dict:
 
 # ─── Player CRUD ───────────────────────────────────────────
 
-VALID_LEVELS = {"A+", "A", "B+", "B", "C+", "C", "C- strong", "C-strong", "C-", "D"}
+VALID_LEVELS = {"A+", "A", "B+", "B", "C+", "C strong", "Cstrong", "C",
+                "C- strong", "C-strong", "C-", "D"}
 VALID_SIDES = {"right", "left", "both", "R", "L", "U"}
 
 
@@ -2101,7 +2103,11 @@ def _normalize_side(side: str) -> str:
 
 
 def _normalize_level(level: str) -> str:
-    return "C- strong" if level == "C-strong" else level
+    if level == "C-strong":
+        return "C- strong"
+    if level == "Cstrong":
+        return "C strong"
+    return level
 
 
 async def create_player(name: str, level: str, side: str) -> dict:
@@ -2951,12 +2957,24 @@ async def mark_card_sent(tid: int, player_id: int):
 # expected result comes from the ELO gap between the two teams; games with a
 # rating_excluded player (the coach) and casual games are ignored. Constants are
 # tunable — being calibrated with Liza on dev.
+# "C strong" sits between C and C+, and everything from C+ up moves half a
+# step higher, so the climb out of C costs twice what it did (Liza, 2026-11-30).
 ELO_SCALE = {"D": 1.0, "D+": 1.5, "D+strong": 2.0, "D+ strong": 2.0, "C-": 2.5,
-             "C-strong": 3.0, "C- strong": 3.0, "C": 3.5, "C+": 4.0,
-             "B": 5.0, "B+": 6.0, "A": 7.0, "A+": 8.0}
+             "C-strong": 3.0, "C- strong": 3.0, "C": 3.5, "C strong": 4.0,
+             "C+": 4.5, "B": 5.5, "B+": 6.5, "A": 7.5, "A+": 8.5}
 _ELO_STEPS = sorted(set(ELO_SCALE.values()))
-ELO_S = 1.5           # logistic scale: one level step (0.5) ≈ 68% expected
+ELO_S = 1.0           # logistic scale: one level step (0.5) ≈ 76% expected.
+                      # Lowered from 1.5 so who you beat matters more: a win
+                      # over a level-stronger pair is now worth 3.2x one over a
+                      # level-weaker pair, where it used to be 2.2x.
 ELO_K = 0.05          # per-match step (tunable)
+# A win must always move the rating up. Counting games played makes that false
+# on its own — beat a much weaker pair 6:2 and you fall short of what the
+# formula expected, so the rating drops. That happened on 18% of wins in the
+# backtest, which is exactly the "я выиграл, а рейтинг упал" complaint waiting
+# to happen (Roman, 2026-11-30). The winner's delta is floored here instead,
+# symmetrically, so the exchange still nets to zero.
+ELO_WIN_FLOOR = 0.001
 # Calibration is measured in TOURNAMENTS, not games (Liza, 2026-09-09): a
 # tournament is usually ~7 rounds, so a games threshold of 6 was satisfied by a
 # single evening. Three tournaments is what she considers enough to trust a
@@ -2977,8 +2995,8 @@ def elo_floor(value: float) -> float:
 # Canonical level bands (name, threshold ELO). A player is "at" a level once
 # their ELO reaches its threshold — C+ needs 4.0, C needs 3.5, etc. (Liza 2026-07-07).
 _ELO_BANDS = [("D", 1.0), ("D+", 1.5), ("D+strong", 2.0), ("C-", 2.5),
-              ("C-strong", 3.0), ("C", 3.5), ("C+", 4.0), ("B", 5.0),
-              ("B+", 6.0), ("A", 7.0), ("A+", 8.0)]
+              ("C-strong", 3.0), ("C", 3.5), ("C strong", 4.0), ("C+", 4.5),
+              ("B", 5.5), ("B+", 6.5), ("A", 7.5), ("A+", 8.5)]
 
 
 def elo_to_level(value: float) -> str:
@@ -3046,6 +3064,13 @@ async def recompute_club_elo(db):
         act_a = (s1 / (s1 + s2)) if (s1 is not None and s2 is not None and (s1 + s2) > 0) \
             else (1.0 if m["winner"] == 1 else 0.0)
         d = ELO_K * (act_a - exp_a)
+        # A win always pays. Without this, counting games makes a comfortable
+        # win over a much weaker pair read as an underperformance and the
+        # rating falls (see ELO_WIN_FLOOR).
+        if m["winner"] == 1 and d < ELO_WIN_FLOOR:
+            d = ELO_WIN_FLOOR
+        elif m["winner"] == 2 and -d < ELO_WIN_FLOOR:
+            d = -ELO_WIN_FLOOR
         for pid in A:
             elo[pid] = max(elo[pid] + d, flr[pid]); games[pid] += 1
         for pid in B:
