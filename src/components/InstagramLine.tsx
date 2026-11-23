@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
 import { useUpdateMyInstagram } from '../api/joinRequests';
@@ -35,6 +35,7 @@ function apiDetail(e: unknown): string {
 export function InstagramLine({ player, isOwn }: { player: Player; isOwn: boolean }) {
   const t = useT();
   const save = useUpdateMyInstagram();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const handle = player.instagram ?? '';
@@ -57,13 +58,29 @@ export function InstagramLine({ player, isOwn }: { player: Player; isOwn: boolea
   const dirty = draft !== null && draft.replace(/^@/, '').trim() !== handle;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '-8px 0 14px' }}>
+      {/* The field was always here, but an empty input with a placeholder reads
+          as decoration and gets scrolled past: one month in, 6 players out of
+          185 had filled it. This says out loud that something is missing, on
+          your own profile only — a nudge on someone else's page would just be
+          a public reproach (Roman, 2026-11-23). */}
+      {!handle && (
+        <button onClick={() => inputRef.current?.focus()} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          padding: '0 0 6px', color: T.goldDeep,
+          fontFamily: T.fontSerif, fontStyle: 'italic', fontSize: 13,
+        }}>
+          <InstagramMark size={13} color={T.goldDeep} />
+          {t('profile.instagramNudge')}
+        </button>
+      )}
       <div style={{ display: 'flex', gap: 6, width: '100%', maxWidth: 320, alignItems: 'center' }}>
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px',
           borderRadius: 999, border: `1px solid ${T.paperEdge}`, background: T.cream,
         }}>
           <InstagramMark />
-          <input value={val} onChange={(e) => { setDraft(e.target.value); setError(null); }}
+          <input ref={inputRef} value={val} onChange={(e) => { setDraft(e.target.value); setError(null); }}
             placeholder={t('profile.instagramPh')} maxLength={60}
             autoCapitalize="off" autoCorrect="off" spellCheck={false}
             style={{

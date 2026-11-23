@@ -97,6 +97,8 @@ export const STR = {
   'profile.winsInMatches': { ru: 'побед в матчах', en: 'match win rate' },
   'profile.days30': { ru: '30 дней', en: '30 days' },
   'profile.instagramPh': { ru: 'Твой Instagram (@ник)', en: 'Your Instagram (@handle)' },
+  'profile.instagramNudge': { ru: 'Заполни профиль — добавь Instagram',
+    en: 'Complete your profile — add Instagram' },
   'elo.title': { ru: 'Рейтинг ELO', en: 'ELO rating' },
   'elo.forPeriod': { ru: 'за период', en: 'this period' },
   'elo.toNext': { ru: 'до {lvl} осталось {d}', en: '{d} to {lvl}' },
