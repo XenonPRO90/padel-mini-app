@@ -856,7 +856,7 @@ function InlinePlayerCreate({ onCancel, onCreated }: { onCancel: () => void; onC
   const [level, setLevel] = useState('C');
   const [side, setSide] = useState<SideValue>('both');
   const create = useCreatePlayer();
-  const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C strong', 'C', 'C- strong', 'C-', 'D'];
+  const LEVELS = ['A+', 'A', 'B+', 'B', 'B-', 'C+', 'C strong', 'C', 'C- strong', 'C-', 'D'];
   const SIDES: { id: SideValue; label: string }[] = [
     { id: 'right', label: 'Right' },
     { id: 'left',  label: 'Left' },

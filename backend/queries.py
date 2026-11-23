@@ -885,8 +885,8 @@ async def get_player_profile(pid: int):
     # Uniform ladder (C-strong sits between C- and C), so e.g. C- beating C
     # (2 steps via C-strong) or C-strong beating C+ counts; half-steps don't.
     GK_LADDER = {"D": 1, "C-": 2, "C- strong": 3, "C-strong": 3, "C": 4,
-                 "C strong": 5, "Cstrong": 5, "C+": 6, "B": 7, "B+": 8,
-                 "A": 9, "A+": 10}
+                 "C strong": 5, "Cstrong": 5, "C+": 6, "B-": 7, "B": 8,
+                 "B+": 9, "A": 10, "A+": 11}
     def gk_step(lvl):
         return GK_LADDER.get(lvl, 4)  # default ~C
     my_step = gk_step(player["level"])
@@ -2093,7 +2093,7 @@ async def delete_tournament(tid: int) -> dict:
 
 # ─── Player CRUD ───────────────────────────────────────────
 
-VALID_LEVELS = {"A+", "A", "B+", "B", "C+", "C strong", "Cstrong", "C",
+VALID_LEVELS = {"A+", "A", "B+", "B", "B-", "C+", "C strong", "Cstrong", "C",
                 "C- strong", "C-strong", "C-", "D"}
 VALID_SIDES = {"right", "left", "both", "R", "L", "U"}
 
@@ -2961,7 +2961,8 @@ async def mark_card_sent(tid: int, player_id: int):
 # step higher, so the climb out of C costs twice what it did (Liza, 2026-11-30).
 ELO_SCALE = {"D": 1.0, "D+": 1.5, "D+strong": 2.0, "D+ strong": 2.0, "C-": 2.5,
              "C-strong": 3.0, "C- strong": 3.0, "C": 3.5, "C strong": 4.0,
-             "C+": 4.5, "B": 5.5, "B+": 6.5, "A": 7.5, "A+": 8.5}
+             "Cstrong": 4.0, "C+": 5.0, "B-": 6.0, "B": 7.0, "B+": 8.5,
+             "A": 10.0, "A+": 12.0}
 _ELO_STEPS = sorted(set(ELO_SCALE.values()))
 ELO_S = 1.0           # logistic scale: one level step (0.5) ≈ 76% expected.
                       # Lowered from 1.5 so who you beat matters more: a win
@@ -2995,8 +2996,8 @@ def elo_floor(value: float) -> float:
 # Canonical level bands (name, threshold ELO). A player is "at" a level once
 # their ELO reaches its threshold — C+ needs 4.0, C needs 3.5, etc. (Liza 2026-07-07).
 _ELO_BANDS = [("D", 1.0), ("D+", 1.5), ("D+strong", 2.0), ("C-", 2.5),
-              ("C-strong", 3.0), ("C", 3.5), ("C strong", 4.0), ("C+", 4.5),
-              ("B", 5.5), ("B+", 6.5), ("A", 7.5), ("A+", 8.5)]
+              ("C-strong", 3.0), ("C", 3.5), ("C strong", 4.0), ("C+", 5.0),
+              ("B-", 6.0), ("B", 7.0), ("B+", 8.5), ("A", 10.0), ("A+", 12.0)]
 
 
 def elo_to_level(value: float) -> str:
