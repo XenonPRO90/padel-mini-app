@@ -224,8 +224,13 @@ def build_schedule_html(sched: dict, lang: str = "ru") -> str:
     only the caption below it is personal."""
     L = SCHED_L.get(lang, SCHED_L["ru"])
     n = max(len(sched["courts"]), 1)
-    name_size = 30 if n <= 4 else (26 if n == 5 else 23)
-    pad = 24 if n <= 4 else (16 if n == 5 else 11)
+    # The canvas is a fixed 1080 square, so the rows have to shrink as courts
+    # are added. Seven and eight need their own step: at the six-court size the
+    # last court ran into the footer and off the bottom edge (checked by
+    # rendering, 2026-11-30).
+    name_size = 30 if n <= 4 else 26 if n == 5 else 23 if n == 6 else 20 if n == 7 else 18
+    pad = 24 if n <= 4 else 16 if n == 5 else 11 if n == 6 else 8 if n == 7 else 6
+    head_gap = 18 if n <= 6 else 10
 
     blocks = []
     for c in sched["courts"]:
@@ -253,7 +258,7 @@ def build_schedule_html(sched: dict, lang: str = "ru") -> str:
         f'<div style="font-family:{DISP};font-weight:800;font-size:40px;letter-spacing:5px;'
         f'color:{GOLDDEEP};text-transform:uppercase">{L["round"].format(n=sched["round_num"])}</div>'
         f'<div style="font-family:{SERIF};font-style:italic;font-size:24px;color:{MUTED};'
-        f'margin:10px 0 18px;max-width:840px">{sched["tournament"]}</div>'
+        f'margin:10px 0 {head_gap}px;max-width:840px">{sched["tournament"]}</div>'
         f'<div style="width:100%;max-width:860px">{"".join(blocks)}</div>'
         + _footer()
     )

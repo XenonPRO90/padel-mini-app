@@ -76,6 +76,19 @@ export function useUpdateMyInstagram() {
   });
 }
 
+// Only the flag is sent: every other field is left untouched by the endpoint.
+export function useUpdateMyShowUsername() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (show_username: boolean) =>
+      api('/api/me/profile', { method: 'PUT', body: JSON.stringify({ show_username }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+
 export function useUpdateMyRacket() {
   const qc = useQueryClient();
   return useMutation({

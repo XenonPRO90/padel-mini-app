@@ -276,11 +276,18 @@ async def player_avatar(pid: int, _user=Depends(get_tg_user)):
 
 
 @app.get("/api/players/{pid}/profile")
-async def player_profile(pid: int, _user=Depends(get_tg_user)):
+async def player_profile(pid: int, user=Depends(get_tg_user)):
     """Public profile: stats, placements/medals, streaks, partners, achievements."""
     prof = await q.get_player_profile(pid)
     if not prof:
         raise HTTPException(404, "Player not found")
+    # A Telegram handle is published only once its owner ticks the box. It is
+    # dropped from the payload rather than hidden by the client, so an opted-out
+    # player's @name never leaves the server. The owner still gets their own, or
+    # the settings row would have nothing to show (Roman/Liza, 2026-11-30).
+    p = prof.get("player") or {}
+    if not p.get("show_username") and p.get("telegram_id") != user.get("id"):
+        p["username"] = None
     return prof
 
 
@@ -344,6 +351,7 @@ class OwnProfileBody(BaseModel):
     position: str | None = None
     about: str | None = None
     instagram: str | None = None
+    show_username: bool | None = None
 
 
 @app.put("/api/me/profile")
@@ -356,7 +364,9 @@ async def update_me_profile(body: OwnProfileBody, user=Depends(get_tg_user)):
         return await q.update_own_profile(
             user["id"], body.racket, body.linkedin, body.company, body.position,
             body.about, social=FEATURES["social"], instagram=body.instagram,
-            set_instagram="instagram" in body.model_fields_set)
+            set_instagram="instagram" in body.model_fields_set,
+            show_username=body.show_username,
+            set_show_username="show_username" in body.model_fields_set)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
