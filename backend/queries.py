@@ -2976,6 +2976,12 @@ ELO_K = 0.05          # per-match step (tunable)
 # to happen (Roman, 2026-11-30). The winner's delta is floored here instead,
 # symmetrically, so the exchange still nets to zero.
 ELO_WIN_FLOOR = 0.001
+# Ceiling on what a single match can move a rating. Stretching the upper levels
+# made rare wins over a much higher-labelled pair pay far more than before,
+# which both re-inflated the player Liza wanted held back and let the leader
+# pull away from the field. Beating a coach and beating a C+ are worth the same
+# now (Liza, 2026-11-30). 0 disables it.
+ELO_WIN_CAP = 0.0255
 # Calibration is measured in TOURNAMENTS, not games (Liza, 2026-09-09): a
 # tournament is usually ~7 rounds, so a games threshold of 6 was satisfied by a
 # single evening. Three tournaments is what she considers enough to trust a
@@ -3074,6 +3080,8 @@ async def recompute_club_elo(db):
         act_a = (s1 / (s1 + s2)) if (s1 is not None and s2 is not None and (s1 + s2) > 0) \
             else (1.0 if m["winner"] == 1 else 0.0)
         d = ELO_K * (act_a - exp_a)
+        if ELO_WIN_CAP:
+            d = max(-ELO_WIN_CAP, min(ELO_WIN_CAP, d))
         # A win always pays. Without this, counting games makes a comfortable
         # win over a much weaker pair read as an underperformance and the
         # rating falls (see ELO_WIN_FLOOR).
