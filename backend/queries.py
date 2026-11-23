@@ -3027,6 +3027,11 @@ async def recompute_club_elo(db):
     elo = {pid: max(p["elo_seed"] if p["elo_seed"] is not None else elo_level_value(p["level"]),
                     flr[pid])
            for pid, p in prow.items()}
+    # A coach is rating-neutral, not invisible: his own number never moves, so
+    # it is simply his level — no history to earn it from.
+    for pid, p in prow.items():
+        if p["rating_excluded"]:
+            elo[pid] = elo_level_value(p["level"])
     games = {pid: 0 for pid in prow}
     excluded = {pid for pid, p in prow.items() if p["rating_excluded"]}
 
@@ -3051,11 +3056,15 @@ async def recompute_club_elo(db):
 
     for m in rows:
         ids = [m["p1"], m["p2"], m["p3"], m["p4"]]
-        if excluded & set(ids):
-            continue
+        # A match with a coach on court used to be thrown away whole, which
+        # also erased it for the other three players. For the top of the club
+        # that was a third of their record (Andy: 109 of 323). The coach is
+        # counted as an opponent of known strength instead — he moves nobody's
+        # rating but his own stays put (Roman, 2026-11-30).
         tid = m["tid"]
         for pid in ids:
-            touch(pid, tid)
+            if pid not in excluded:
+                touch(pid, tid)
         A = [m["p1"], m["p2"]]; B = [m["p3"], m["p4"]]
         ea = (elo[A[0]] + elo[A[1]]) / 2
         eb = (elo[B[0]] + elo[B[1]]) / 2
@@ -3072,8 +3081,10 @@ async def recompute_club_elo(db):
         elif m["winner"] == 2 and -d < ELO_WIN_FLOOR:
             d = -ELO_WIN_FLOOR
         for pid in A:
+            if pid in excluded: continue
             elo[pid] = max(elo[pid] + d, flr[pid]); games[pid] += 1
         for pid in B:
+            if pid in excluded: continue
             elo[pid] = max(elo[pid] - d, flr[pid]); games[pid] += 1
 
     for pid in cur_tid:
