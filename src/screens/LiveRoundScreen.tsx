@@ -268,8 +268,11 @@ export function LiveRoundScreen({ onBack, onShareSchedule, onFinished }: Props) 
         )}
       </div>
 
+      {/* Score is now entered for every match, not only mini tournaments: the
+          rating counts how big the win was, and the players call the score out
+          anyway (Liza, 2026-11-30). */}
       {openMatch && (
-        <CourtSheet match={openMatch} scoreMode={isGroups8} onClose={() => setOpenMatch(null)} />
+        <CourtSheet match={openMatch} scoreMode onClose={() => setOpenMatch(null)} />
       )}
       {rosterOpen && (
         <RosterSheet

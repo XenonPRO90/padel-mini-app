@@ -25,7 +25,9 @@ When a constraint is physically infeasible on a given court, the algorithm picks
 the option with the fewest violations rather than failing.
 """
 
-LEVEL_ORDER = {"A+": 7, "A": 6, "B+": 5, "B": 4, "C+": 3, "C": 2, "C- strong": 1.5, "C-": 1, "D": 0.5}
+LEVEL_ORDER = {"A+": 7, "A": 6, "B+": 5, "B": 4, "C+": 3, "C strong": 2.5,
+               "Cstrong": 2.5, "C": 2, "C- strong": 1.5, "C-strong": 1.5,
+               "C-": 1, "D": 0.5}
 
 # Levels exempt from the "mandatory partner change" rule. High-level players are
 # typically rare (often only one B+ in a tournament), so forcing them to switch

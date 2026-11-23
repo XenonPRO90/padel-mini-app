@@ -134,7 +134,7 @@ export function RoundDetailScreen({ tid, roundNum, mode, onBack }: Props) {
         <CourtSheet
           match={winnerMatch}
           initialEditing
-          scoreMode={isGroups8}
+          scoreMode
           onClose={() => setWinnerMatch(null)}
         />
       )}
