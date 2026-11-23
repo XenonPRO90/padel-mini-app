@@ -19,6 +19,8 @@ export interface Player {
   position?: string | null;
   about?: string | null;
   instagram?: string | null;
+  // Opt-in: the Telegram handle is published only when its owner ticks it.
+  show_username?: number | boolean | null;
 }
 
 export interface EloPoint {

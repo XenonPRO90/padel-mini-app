@@ -353,7 +353,8 @@ async def get_player(pid: int):
     async with conn() as db:
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
-            "elo, verified, linkedin, company, position, about, instagram FROM players WHERE id=?",
+            "elo, verified, linkedin, company, position, about, instagram, "
+            "COALESCE(show_username, 0) AS show_username FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
@@ -582,7 +583,8 @@ def normalize_instagram(raw: str | None) -> str | None:
 
 async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
                              position=None, about=None, social: bool = False,
-                             instagram=None, set_instagram: bool = False):
+                             instagram=None, set_instagram: bool = False,
+                             show_username=None, set_show_username: bool = False):
     """Self-edit: a linked participant updates their own racket, and — where
     the instance enables it — their social profile. Instagram is only touched
     when the request carries it (set_instagram), so the older clients that send
@@ -592,10 +594,17 @@ async def update_own_profile(tg_id: int, racket, linkedin=None, company=None,
         p = await cur.fetchone()
         if not p:
             raise ValueError("Профиль не привязан")
-        await db.execute(
-            "UPDATE players SET racket=? WHERE id=?",
-            ((racket or "").strip() or None, p["id"]),
-        )
+        # Each field is written only when the request actually carries it.
+        # Racket used to be rewritten on every call, so a request that changed
+        # some other field silently blanked it.
+        if racket is not None:
+            await db.execute(
+                "UPDATE players SET racket=? WHERE id=?",
+                ((racket or "").strip() or None, p["id"]),
+            )
+        if set_show_username:
+            await db.execute("UPDATE players SET show_username=? WHERE id=?",
+                             (1 if show_username else 0, p["id"]))
         if set_instagram:
             await db.execute("UPDATE players SET instagram=? WHERE id=?",
                              (normalize_instagram(instagram), p["id"]))
@@ -3328,6 +3337,14 @@ async def ensure_schema():
     async with conn() as db:
         try:
             await db.execute("ALTER TABLE players ADD COLUMN instagram TEXT")
+        except Exception:
+            pass  # already there
+        # Telegram handle is published only when its owner asks for it.
+        # Opt-in, so the default is off and nobody's @name appears because a
+        # release shipped (Roman/Liza, 2026-11-30).
+        try:
+            await db.execute(
+                "ALTER TABLE players ADD COLUMN show_username INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass  # already there
         # One row per (month, player) a recap went out to — makes the monthly

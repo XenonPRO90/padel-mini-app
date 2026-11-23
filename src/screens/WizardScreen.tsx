@@ -280,7 +280,9 @@ function StepCourts({ value, onChange }: { value: number; onChange: (v: number) 
     <>
       <StepTitle title="How many courts?" subtitle="Tonight's stage" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-        {[2, 3, 4, 5, 6].map((n) => {
+        {/* Backend already accepted up to 8; only this list was capped at 6,
+            so 7-8 court evenings had no way in (Liza, 2026-11-30). */}
+        {[2, 3, 4, 5, 6, 7, 8].map((n) => {
           const active = n === value;
           return (
             <div key={n} onClick={() => onChange(n)} style={{

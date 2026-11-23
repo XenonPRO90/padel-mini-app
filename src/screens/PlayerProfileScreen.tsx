@@ -9,13 +9,14 @@ import { Ring } from '../components/Ring';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
 import { PhotoLightbox } from '../components/PhotoLightbox';
+import { useUpdateMyShowUsername } from '../api/joinRequests';
 import { usePlayerProfile, useMintInvite } from '../api/players';
 import { useMe } from '../api/me';
 import { useUpdateMyRacket } from '../api/joinRequests';
 import { ShareTextModal } from '../components/ShareTextModal';
 import { useT, STR, type StrKey } from '../lib/i18n';
 import { LangToggle } from '../components/LangToggle';
-import type { ProfilePlacement, ProfilePartner, ProfileOpponent } from '../lib/types';
+import type { Player, ProfilePlacement, ProfilePartner, ProfileOpponent } from '../lib/types';
 
 interface Props {
   pid: number;
@@ -215,6 +216,8 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   );
                 })()}
               </div>
+
+              {isOwn && linked && <ShowHandleToggle player={data.player} />}
 
               {/* Racket — visible to all; editable on your own profile.
                   Instances that run as a business network drop it: the club
@@ -519,5 +522,63 @@ function H2HRow({ icon, label, o, last }: {
         <span style={{ color: T.burgundy }}>{o.losses}</span>
       </div>
     </div>
+  );
+}
+
+
+// Opt-in for publishing your Telegram handle. Off by default, so a release
+// never puts someone's @name in front of the club without them asking
+// (Roman/Liza, 2026-11-30). The server drops the handle from other people's
+// payloads entirely, so this really controls who can reach you, not just what
+// the badge prints.
+function ShowHandleToggle({ player }: { player: Player }) {
+  const t = useT();
+  const save = useUpdateMyShowUsername();
+  const on = !!player.show_username;
+  // No @username in Telegram at all — nothing to publish, and the fix is in
+  // Telegram's own settings, not here. Saying so beats an inert switch.
+  if (!player.username) {
+    return (
+      <div style={{
+        marginTop: 10, fontFamily: T.fontSerif, fontStyle: 'italic',
+        fontSize: 12, color: T.muted, textAlign: 'center', maxWidth: 300,
+      }}>{t('profile.noHandle')}</div>
+    );
+  }
+  return (
+    <button
+      onClick={() => save.mutate(!on)}
+      disabled={save.isPending}
+      style={{
+        marginTop: 10, display: 'flex', alignItems: 'center', gap: 10,
+        background: 'transparent', border: 'none', padding: '4px 2px',
+        cursor: save.isPending ? 'wait' : 'pointer',
+        touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
+      }}>
+      <span style={{
+        width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+        background: on ? T.emerald : T.paperEdge,
+        border: `1px solid ${on ? T.emerald : T.rule}`,
+        display: 'flex', alignItems: 'center',
+        justifyContent: on ? 'flex-end' : 'flex-start',
+        padding: 2, transition: 'background 160ms',
+      }}>
+        <span style={{
+          width: 14, height: 14, borderRadius: '50%', background: T.cream,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+        }} />
+      </span>
+      <span style={{
+        fontFamily: T.fontSerif, fontSize: 13, color: on ? T.ink : T.muted,
+        textAlign: 'left', lineHeight: 1.3,
+      }}>
+        {t('profile.showHandle')}
+        {!on && (
+          <span style={{ display: 'block', fontSize: 11, fontStyle: 'italic', color: T.muted }}>
+            {t('profile.showHandleOff')}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
