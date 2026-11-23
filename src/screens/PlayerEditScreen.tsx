@@ -7,7 +7,7 @@ import { ELabel, EOrnRule } from '../lib/elegant';
 import { useCreatePlayer, useUpdatePlayer, useDeletePlayer, type SideValue } from '../api/players';
 import { useMe } from '../api/me';
 
-const LEVELS = ['A+', 'A', 'B+', 'B', 'C+', 'C strong', 'C', 'C- strong', 'C-', 'D'];
+const LEVELS = ['A+', 'A', 'B+', 'B', 'B-', 'C+', 'C strong', 'C', 'C- strong', 'C-', 'D'];
 const SIDES: { id: SideValue; label: string }[] = [
   { id: 'right', label: 'Right' },
   { id: 'left',  label: 'Left' },
