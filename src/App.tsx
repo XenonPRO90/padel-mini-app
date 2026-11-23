@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TabBar } from './components/TabBar';
 import { HomeScreen } from './screens/HomeScreen';
@@ -116,6 +116,30 @@ export default function App() {
     return () => back.offClick(goBack);
   }, [top.name]);
 
+  // Home tabs are kept mounted once visited and hidden with CSS instead of
+  // being unmounted. Opening a player used to tear the whole home screen down,
+  // so coming back rebuilt it from scratch: the club list jumped to the top and
+  // its filters reset, and you had to scroll all the way down again (Roman,
+  // 2026-11-23). The browser restores scrollTop of a hidden subtree on its own,
+  // so nothing has to be remembered by hand.
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(['tournament']));
+  useEffect(() => {
+    setVisited((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  }, [tab]);
+
+  // A tab is only built the first time it is opened, so launching the app still
+  // costs one screen's worth of requests rather than four. The tab being opened
+  // right now counts as built on this very render — waiting for the effect
+  // above would show one blank frame on the way in.
+  const live = visited.has(tab) ? visited : new Set(visited).add(tab);
+  const homePane = (name: Tab, node: ReactNode) =>
+    live.has(name) ? (
+      <div key={name} style={{
+        flex: 1, minHeight: 0, flexDirection: 'column',
+        display: top.name === 'home' && tab === name ? 'flex' : 'none',
+      }}>{node}</div>
+    ) : null;
+
   const showTabBar = top.name === 'home';
 
   return (
@@ -125,7 +149,7 @@ export default function App() {
         background: T.bg, color: T.textPrimary,
       }}>
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {top.name === 'home' && tab === 'tournament' && (
+          {homePane('tournament',
             <HomeRouter
               onOpenLiveRound={() => push({ name: 'liveRound' })}
               onCreateTournament={() => push({ name: 'wizard' })}
@@ -135,7 +159,7 @@ export default function App() {
               onOrganizeCasual={() => push({ name: 'casualCreate' })}
             />
           )}
-          {top.name === 'home' && tab === 'players' && (
+          {homePane('players',
             <PlayersScreen
               onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onAddPlayer={() => push({ name: 'playerEdit', player: null })}
@@ -143,13 +167,13 @@ export default function App() {
               onOpenAdmins={() => push({ name: 'admins' })}
             />
           )}
-          {top.name === 'home' && tab === 'club' && (
+          {homePane('club',
             <ClubScreen
               onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
             />
           )}
-          {top.name === 'home' && tab === 'history' && (
+          {homePane('history',
             <HistoryScreen
               onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
             />

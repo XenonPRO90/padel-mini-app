@@ -8,6 +8,7 @@ import { ProfileCardModal } from './ProfileCardModal';
 import { Ring } from '../components/Ring';
 import { LevelBadge, SideBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
+import { PhotoLightbox } from '../components/PhotoLightbox';
 import { usePlayerProfile, useMintInvite } from '../api/players';
 import { useMe } from '../api/me';
 import { useUpdateMyRacket } from '../api/joinRequests';
@@ -46,6 +47,7 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
   const isAdmin = !!me?.is_admin;
   // Linking someone's Telegram is a club action; editing the card is not.
   const isFullAdmin = !!me?.is_full_admin;
+  const [photoOpen, setPhotoOpen] = useState(false);
   const linked = !!data?.player?.telegram_id;
   const isOwn = !!me?.player && me.player.id === pid;
   const racketM = useUpdateMyRacket();
@@ -113,7 +115,16 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
             {/* Hero — avatar in win-rate ring */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 18 }}>
               <Ring size={140} stroke={4} value={data.stats.win_rate} max={1} color={T.emerald}>
-                <Avatar name={data.player.name} size={84} photoUrl={data.player.photo_url} />
+                {/* Only a real photo is worth opening — initials gain nothing. */}
+                <div
+                  onClick={data.player.photo_url ? () => setPhotoOpen(true) : undefined}
+                  style={{
+                    cursor: data.player.photo_url ? 'pointer' : 'default',
+                    display: 'flex', borderRadius: '50%',
+                    touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
+                  }}>
+                  <Avatar name={data.player.name} size={84} photoUrl={data.player.photo_url} />
+                </div>
               </Ring>
               <div style={{
                 marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 6,
@@ -176,13 +187,33 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                     padding: '2px 8px',
                   }}>{t('profile.inClub', { n: data.stats.club_rank })}</span>
                 )}
-                {linked && (
-                  <span style={{
+                {linked && (() => {
+                  // The handle was already printed here, just not reachable.
+                  // Players without a Telegram @username (10 of 185) keep the
+                  // plain badge rather than a link that would go nowhere.
+                  const handle = data.player.username;
+                  const label = `${t('profile.inApp')}${handle ? ` · @${handle}` : ''}`;
+                  const style: React.CSSProperties = {
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
                     color: T.emerald, border: `1px solid ${T.emerald}`, borderRadius: 999,
                     padding: '2px 8px',
-                  }}>{t('profile.inApp')}{data.player.username ? ` · @${data.player.username}` : ''}</span>
-                )}
+                  };
+                  if (!handle) return <span style={style}>{label}</span>;
+                  return (
+                    <button
+                      onClick={() => {
+                        const url = `https://t.me/${handle}`;
+                        const tg = window.Telegram?.WebApp;
+                        // openTelegramLink keeps the jump inside Telegram and
+                        // lands on the chat; openLink would bounce the user out
+                        // to a browser page about Telegram.
+                        if (tg?.openTelegramLink) tg.openTelegramLink(url);
+                        else window.open(url, '_blank', 'noopener');
+                      }}
+                      style={{ ...style, background: 'transparent', cursor: 'pointer' }}
+                    >{label}</button>
+                  );
+                })()}
               </div>
 
               {/* Racket — visible to all; editable on your own profile.
@@ -404,6 +435,13 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
       )}
       {cardOpen && data && (
         <ProfileCardModal profile={data} onClose={() => setCardOpen(false)} />
+      )}
+      {photoOpen && data?.player.photo_url && (
+        <PhotoLightbox
+          src={data.player.photo_url}
+          alt={data.player.name}
+          onClose={() => setPhotoOpen(false)}
+        />
       )}
     </div>
   );
