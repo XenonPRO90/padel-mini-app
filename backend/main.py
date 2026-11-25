@@ -382,6 +382,57 @@ async def update_me_profile(body: OwnProfileBody, user=Depends(get_tg_user)):
         raise HTTPException(400, str(e))
 
 
+class FceEmailBody(BaseModel):
+    email: str | None = None
+
+
+@app.put("/api/me/fce")
+async def set_my_fce_email(body: FceEmailBody, user=Depends(get_tg_user)):
+    """The player tells us which address they registered with on fce.global.
+    That address, not their name, is what the sponsor's daily export is matched
+    against (Roman, 2026-11-25)."""
+    if user.get("_dev_mode"):
+        raise HTTPException(400, "dev mode")
+    try:
+        return await q.set_own_fce_email(user["id"], body.email)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/admin/fce")
+async def fce_admin_state(_admin=Depends(get_full_admin)):
+    """Counts plus everything the export could not settle by itself."""
+    return {"stats": await q.fce_stats(), "pending": await q.fce_pending()}
+
+
+class FceImportBody(BaseModel):
+    text: str
+
+
+@app.post("/api/admin/fce/import")
+async def fce_admin_import(body: FceImportBody, _admin=Depends(get_full_admin)):
+    return await q.fce_import(body.text)
+
+
+class FceResolveBody(BaseModel):
+    row_id: int
+    player_id: int | None = None
+
+
+@app.post("/api/admin/fce/resolve")
+async def fce_admin_resolve(body: FceResolveBody, admin=Depends(get_full_admin)):
+    return await q.fce_resolve(body.row_id, body.player_id, admin.get("id"))
+
+
+class FceUnverifyBody(BaseModel):
+    player_id: int
+
+
+@app.post("/api/admin/fce/unverify")
+async def fce_admin_unverify(body: FceUnverifyBody, admin=Depends(get_full_admin)):
+    return await q.fce_unverify(body.player_id, admin.get("id"))
+
+
 @app.get("/api/rackets/stats")
 async def rackets_stats(_user=Depends(get_tg_user)):
     return {"items": await q.get_racket_stats()}

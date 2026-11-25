@@ -354,7 +354,9 @@ async def get_player(pid: int):
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
             "elo, verified, linkedin, company, position, about, instagram, "
-            "COALESCE(show_username, 0) AS show_username FROM players WHERE id=?",
+            "COALESCE(show_username, 0) AS show_username, "
+            "COALESCE(fce_verified, 0) AS fce_verified, fce_email "
+            "FROM players WHERE id=?",
             (pid,),
         )
         return row_to_dict(await cur.fetchone())
@@ -978,6 +980,7 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
         if period == "month":
             cur = await db.execute(
                 """SELECT s.player_id AS pid, p.name, p.level, p.photo_url,
+                          COALESCE(p.fce_verified,0) AS fce_verified,
                           SUM(s.points) AS pts, SUM(s.wins) AS w, SUM(s.losses) AS l,
                           COUNT(DISTINCT s.tournament_id) AS tours
                    FROM scores s JOIN tournaments t ON t.id=s.tournament_id
@@ -990,6 +993,7 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
         else:
             cur = await db.execute(
                 """SELECT s.player_id AS pid, p.name, p.level, p.photo_url,
+                          COALESCE(p.fce_verified,0) AS fce_verified,
                           SUM(s.points) AS pts, SUM(s.wins) AS w, SUM(s.losses) AS l,
                           COUNT(DISTINCT s.tournament_id) AS tours
                    FROM scores s JOIN players p ON p.id=s.player_id
@@ -1002,7 +1006,8 @@ async def get_club_leaderboard(period: str = "all", by: str = "points"):
         g = r["w"] + r["l"]
         out.append({
             "player_id": r["pid"], "name": r["name"], "level": r["level"],
-            "photo_url": r["photo_url"], "points": r["pts"], "wins": r["w"],
+            "photo_url": r["photo_url"], "fce_verified": bool(r["fce_verified"]),
+            "points": r["pts"], "wins": r["w"],
             "losses": r["l"], "games": g, "tournaments": r["tours"],
             "win_rate": round(r["w"] / g, 3) if g else 0.0,
         })
@@ -1020,7 +1025,7 @@ async def get_elo_leaderboard():
     async with conn() as db:
         cur = await db.execute(
             """SELECT p.id AS pid, p.name, p.level, p.photo_url, p.elo, p.verified,
-                      p.elo_games,
+                      p.elo_games, COALESCE(p.fce_verified, 0) AS fce_verified,
                       (SELECT COUNT(*) FROM elo_history h WHERE h.player_id = p.id) AS rated_t,
                       COALESCE(SUM(s.wins), 0) AS w, COALESCE(SUM(s.losses), 0) AS l
                FROM players p LEFT JOIN scores s ON s.player_id = p.id
@@ -1033,6 +1038,7 @@ async def get_elo_leaderboard():
         out.append({
             "player_id": r["pid"], "name": r["name"], "level": r["level"],
             "photo_url": r["photo_url"], "elo": round(r["elo"], 2),
+            "fce_verified": bool(r["fce_verified"]),
             "elo_level": elo_to_level(r["elo"]), "verified": bool(r["verified"]),
             "elo_games": r["elo_games"], "tournaments": r["rated_t"],
             "validating": r["rated_t"] < ELO_CAL_TOURNAMENTS,
@@ -3441,6 +3447,39 @@ async def ensure_schema():
                 "ALTER TABLE players ADD COLUMN show_username INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass  # already there
+        # ─── FCE Activity (sponsor programme, Dec 2026 — Feb 2027) ───
+        # A player self-declares the address they registered with on fce.global;
+        # the daily export from FCE is matched against it. We deliberately do
+        # NOT collect legal names: 49 of 187 linked players have no surname in
+        # the app at all and 22 more have it cut to one letter, so name matching
+        # would fail for a third of the club (Roman, 2026-11-25).
+        for col, ddl in (
+                ("fce_email",       "ALTER TABLE players ADD COLUMN fce_email TEXT"),
+                ("fce_verified",    "ALTER TABLE players ADD COLUMN fce_verified "
+                                    "INTEGER NOT NULL DEFAULT 0"),
+                ("fce_verified_at", "ALTER TABLE players ADD COLUMN fce_verified_at TEXT")):
+            try:
+                await db.execute(ddl)
+            except Exception:
+                pass  # already there
+        # Every row of every export we were given, kept verbatim. It makes a
+        # re-import idempotent, and it is the audit trail for why a prize went
+        # to a particular person — FCE compliance will ask.
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS fce_import_rows (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   raw TEXT NOT NULL,
+                   email TEXT,
+                   name TEXT,
+                   fingerprint TEXT NOT NULL UNIQUE,
+                   status TEXT NOT NULL DEFAULT 'pending',
+                   player_id INTEGER,
+                   decided_by INTEGER,
+                   imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+                   decided_at TEXT)""")
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fce_rows_status ON fce_import_rows(status)")
+
         # One row per (month, player) a recap went out to — makes the monthly
         # send idempotent across restarts and retries.
         await db.execute(
@@ -3651,3 +3690,253 @@ async def mark_recap_sent(month: str, player_id: int):
         await db.execute("INSERT OR IGNORE INTO recap_sent(month, player_id) VALUES(?,?)",
                          (month, player_id))
         await db.commit()
+
+
+# ─── FCE Activity: verification by e-mail ────────────────────────────────
+# The sponsor sends a daily export of everyone who finished KYC. A player
+# tells us, inside the app, which address they used; matching is then exact.
+# Anything the export carries that we could not match lands in a queue an
+# admin resolves by hand — that is the fallback, not the main path.
+import re as _re
+import hashlib as _hashlib
+from difflib import SequenceMatcher as _SeqMatcher
+
+_FCE_HEADER_WORDS = {"email", "e", "mail", "name", "full", "first", "last",
+                     "fio", "pochta", "imia", "imya", "date", "status", "kyc",
+                     "user", "id", "registered", "verified"}
+_FCE_EMAIL_RE = _re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+_CYR2LAT = {
+    "а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"e","ж":"zh","з":"z",
+    "и":"i","й":"i","к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r",
+    "с":"s","т":"t","у":"u","ф":"f","х":"h","ц":"c","ч":"ch","ш":"sh","щ":"sch",
+    "ъ":"","ы":"y","ь":"","э":"e","ю":"yu","я":"ya"}
+
+
+def fce_norm_email(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _fce_norm_name(value: str | None) -> str:
+    """Lowercase, transliterate, drop everything that is not a letter or space.
+    Emoji in a display name are common here ('Алексей🤵‍♂️')."""
+    out = []
+    for ch in (value or "").lower():
+        if ch in _CYR2LAT:
+            out.append(_CYR2LAT[ch])
+        elif ch.isalpha() or ch.isspace():
+            out.append(ch)
+        else:
+            out.append(" ")
+    return " ".join("".join(out).split())
+
+
+def fce_parse_export(text: str) -> list[dict]:
+    """Pull (email, name) out of whatever the sponsor pasted: CSV, TSV, or a
+    list copied out of a chat. One row per line; a line with no e-mail and no
+    letters is skipped."""
+    rows = []
+    for line in (text or "").splitlines():
+        line = line.strip().strip(",;")
+        if not line:
+            continue
+        m = _FCE_EMAIL_RE.search(line)
+        email = fce_norm_email(m.group(0)) if m else None
+        rest = (line[:m.start()] + " " + line[m.end():]) if m else line
+        name = " ".join(_re.split(r"[,;\t|]+", rest)).strip()
+        name = " ".join(name.split())
+        if not email and not _fce_norm_name(name):
+            continue
+        # a header line ("email,name") has no e-mail in it and only ever uses
+        # these words, so it is safe to drop
+        if not email and all(tok in _FCE_HEADER_WORDS
+                             for tok in _fce_norm_name(name).split()):
+            continue
+        rows.append({"raw": line, "email": email, "name": name or None})
+    return rows
+
+
+def _fce_fingerprint(row: dict) -> str:
+    key = row["email"] or _fce_norm_name(row["name"]) or row["raw"]
+    return _hashlib.sha1(key.encode("utf-8")).hexdigest()
+
+
+def _fce_candidates(name: str | None, players: list) -> list[dict]:
+    """Best guesses for a row we could not match by e-mail, so the admin picks
+    instead of searching. Scored on name similarity, with a bonus when the
+    surname initial agrees — 'Igor D' and 'Igor W' are told apart only by it."""
+    target = _fce_norm_name(name)
+    if not target:
+        return []
+    t_tokens = target.split()
+    out = []
+    for p in players:
+        cand = _fce_norm_name(p["name"])
+        if not cand:
+            continue
+        c_tokens = cand.split()
+        score = _SeqMatcher(None, target, cand).ratio()
+        # The given name carries most of the signal, and a different one is
+        # strong evidence against: a shared surname alone once put "Ilya Petrov"
+        # above "Alexey P" for a row reading "ALEKSEY PETROV".
+        first = _SeqMatcher(None, t_tokens[0], c_tokens[0]).ratio()
+        score += 0.4 * first
+        if first < 0.5:
+            score -= 0.3
+        if set(t_tokens[1:]) & set(c_tokens[1:]):
+            score += 0.2
+        if (len(c_tokens) > 1 and len(t_tokens) > 1
+                and c_tokens[-1][:1] == t_tokens[-1][:1]):
+            score += 0.1
+        out.append({"id": p["id"], "name": p["name"], "level": p["level"],
+                    "score": round(min(score, 2.0), 3)})
+    out.sort(key=lambda x: -x["score"])
+    return [c for c in out if c["score"] >= 0.45][:5]
+
+
+async def set_own_fce_email(tg_id: int, email: str | None):
+    """The player declares the address they used on fce.global. Clearing it
+    also drops the badge: the claim it rested on is gone."""
+    email = fce_norm_email(email) or None
+    if email and not _FCE_EMAIL_RE.fullmatch(email):
+        raise ValueError("Это не похоже на адрес почты")
+    async with conn() as db:
+        cur = await db.execute("SELECT id FROM players WHERE telegram_id=?", (tg_id,))
+        row = await cur.fetchone()
+        if not row:
+            raise ValueError("Профиль не привязан к Telegram")
+        pid = row[0]
+        if email is None:
+            await db.execute(
+                "UPDATE players SET fce_email=NULL, fce_verified=0, "
+                "fce_verified_at=NULL WHERE id=?", (pid,))
+        else:
+            cur = await db.execute(
+                "SELECT id FROM players WHERE fce_email=? AND id<>?", (email, pid))
+            if await cur.fetchone():
+                raise ValueError("Эта почта уже указана другим игроком")
+            await db.execute("UPDATE players SET fce_email=? WHERE id=?", (email, pid))
+            # the address may already be sitting in an imported row
+            cur = await db.execute(
+                "SELECT id FROM fce_import_rows WHERE email=? AND status<>'rejected'",
+                (email,))
+            row = await cur.fetchone()
+            if row:
+                await db.execute(
+                    "UPDATE players SET fce_verified=1, "
+                    "fce_verified_at=datetime('now') WHERE id=?", (pid,))
+                await db.execute(
+                    "UPDATE fce_import_rows SET status='matched', player_id=?, "
+                    "decided_at=datetime('now') WHERE id=?", (pid, row[0]))
+        await db.commit()
+    return {"ok": True, "email": email}
+
+
+async def fce_import(text: str) -> dict:
+    """Take an export, store every row verbatim, and settle what can be settled
+    without a human: a row whose e-mail a player has already declared matches
+    itself. Re-importing the same export is a no-op."""
+    rows = fce_parse_export(text)
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, name, level, fce_email FROM players WHERE rating_excluded=0")
+        players = await cur.fetchall()
+        by_email = {fce_norm_email(p["fce_email"]): p for p in players if p["fce_email"]}
+
+        added = matched = already = 0
+        for r in rows:
+            fp = _fce_fingerprint(r)
+            cur = await db.execute(
+                "SELECT id, status FROM fce_import_rows WHERE fingerprint=?", (fp,))
+            if await cur.fetchone():
+                already += 1
+                continue
+            hit = by_email.get(r["email"]) if r["email"] else None
+            await db.execute(
+                "INSERT INTO fce_import_rows(raw, email, name, fingerprint, status, "
+                "player_id, decided_at) VALUES(?,?,?,?,?,?,"
+                "CASE WHEN ? THEN datetime('now') END)",
+                (r["raw"], r["email"], r["name"], fp,
+                 "matched" if hit else "pending",
+                 hit["id"] if hit else None, 1 if hit else 0))
+            if hit:
+                await db.execute(
+                    "UPDATE players SET fce_verified=1, fce_verified_at=datetime('now') "
+                    "WHERE id=?", (hit["id"],))
+                matched += 1
+            added += 1
+        await db.commit()
+    pending = await fce_pending()
+    return {"строк в выгрузке": len(rows), "новых": added,
+            "сошлись по почте": matched, "уже были": already,
+            "ждут решения": len(pending)}
+
+
+async def fce_pending() -> list[dict]:
+    """Rows nobody has settled yet, each with the likeliest players under it."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, raw, email, name, imported_at FROM fce_import_rows "
+            "WHERE status='pending' ORDER BY id")
+        rows = await cur.fetchall()
+        cur = await db.execute(
+            "SELECT id, name, level FROM players "
+            "WHERE rating_excluded=0 AND fce_verified=0")
+        players = await cur.fetchall()
+    return [{"row_id": r["id"], "raw": r["raw"], "email": r["email"],
+             "name": r["name"], "imported_at": r["imported_at"],
+             "candidates": _fce_candidates(r["name"], players)} for r in rows]
+
+
+async def fce_resolve(row_id: int, player_id: int | None, admin_tg: int | None):
+    """An admin either points a row at a player, or marks it as nobody's."""
+    async with conn() as db:
+        if player_id is None:
+            await db.execute(
+                "UPDATE fce_import_rows SET status='rejected', player_id=NULL, "
+                "decided_by=?, decided_at=datetime('now') WHERE id=?",
+                (admin_tg, row_id))
+        else:
+            cur = await db.execute(
+                "SELECT email FROM fce_import_rows WHERE id=?", (row_id,))
+            row = await cur.fetchone()
+            await db.execute(
+                "UPDATE fce_import_rows SET status='matched', player_id=?, "
+                "decided_by=?, decided_at=datetime('now') WHERE id=?",
+                (player_id, admin_tg, row_id))
+            await db.execute(
+                "UPDATE players SET fce_verified=1, fce_verified_at=datetime('now') "
+                "WHERE id=?", (player_id,))
+            if row and row["email"]:
+                await db.execute(
+                    "UPDATE players SET fce_email=COALESCE(fce_email, ?) WHERE id=?",
+                    (row["email"], player_id))
+        await db.commit()
+    return {"ok": True}
+
+
+async def fce_unverify(player_id: int, admin_tg: int | None):
+    """FCE revoked the KYC, or the badge was put on the wrong person."""
+    async with conn() as db:
+        await db.execute(
+            "UPDATE players SET fce_verified=0, fce_verified_at=NULL WHERE id=?",
+            (player_id,))
+        await db.execute(
+            "UPDATE fce_import_rows SET status='rejected', decided_by=?, "
+            "decided_at=datetime('now') WHERE player_id=? AND status='matched'",
+            (admin_tg, player_id))
+        await db.commit()
+    return {"ok": True}
+
+
+async def fce_stats() -> dict:
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT
+                 (SELECT COUNT(*) FROM players WHERE rating_excluded=0
+                    AND telegram_id IS NOT NULL) AS linked,
+                 (SELECT COUNT(*) FROM players WHERE fce_email IS NOT NULL) AS declared,
+                 (SELECT COUNT(*) FROM players WHERE fce_verified=1) AS verified,
+                 (SELECT COUNT(*) FROM fce_import_rows WHERE status='pending') AS pending,
+                 (SELECT COUNT(*) FROM fce_import_rows) AS rows_total""")
+        r = await cur.fetchone()
+    return dict(r)
