@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { T } from '../lib/tokens';
+import { FceBadge } from '../components/FceBadge';
 import { ELabel, EGoldFrame, EMedal, EPlace } from '../lib/elegant';
 import { LevelBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
@@ -12,9 +13,10 @@ type View = 'rating' | 'pairs' | 'records';
 interface Props {
   onOpenPlayer?: (p: Player) => void;
   onOpenTournament?: (tid: number) => void;
+  onOpenFceCup?: () => void;
 }
 
-export function ClubScreen({ onOpenPlayer, onOpenTournament }: Props) {
+export function ClubScreen({ onOpenPlayer, onOpenTournament, onOpenFceCup }: Props) {
   const [view, setView] = useState<View>('rating');
   const t = useT();
   return (
@@ -22,6 +24,24 @@ export function ClubScreen({ onOpenPlayer, onOpenTournament }: Props) {
       <div style={{ padding: '10px 16px 10px', borderBottom: `1px solid ${T.paperEdge}`, background: T.cream }}>
         <ELabel style={{ textAlign: 'center', display: 'block', marginBottom: 8 }}>· {t('club.title')} ·</ELabel>
         <Segmented value={view} onChange={setView} />
+        {/* Entry to the sponsor's programme. It sits in Club rather than in
+            the tab bar: it is FCE's page, a guest in the club's navigation. */}
+        {onOpenFceCup && (
+          <button onClick={onOpenFceCup} style={{
+            marginTop: 10, width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+            background: '#091a38', border: 'none', borderRadius: 12, padding: '10px 13px',
+            cursor: 'pointer', textAlign: 'left',
+          }}>
+            <FceBadge size={20} />
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 14,
+                             fontWeight: 700, color: '#fff' }}>FCE Activity</span>
+              <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 12,
+                             color: '#b9c7de' }}>Бесплатные игры и iPhone за прорыв</span>
+            </span>
+            <span style={{ color: '#8aa0c4', fontSize: 18, lineHeight: 1 }}>›</span>
+          </button>
+        )}
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 40px' }}>
         {view === 'rating' && <RatingView onOpenPlayer={onOpenPlayer} />}

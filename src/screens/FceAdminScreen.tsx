@@ -1,0 +1,191 @@
+import { useState } from 'react';
+import { useFceAdmin, useFceImport, useFceResolve, type FcePendingRow } from '../api/fce';
+import { T } from '../lib/tokens';
+import { useT } from '../lib/i18n';
+
+// Where the sponsor's daily export is turned into badges.
+//
+// Most of it settles itself: a row whose address a player has already declared
+// matches exactly. What is left — people who never filled the field in, or
+// mistyped it — lands here with the likeliest players under each row, so the
+// decision is one tap and not a search.
+const BLUE = '#1e78f0';
+
+export function FceAdminScreen({ onBack }: { onBack: () => void }) {
+  const t = useT();
+  const { data, isLoading } = useFceAdmin();
+  const doImport = useFceImport();
+  const resolve = useFceResolve();
+  const [text, setText] = useState('');
+  const [report, setReport] = useState<Record<string, number> | null>(null);
+
+  const runImport = async () => {
+    try {
+      setReport(await doImport.mutateAsync(text));
+      setText('');
+    } catch (e) {
+      alert((e as Error).message || t('common.error'));
+    }
+  };
+
+  const s = data?.stats;
+  const pending = data?.pending ?? [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }}>
+      <div style={{
+        padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12,
+        borderBottom: `1px solid ${T.paperEdge}`, background: T.cream, position: 'sticky', top: 0,
+      }}>
+        <button onClick={onBack} style={{
+          background: 'transparent', border: 'none', padding: 4, cursor: 'pointer',
+          color: T.gold, fontFamily: T.fontSerif, fontSize: 14,
+        }}>← {t('common.back')}</button>
+        <div style={{ fontFamily: T.fontSerif, fontSize: 17, fontWeight: 700, color: T.ink }}>
+          FCE · сопоставление
+        </div>
+      </div>
+
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {s && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Stat n={s.verified} label="с бейджем" accent />
+            <Stat n={s.declared} label="вписали почту" />
+            <Stat n={s.pending} label="ждут решения" />
+          </div>
+        )}
+
+        <div>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.18em', color: T.muted, marginBottom: 8,
+          }}>ВЫГРУЗКА ОТ FCE</div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'Вставь строки из выгрузки — CSV, таблицу или просто список.\nВ каждой строке нужна почта, имя необязательно.'}
+            rows={5}
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 10,
+              border: `1px solid ${T.paperEdge}`, background: '#fff', resize: 'vertical',
+              fontFamily: T.fontDisplay, fontSize: 13, color: T.ink, lineHeight: 1.5,
+            }}
+          />
+          <button
+            onClick={runImport}
+            disabled={doImport.isPending || !text.trim()}
+            style={{
+              marginTop: 8, width: '100%', padding: '11px 16px', borderRadius: 10,
+              border: 'none', background: text.trim() ? BLUE : T.paperEdge, color: '#fff',
+              fontFamily: T.fontDisplay, fontSize: 14, fontWeight: 700,
+              cursor: text.trim() ? 'pointer' : 'default',
+            }}
+          >{doImport.isPending ? 'Загружаю…' : 'Загрузить'}</button>
+          {report && (
+            <div style={{
+              marginTop: 10, background: T.cream, border: `1px solid ${T.paperEdge}`,
+              borderRadius: 10, padding: 12, fontFamily: T.fontDisplay, fontSize: 13, color: T.ink,
+            }}>
+              {Object.entries(report).map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span style={{ color: T.muted }}>{k}</span><b>{v}</b>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.18em', color: T.muted, marginBottom: 8,
+          }}>ТРЕБУЮТ РЕШЕНИЯ {pending.length > 0 && `· ${pending.length}`}</div>
+          {isLoading && <Muted>Загружаю…</Muted>}
+          {!isLoading && pending.length === 0 && (
+            <Muted>Всё разобрано. Строки, которые сошлись по почте, бейдж получили сами.</Muted>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pending.map((row) => (
+              <PendingCard
+                key={row.row_id}
+                row={row}
+                busy={resolve.isPending}
+                onPick={(pid) => resolve.mutate({ row_id: row.row_id, player_id: pid })}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingCard({ row, busy, onPick }: {
+  row: FcePendingRow; busy: boolean; onPick: (pid: number | null) => void;
+}) {
+  return (
+    <div style={{
+      background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 12, padding: 12,
+    }}>
+      <div style={{ fontFamily: T.fontSerif, fontSize: 15, fontWeight: 700, color: T.ink }}>
+        {row.name || '— без имени —'}
+      </div>
+      {row.email && (
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 12.5, color: BLUE, marginTop: 2 }}>
+          {row.email}
+        </div>
+      )}
+      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {row.candidates.length === 0 && (
+          <span style={{ fontFamily: T.fontSerif, fontSize: 13, color: T.muted }}>
+            Похожих игроков не нашлось
+          </span>
+        )}
+        {row.candidates.map((c) => (
+          <button
+            key={c.id}
+            disabled={busy}
+            onClick={() => onPick(c.id)}
+            style={{
+              padding: '7px 11px', borderRadius: 999, cursor: 'pointer',
+              border: `1px solid ${BLUE}55`, background: '#fff', color: T.ink,
+              fontFamily: T.fontDisplay, fontSize: 13,
+            }}
+          >{c.name} <span style={{ color: T.muted }}>· {c.level}</span></button>
+        ))}
+        <button
+          disabled={busy}
+          onClick={() => onPick(null)}
+          style={{
+            padding: '7px 11px', borderRadius: 999, cursor: 'pointer',
+            border: `1px solid ${T.paperEdge}`, background: 'transparent', color: T.muted,
+            fontFamily: T.fontDisplay, fontSize: 13,
+          }}
+        >не наш игрок</button>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ n, label, accent }: { n: number; label: string; accent?: boolean }) {
+  return (
+    <div style={{
+      flex: 1, background: accent ? '#e8f0fe' : T.cream, borderRadius: 10,
+      border: `1px solid ${accent ? `${BLUE}44` : T.paperEdge}`, padding: '10px 6px',
+      textAlign: 'center',
+    }}>
+      <div style={{ fontFamily: T.fontSerif, fontSize: 20, fontWeight: 700,
+                    color: accent ? BLUE : T.ink }}>{n}</div>
+      <div style={{ fontFamily: T.fontDisplay, fontSize: 9.5, letterSpacing: '0.06em',
+                    color: T.muted, marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function Muted({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted, lineHeight: 1.5 }}>
+      {children}
+    </div>
+  );
+}

@@ -367,7 +367,9 @@ async def get_player_by_tg(tg_id: int):
     async with conn() as db:
         cur = await db.execute(
             "SELECT id, name, level, side, telegram_id, username, photo_url, racket, "
-            "linkedin, company, position, about FROM players WHERE telegram_id=?",
+            "linkedin, company, position, about, "
+            "COALESCE(fce_verified, 0) AS fce_verified, fce_email "
+            "FROM players WHERE telegram_id=?",
             (tg_id,),
         )
         return row_to_dict(await cur.fetchone())

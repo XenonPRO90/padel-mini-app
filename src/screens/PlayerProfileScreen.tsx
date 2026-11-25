@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { T, BRAND_CLUB } from '../lib/tokens';
+import { FceBadge } from '../components/FceBadge';
 import { SocialProfile } from '../components/SocialProfile';
 import { EloChart } from '../components/EloChart';
 import { InstagramLine } from '../components/InstagramLine';
@@ -175,6 +176,15 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
               <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <LevelBadge level={data.player.level} />
                 <SideBadge side={data.player.side} />
+                {/* FCE Activity: public for the duration of the programme. */}
+                {!!data.player.fce_verified && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                    color: '#1e78f0', border: '1px solid #1e78f055', borderRadius: 999,
+                    padding: '1px 8px 1px 3px', background: '#e8f0fe',
+                  }}><FceBadge size={14} />FCE</span>
+                )}
                 {data.player.elo != null && (
                   <span style={{
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: 0.5,

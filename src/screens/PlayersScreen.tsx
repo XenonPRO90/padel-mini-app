@@ -13,9 +13,10 @@ interface PlayersScreenProps {
   onAddPlayer?: () => void;
   onOpenRequests?: () => void;
   onOpenAdmins?: () => void;
+  onOpenFce?: () => void;
 }
 
-export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests, onOpenAdmins }: PlayersScreenProps = {}) {
+export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests, onOpenAdmins, onOpenFce }: PlayersScreenProps = {}) {
   const t = useT();
   const [q, setQ] = useState('');
   const { data: me } = useMe();
@@ -57,6 +58,13 @@ export function PlayersScreen({ onOpenPlayer, onAddPlayer, onOpenRequests, onOpe
             borderRadius: 999, padding: '8px 14px', cursor: 'pointer',
             fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, letterSpacing: 1,
           }}>{t('admins.title')}</button>
+        )}
+        {isFullAdmin && onOpenFce && (
+          <button onClick={onOpenFce} style={{
+            background: 'transparent', color: '#1e78f0', border: '1px solid #1e78f0',
+            borderRadius: 999, padding: '8px 14px', cursor: 'pointer',
+            fontFamily: T.fontDisplay, fontSize: 12, fontWeight: 600, letterSpacing: 1,
+          }}>FCE</button>
         )}
         {isFullAdmin && onOpenRequests && (
           <button onClick={onOpenRequests} style={{

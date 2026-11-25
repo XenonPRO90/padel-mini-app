@@ -18,6 +18,8 @@ import { TournamentDetailScreen } from './screens/TournamentDetailScreen';
 import { RoundDetailScreen } from './screens/RoundDetailScreen';
 import { CelebrationScreen } from './screens/CelebrationScreen';
 import { SchedulePosterScreen } from './screens/SchedulePosterScreen';
+import { FceCupScreen } from './screens/FceCupScreen';
+import { FceAdminScreen } from './screens/FceAdminScreen';
 import { useMe } from './api/me';
 import { T } from './lib/tokens';
 import type { Player } from './lib/types';
@@ -36,6 +38,8 @@ type Screen =
   | { name: 'playerProfile'; player: Player }
   | { name: 'myProfile' }
   | { name: 'adminRequests' }
+  | { name: 'fceCup' }
+  | { name: 'fceAdmin' }
   | { name: 'admins' }
   | { name: 'tournamentDetail'; tid: number }
   | { name: 'roundDetail'; tid: number; roundNum: number; mode?: string }
@@ -156,6 +160,7 @@ export default function App() {
               onTournamentFinished={(tid) => setStack([{ name: 'home' }, { name: 'celebration', tid }])}
               onOpenMyProfile={(p) => push({ name: 'playerProfile', player: p })}
               onOpenClub={() => setTab('club')}
+              onOpenFceCup={() => push({ name: 'fceCup' })}
               onOrganizeCasual={() => push({ name: 'casualCreate' })}
             />
           )}
@@ -165,10 +170,12 @@ export default function App() {
               onAddPlayer={() => push({ name: 'playerEdit', player: null })}
               onOpenRequests={() => push({ name: 'adminRequests' })}
               onOpenAdmins={() => push({ name: 'admins' })}
+              onOpenFce={() => push({ name: 'fceAdmin' })}
             />
           )}
           {homePane('club',
             <ClubScreen
+              onOpenFceCup={() => push({ name: 'fceCup' })}
               onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
             />
@@ -204,6 +211,8 @@ export default function App() {
           {top.name === 'adminRequests' && (
             <AdminRequestsScreen onBack={pop} />
           )}
+          {top.name === 'fceCup' && <FceCupScreen onBack={pop} />}
+          {top.name === 'fceAdmin' && <FceAdminScreen onBack={pop} />}
           {top.name === 'admins' && (
             <AdminsScreen onBack={pop} />
           )}
@@ -246,13 +255,14 @@ export default function App() {
 // Role-aware first screen (the 'tournament' tab). Inside the provider so it can
 // read /api/me: admins → management home, linked players → personal dashboard,
 // brand-new users → welcome + join.
-function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub, onOrganizeCasual }: {
+function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub, onOrganizeCasual, onOpenFceCup }: {
   onOpenLiveRound: () => void;
   onCreateTournament: () => void;
   onTournamentFinished: (tid: number) => void;
   onOpenMyProfile: (p: Player) => void;
   onOpenClub: () => void;
   onOrganizeCasual: () => void;
+  onOpenFceCup: () => void;
 }) {
   const { data: me, isLoading } = useMe();
   if (isLoading) return null;
@@ -263,6 +273,7 @@ function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished,
         onOpenClub={onOpenClub}
         onOpenLiveRound={onOpenLiveRound}
         onOrganizeCasual={onOrganizeCasual}
+        onOpenFceCup={onOpenFceCup}
       />
     );
   }

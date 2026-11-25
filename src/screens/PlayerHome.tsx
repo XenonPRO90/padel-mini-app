@@ -7,6 +7,7 @@ import { EHero, EDivider, EGoldFrame, ELabel } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
 import { CasualPendingBanner } from '../components/CasualPendingBanner';
 import { useT } from '../lib/i18n';
+import { FceBadge } from '../components/FceBadge';
 import type { ActiveTournamentResponse } from '../lib/types';
 
 interface Props {
@@ -14,10 +15,11 @@ interface Props {
   onOpenClub: () => void;
   onOpenLiveRound: () => void;
   onOrganizeCasual?: () => void;
+  onOpenFceCup?: () => void;
 }
 
 // Personalized home for a linked, non-admin participant.
-export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound, onOrganizeCasual }: Props) {
+export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound, onOrganizeCasual, onOpenFceCup }: Props) {
   const tx = useT();
   const { data: me } = useMe();
   const pid = me?.player?.id;
@@ -91,6 +93,26 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound, onOrgan
         <Shortcut label={tx('home.myCabinet')} sub={tx('home.myCabinetSub')} onClick={onOpenProfile} />
         <Shortcut label={tx('home.clubRating')} sub={tx('home.clubRatingSub')} onClick={onOpenClub} />
       </div>
+
+      {/* The sponsor's programme. Its own navy-on-blue pill rather than a third
+          Shortcut: it belongs to FCE, not to the club's own navigation. */}
+      {onOpenFceCup && (
+        <button onClick={onOpenFceCup} style={{
+          marginTop: 10, width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          background: '#091a38', border: 'none', borderRadius: 14, padding: '13px 16px',
+          cursor: 'pointer', textAlign: 'left',
+        }}>
+          <FceBadge size={24} />
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 15,
+                           fontWeight: 700, color: '#fff' }}>FCE Activity</span>
+            <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 12.5,
+                           color: '#b9c7de', marginTop: 1 }}>
+              Бесплатные игры, iPhone за прорыв квартала
+            </span>
+          </span>
+        </button>
+      )}
 
       {onOrganizeCasual && (
         <button onClick={onOrganizeCasual} style={{

@@ -21,6 +21,11 @@ export interface Player {
   instagram?: string | null;
   // Opt-in: the Telegram handle is published only when its owner ticks it.
   show_username?: number | boolean | null;
+  // FCE Activity: the address the player says they registered with on
+  // fce.global, and whether the sponsor's export has confirmed their KYC.
+  // The address is served to its owner and to full admins only.
+  fce_email?: string | null;
+  fce_verified?: number | boolean | null;
   // Set when the server handed over a handle its owner has NOT published,
   // because the viewer is a full admin. Mark it in the UI, never treat it as
   // public.
