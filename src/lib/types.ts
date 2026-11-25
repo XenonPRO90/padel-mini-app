@@ -21,6 +21,10 @@ export interface Player {
   instagram?: string | null;
   // Opt-in: the Telegram handle is published only when its owner ticks it.
   show_username?: number | boolean | null;
+  // Set when the server handed over a handle its owner has NOT published,
+  // because the viewer is a full admin. Mark it in the UI, never treat it as
+  // public.
+  username_private?: boolean | null;
 }
 
 export interface EloPoint {

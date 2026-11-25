@@ -193,11 +193,18 @@ export function PlayerProfileScreen({ pid, onBack, onEdit, onOpenTournament }: P
                   // Players without a Telegram @username (10 of 185) keep the
                   // plain badge rather than a link that would go nowhere.
                   const handle = data.player.username;
-                  const label = `${t('profile.inApp')}${handle ? ` · @${handle}` : ''}`;
+                  // A handle the owner never published, shown because the viewer
+                  // is a full admin. It gets its own dashed gold pill and says so
+                  // outright, so nobody passes it on thinking it was public.
+                  const adminOnly = !!data.player.username_private;
+                  const label = adminOnly
+                    ? `@${handle} · ${t('profile.handleAdminOnly')}`
+                    : `${t('profile.inApp')}${handle ? ` · @${handle}` : ''}`;
+                  const accent = adminOnly ? T.goldDeep : T.emerald;
                   const style: React.CSSProperties = {
                     fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
-                    color: T.emerald, border: `1px solid ${T.emerald}`, borderRadius: 999,
-                    padding: '2px 8px',
+                    color: accent, border: `1px ${adminOnly ? 'dashed' : 'solid'} ${accent}`,
+                    borderRadius: 999, padding: '2px 8px',
                   };
                   if (!handle) return <span style={style}>{label}</span>;
                   return (
