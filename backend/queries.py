@@ -2126,7 +2126,7 @@ async def create_player(name: str, level: str, side: str) -> dict:
         # CURRENT level, and a later promote/demote would drag the anchor along.
         cur = await db.execute(
             "INSERT INTO players(name, level, side, verified, elo_seed) VALUES(?,?,?,1,?)",
-            (name, level, side, elo_level_value(level)),
+            (name, level, side, elo_start_value(level)),
         )
         await db.commit()
         pid = cur.lastrowid
@@ -2994,6 +2994,23 @@ def elo_level_value(level: str) -> float:
     return ELO_SCALE.get((level or "C").strip(), 3.5)
 
 
+# Where a player is PUT when a level is first written on them, as opposed to
+# what the level is worth on the ladder. The two used to be the same number.
+# They came apart when the ladder was stretched: C+ moved from 4.0 to 5.0, but
+# the club's existing C+ were left on 4.0 anchors, so a newly entered C+ would
+# start a full level above people with three hundred matches behind them —
+# Denis Korolev reached 4.909 off six games while Roman Erm sat at 4.893 off
+# 306. Liza's rule: "записали как C+ — стартует с 4.00 и подтверждает свой
+# рейтинг" (2026-11-25). Only C+ is affected; C and below never moved, and
+# nobody in the club is at B or above, so those are left on the ladder value
+# and should be revisited the first time someone is actually entered there.
+ELO_START = {**ELO_SCALE, "C+": 4.0}
+
+
+def elo_start_value(level: str) -> float:
+    return ELO_START.get((level or "C").strip(), 3.5)
+
+
 def elo_floor(value: float) -> float:
     below = [v for v in _ELO_STEPS if v < value]
     return max(below) if below else value
@@ -3133,7 +3150,7 @@ async def get_level_suggestions():
       - demote  : ... a clear step below."""
     async with conn() as db:
         cur = await db.execute(
-            "SELECT id, name, level, photo_url, elo, elo_games, verified, "
+            "SELECT id, name, level, photo_url, elo, elo_games, verified, elo_seed, "
             "(SELECT COUNT(*) FROM elo_history h WHERE h.player_id = players.id) AS rated_t "
             "FROM players WHERE elo IS NOT NULL AND rating_excluded=0")
         rows = await cur.fetchall()
@@ -3153,9 +3170,22 @@ async def get_level_suggestions():
         # (a full step below their level) — so mild ELO drift doesn't nag the admin.
         cur_val = elo_level_value(lvl)
         band_val = elo_level_value(implied)
+        floor_val = elo_floor(cur_val)
+        # Lying on the floor means something only for a player who was once
+        # above it. For C+ the start (4.00) IS the floor, so without this a
+        # freshly entered C+ would be proposed for demotion the same day —
+        # the rule would fight the admin who had just applied it. Suppressed
+        # only for a level whose start sits on its floor, and only while the
+        # player is still on the seed they were given. Someone whose anchor is
+        # low because an earlier promotion froze it there is still flagged:
+        # for them the floor really does say the level was never earned.
+        start_val = elo_start_value(lvl)
+        seed = r["elo_seed"]
+        started_on_floor = (start_val <= floor_val + 1e-9 and seed is not None
+                            and abs(seed - start_val) < 1e-9)
         if band_val > cur_val and elo >= band_val + ELO_PROMOTE_BUFFER:
             out.append({**base, "kind": "promote", "suggested": implied})
-        elif elo <= elo_floor(cur_val) + 0.02:
+        elif elo <= floor_val + 0.02 and not started_on_floor:
             out.append({**base, "kind": "demote", "suggested": implied})
     rank = {"assign": 0, "promote": 1, "demote": 2}
     out.sort(key=lambda x: (rank[x["kind"]], -abs(x["elo"] - elo_level_value(x["level"]))))
@@ -3186,7 +3216,7 @@ async def _apply_level(db, pid: int, level: str):
     as B on 2026-09-01, corrected to C+, and left sitting first in the club on a
     B-sized anchor after ten games (Liza, 2026-09-09).
     """
-    new_val = elo_level_value(level)
+    new_val = elo_start_value(level)
     if await is_validating(db, pid):
         await db.execute(
             "UPDATE players SET level=?, verified=1, elo_seed=? WHERE id=?",
