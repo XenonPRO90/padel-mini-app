@@ -91,6 +91,33 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
                 Зарегистрируйся на fce.global и пройди верификацию. Потом впиши здесь почту,
                 на которую регистрировался — по ней мы тебя найдём в списке и включим в зачёт.
               </div>
+              {/* The link carries FCE's promo, so registering through it is
+                  what makes the $1 000 appear. Opened outside Telegram: it is
+                  an exchange sign-up with KYC, not a mini-app page. */}
+              <button
+                onClick={() => {
+                  const url = standings?.signup_url;
+                  if (!url) return;
+                  const tg = window.Telegram?.WebApp;
+                  if (tg?.openLink) tg.openLink(url);
+                  else window.open(url, '_blank', 'noopener');
+                }}
+                disabled={!standings?.signup_url}
+                style={{
+                  marginTop: 12, width: '100%', padding: '12px 16px', borderRadius: 10,
+                  border: 'none', background: NAVY, color: '#fff', cursor: 'pointer',
+                  fontFamily: T.fontDisplay, fontSize: 14.5, fontWeight: 700,
+                }}
+              >Зарегистрироваться на fce.global</button>
+              <div style={{
+                marginTop: 6, fontFamily: T.fontSerif, fontSize: 12.5, color: T.muted,
+                lineHeight: 1.45, textAlign: 'center',
+              }}>По этой ссылке начисляется $1 000 обмена без комиссии</div>
+
+              <div style={{ marginTop: 14, fontFamily: T.fontDisplay, fontSize: 11,
+                            fontWeight: 700, letterSpacing: '0.1em', color: T.muted }}>
+                ПОСЛЕ РЕГИСТРАЦИИ
+              </div>
               <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                 <input
                   value={email}

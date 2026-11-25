@@ -169,15 +169,23 @@ def _fce_lockup(mark_px: int = 26, word_px: int = 19) -> str:
 
 def _footer():
     fam = MONO if _IS_FCE else DISP
-    out = (f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;'
+    # With the sponsor on, the club's own line moves up to leave the bottom
+    # band to FCE — the logo is theirs to be seen, not to be squinted at.
+    brand_bottom = 218 if FCE_SPONSOR else 70
+    out = (f'<div style="position:absolute;bottom:{brand_bottom}px;left:0;right:0;text-align:center;'
            f'font-family:{fam};font-size:14px;letter-spacing:5px;color:{MUTED};'
            f'text-transform:uppercase">{BRAND_FOOTER}</div>')
     if FCE_SPONSOR:
-        out += (f'<div style="position:absolute;bottom:32px;left:0;right:0;'
-                f'display:flex;align-items:center;justify-content:center;gap:12px">'
-                f'<span style="font-family:{DISP};font-size:11px;letter-spacing:3px;'
-                f'color:{MUTED};text-transform:uppercase">при поддержке</span>'
-                f'{_fce_lockup()}</div>')
+        out += (
+            f'<div style="position:absolute;bottom:44px;left:90px;right:90px;'
+            f'padding-top:26px;border-top:1px solid {PAPEREDGE};text-align:center">'
+            f'<div style="display:flex;align-items:center;justify-content:center;gap:14px">'
+            f'{_fce_lockup(mark_px=52, word_px=38)}</div>'
+            f'<div style="margin-top:16px;font-family:{DISP};font-size:19px;'
+            f'letter-spacing:2px;color:{INK};text-transform:uppercase">идёт кубок FCE</div>'
+            f'<div style="margin-top:7px;font-family:{SERIF};font-size:18px;'
+            f'color:{MUTED}">Бесплатные игры и iPhone 18 Pro — подробности в приложении</div>'
+            f'</div>')
     return out
 
 

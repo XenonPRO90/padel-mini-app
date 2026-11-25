@@ -97,6 +97,8 @@ export interface FceStandings {
   quarter: { code: string; start_date: string; end_date: string; taken_at: string } | null;
   min_tournaments?: number;
   min_before?: number;
+  /** Registration link carrying FCE's $1 000 promo; served from config. */
+  signup_url?: string;
   rows: FceStandingRow[];
 }
 

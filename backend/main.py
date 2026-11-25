@@ -12,7 +12,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX, FEATURES
+from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX, FEATURES, FCE_SIGNUP_URL
 from .auth import get_tg_user
 from . import queries as q
 from . import cards as cards_mod
@@ -449,7 +449,9 @@ async def fce_admin_snapshot(body: FceSnapshotBody, _admin=Depends(get_full_admi
 
 @app.get("/api/fce/standings")
 async def fce_standings(code: str | None = None, _user=Depends(get_tg_user)):
-    return await q.fce_standings(code)
+    out = await q.fce_standings(code)
+    out["signup_url"] = FCE_SIGNUP_URL
+    return out
 
 
 @app.get("/api/me/vouchers")

@@ -55,3 +55,8 @@ FEATURES = {
 # evening: the logo must not appear before the programme is announced. Never
 # applies to the FCE instance itself, where it would be the club's own mark.
 FCE_SPONSOR = os.getenv("FCE_SPONSOR", "0") == "1" and BRAND != "fce"
+
+# Where a player goes to register. The real one carries FCE's promo code for
+# the $1 000 of commission-free volume, so it lives in config and can be
+# swapped without touching the app (Roman, 2026-11-25).
+FCE_SIGNUP_URL = os.getenv("FCE_SIGNUP_URL", "https://fce.global/signup?ref=padelmasters")
