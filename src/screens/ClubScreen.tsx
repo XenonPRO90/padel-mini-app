@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { T } from '../lib/tokens';
-import { FceBadge } from '../components/FceBadge';
+import { FceMark } from '../components/FceBadge';
 import { ELabel, EGoldFrame, EMedal, EPlace } from '../lib/elegant';
 import { LevelBadge } from '../components/Badges';
 import { Avatar } from './PlayersScreen';
@@ -32,7 +32,7 @@ export function ClubScreen({ onOpenPlayer, onOpenTournament, onOpenFceCup }: Pro
             background: '#091a38', border: 'none', borderRadius: 12, padding: '10px 13px',
             cursor: 'pointer', textAlign: 'left',
           }}>
-            <FceBadge size={20} />
+            <FceMark size={19} />
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 14,
                              fontWeight: 700, color: '#fff' }}>Кубок FCE</span>

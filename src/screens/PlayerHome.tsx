@@ -7,7 +7,7 @@ import { EHero, EDivider, EGoldFrame, ELabel } from '../lib/elegant';
 import { Avatar } from './PlayersScreen';
 import { CasualPendingBanner } from '../components/CasualPendingBanner';
 import { useT } from '../lib/i18n';
-import { FceBadge } from '../components/FceBadge';
+import { FceMark } from '../components/FceBadge';
 import type { ActiveTournamentResponse } from '../lib/types';
 
 interface Props {
@@ -102,7 +102,7 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound, onOrgan
           background: '#091a38', border: 'none', borderRadius: 14, padding: '13px 16px',
           cursor: 'pointer', textAlign: 'left',
         }}>
-          <FceBadge size={24} />
+          <FceMark size={22} />
           <span style={{ minWidth: 0 }}>
             <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 15,
                            fontWeight: 700, color: '#fff' }}>Кубок FCE</span>

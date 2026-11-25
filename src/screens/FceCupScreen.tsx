@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMe } from '../api/me';
 import { useSetMyFceEmail, useFceStandings, type FceStandingRow } from '../api/fce';
-import { FceBadge } from '../components/FceBadge';
+import { FceBadge, FceMark } from '../components/FceBadge';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
 
@@ -47,7 +47,7 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
           color: '#8aa0c4', fontWeight: 700,
         }}>PADEL CLUB × FCE</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-          <FceBadge size={26} />
+          <FceMark size={28} />
           <div style={{ fontFamily: T.fontSerif, fontSize: 26, color: '#fff', fontWeight: 700 }}>
             FCE Activity
           </div>
@@ -67,7 +67,7 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
           {verified ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FceBadge size={18} />
+                <FceBadge height={10} />
                 <span style={{ fontFamily: T.fontDisplay, fontSize: 11, fontWeight: 700,
                                letterSpacing: '0.1em', color: BLUE }}>УЧАСТВУЕШЬ</span>
               </div>
@@ -239,12 +239,26 @@ function Standings({ data, myId }: {
         background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 12,
         overflow: 'hidden',
       }}>
+        {ranked.length > 0 && (
+          <div style={{
+            padding: '7px 12px', background: '#f3f7fe',
+            fontFamily: T.fontDisplay, fontSize: 9.5, fontWeight: 700,
+            letterSpacing: '0.16em', color: BLUE,
+          }}>ПРИЗОВАЯ ЗОНА · 1–3 iPhone · 4–10 ФОРМА</div>
+        )}
         {ranked.length === 0 && (
           <div style={{ padding: 14, fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted }}>
             Пока никто не набрал {need} турниров — таблица заполнится по ходу квартала.
           </div>
         )}
-        {ranked.map((r) => <Row key={r.player_id} r={r} mine={r.player_id === myId} />)}
+        {ranked.map((r, i) => (
+          <Row
+            key={r.player_id}
+            r={r}
+            mine={r.player_id === myId}
+            lastPrize={!!r.prize && !ranked[i + 1]?.prize}
+          />
+        ))}
       </div>
 
       <div style={{
@@ -261,17 +275,29 @@ function fmtRate(v: number) {
   return `${v >= 0 ? '+' : ''}${v.toFixed(4)}`;
 }
 
-function Row({ r, mine }: { r: FceStandingRow; mine: boolean }) {
+function Row({ r, mine, lastPrize }: {
+  r: FceStandingRow; mine: boolean; lastPrize: boolean;
+}) {
   const prize = r.prize === 'iphone' ? 'iPhone' : r.prize === 'kit' ? 'форма' : '';
+  // The prize zone has to be visible at a glance: the three iPhone places get
+  // a solid blue disc, the seven kit places a tinted one, everyone below a
+  // plain number — and a rule closes the zone so you can see where it ends.
+  const disc = r.prize === 'iphone'
+    ? { background: BLUE, color: '#fff', border: `1px solid ${BLUE}` }
+    : r.prize === 'kit'
+      ? { background: BLUE_TINT, color: BLUE, border: `1px solid ${BLUE}55` }
+      : { background: 'transparent', color: T.muted, border: '1px solid transparent' };
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
       borderTop: `1px solid ${T.paperEdge}`,
+      borderBottom: lastPrize ? `2px solid ${BLUE}55` : undefined,
       background: mine ? BLUE_TINT : 'transparent',
     }}>
       <div style={{
-        width: 22, textAlign: 'center', fontFamily: T.fontSerif, fontSize: 15,
-        fontWeight: 700, color: r.prize === 'iphone' ? BLUE : T.muted, flexShrink: 0,
+        width: 24, height: 24, borderRadius: 999, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: T.fontSerif, fontSize: 13.5, fontWeight: 700, ...disc,
       }}>{r.place}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
