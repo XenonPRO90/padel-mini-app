@@ -105,7 +105,7 @@ export function PlayerHome({ onOpenProfile, onOpenClub, onOpenLiveRound, onOrgan
           <FceBadge size={24} />
           <span style={{ minWidth: 0 }}>
             <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 15,
-                           fontWeight: 700, color: '#fff' }}>FCE Activity</span>
+                           fontWeight: 700, color: '#fff' }}>Кубок FCE</span>
             <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 12.5,
                            color: '#b9c7de', marginTop: 1 }}>
               Бесплатные игры, iPhone за прорыв квартала

@@ -4053,15 +4053,27 @@ async def fce_standings(code: str | None = None) -> dict:
 
     ranked = sorted([x for x in out if x["eligible"]],
                     key=lambda x: (-x["rate"], -x["played"], x["name"]))
-    place = 0
+    # Everyone who qualified is ranked and keeps their place, but the deck
+    # pays only players who finished KYC. So an unverified leader still shows
+    # up where they earned it — and the prize moves past them to the next one
+    # who did register. Seeing yourself first with the prize out of reach is
+    # the whole nudge (Roman, 2026-11-25).
+    place = awarded = 0
     for x in ranked:
         place += 1
         x["place"] = place
-        x["prize"] = ("iphone" if place <= 3 else ("kit" if place <= 10 else None))
+        if x["fce_verified"]:
+            awarded += 1
+            x["prize"] = ("iphone" if awarded <= 3 else ("kit" if awarded <= 10 else None))
+            x["prize_place"] = awarded
+        else:
+            x["prize"] = None
+            x["prize_place"] = None
     rest = sorted([x for x in out if not x["eligible"]],
                   key=lambda x: (-x["played"], -x["rate"]))
     for x in rest:
         x["place"] = None
         x["prize"] = None
+        x["prize_place"] = None
     return {"quarter": q, "min_tournaments": FCE_MIN_TOURNAMENTS,
             "min_before": FCE_MIN_BEFORE, "rows": ranked + rest}

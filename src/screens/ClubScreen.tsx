@@ -35,7 +35,7 @@ export function ClubScreen({ onOpenPlayer, onOpenTournament, onOpenFceCup }: Pro
             <FceBadge size={20} />
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 14,
-                             fontWeight: 700, color: '#fff' }}>FCE Activity</span>
+                             fontWeight: 700, color: '#fff' }}>Кубок FCE</span>
               <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 12,
                              color: '#b9c7de' }}>Бесплатные игры и iPhone за прорыв</span>
             </span>

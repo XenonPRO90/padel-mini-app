@@ -14,7 +14,7 @@ export function FceBadge({ size = 16, title = 'FCE verified' }: { size?: number;
         background: '#ffffff', border: `1px solid ${FCE_BLUE}33`,
       }}
     >
-      <svg viewBox="0 0 100 100" width={size * 0.62} height={size * 0.62} aria-hidden="true">
+      <svg viewBox="6.3 2.3 80.4 85.4" width={size * 0.58} height={size * 0.58} aria-hidden="true">
         <g fill={FCE_BLUE}>
           <path d="M48.3,10.9v76.8l38.4-38.4L48.3,10.9z" />
           <polygon points="41.2,72.1 41.2,55.6 22.8,37.2 41.2,18.9 41.2,2.3 6.3,37.2" />

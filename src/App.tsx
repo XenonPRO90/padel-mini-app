@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TabBar } from './components/TabBar';
+import { FceBadge } from './components/FceBadge';
 import { HomeScreen } from './screens/HomeScreen';
 import { PlayersScreen } from './screens/PlayersScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -241,6 +242,26 @@ export default function App() {
             <SchedulePosterScreen onClose={pop} />
           )}
         </div>
+        {/* The sponsor runs across the whole app, not just its own page: a
+            slim band above the tab bar, present on every home tab. It costs
+            one line of height and never a tab slot — the bar belongs to the
+            club (Roman, 2026-11-25). */}
+        {showTabBar && (
+          <button onClick={() => push({ name: 'fceCup' })} style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            background: '#091a38', border: 'none', borderTop: '1px solid #16294a',
+            padding: '7px 16px', cursor: 'pointer', textAlign: 'left',
+          }}>
+            <FceBadge size={17} />
+            <span style={{
+              flex: 1, minWidth: 0, fontFamily: T.fontSerif, fontSize: 12.5, color: '#dbe4f2',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              <b style={{ color: '#fff' }}>Кубок FCE</b> · бесплатные игры и iPhone за прорыв
+            </span>
+            <span style={{ color: '#8aa0c4', fontSize: 15, lineHeight: 1 }}>›</span>
+          </button>
+        )}
         {showTabBar && (
           <TabBar
             active={tab}

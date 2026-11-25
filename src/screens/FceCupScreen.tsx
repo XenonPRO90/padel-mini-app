@@ -279,7 +279,11 @@ function Row({ r, mine }: { r: FceStandingRow; mine: boolean }) {
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{r.name}</div>
         <div style={{ fontFamily: T.fontDisplay, fontSize: 11, color: T.muted }}>
-          {r.level} · {r.played} турн.{prize ? ` · ${prize}` : ''}
+          {r.level} · {r.played} турн.
+          {prize && <span style={{ color: BLUE, fontWeight: 700 }}> · {prize}</span>}
+          {!prize && !r.fce_verified && r.place !== null && r.place <= 12 && (
+            <span style={{ color: T.loss }}> · без регистрации приз уходит дальше</span>
+          )}
         </div>
       </div>
       <div style={{
