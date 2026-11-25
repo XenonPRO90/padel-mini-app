@@ -160,6 +160,8 @@ async def get_pair_leaderboard(tid: int):
         unranked_filter = "AND s.player_id IS NOT NULL" if finished else ""
         cur = await db.execute(
             f"""SELECT
+               tp1.player_id AS pid_a,
+               tp2.player_id AS pid_b,
                p1.name AS name_a,
                p2.name AS name_b,
                COALESCE(s.points, 0) AS points,
@@ -2047,6 +2049,13 @@ async def finish_tournament(tid: int):
             (tid,),
         )
         await db.commit()
+    # Win & Get Free Game: the sponsor pays the winners' next game, so the
+    # voucher is minted the moment the result is final rather than later by
+    # hand. Issuing is idempotent, so finishing twice costs nothing.
+    try:
+        await fce_issue_vouchers(tid)
+    except Exception:
+        pass  # a sponsor perk must never block closing a tournament
     return {"ok": True}
 
 
@@ -2718,6 +2727,7 @@ async def _ranked_standings(t: dict) -> list[dict]:
         formatted = [
             {
                 "name": f"{r['name_a']} & {r['name_b']}",
+                "player_ids": [r["pid_a"], r["pid_b"]],
                 "points": r["points"], "wins": r["wins"], "losses": r["losses"],
             }
             for r in rows
@@ -2727,6 +2737,7 @@ async def _ranked_standings(t: dict) -> list[dict]:
         formatted = [
             {
                 "name": r["name"],
+                "player_ids": [r["player_id"]],
                 "points": r["points"], "wins": r["wins"], "losses": r["losses"],
             }
             for r in rows
@@ -3482,6 +3493,26 @@ async def ensure_schema():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_fce_rows_status ON fce_import_rows(status)")
 
+        # Win & Get Free Game. A voucher is issued the moment a tournament is
+        # finished, to everyone who shares first place — in pair formats that is
+        # both partners. It is issued even to a player who has not registered
+        # with FCE yet, and simply cannot be spent until they do, so nobody
+        # loses a prize for being slow with the paperwork (Roman, 2026-11-25).
+        # UNIQUE keeps a re-finished tournament from minting a second one.
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS fce_vouchers (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   player_id INTEGER NOT NULL,
+                   tournament_id INTEGER,
+                   issued_at TEXT NOT NULL DEFAULT (datetime('now')),
+                   expires_at TEXT NOT NULL,
+                   redeemed_at TEXT,
+                   redeemed_by INTEGER,
+                   note TEXT)""")
+        await db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_fce_voucher_once "
+            "ON fce_vouchers(player_id, tournament_id)")
+
         # The quarter the cup runs over, and every player's rating at the moment
         # it opened. The baseline is frozen deliberately: ELO is recomputed from
         # the whole match history, so touching the engine mid-quarter would
@@ -4077,3 +4108,134 @@ async def fce_standings(code: str | None = None) -> dict:
         x["prize_place"] = None
     return {"quarter": q, "min_tournaments": FCE_MIN_TOURNAMENTS,
             "min_before": FCE_MIN_BEFORE, "rows": ranked + rest}
+
+
+# ─── FCE Activity: Win & Get Free Game ───────────────────────────────────
+FCE_VOUCHER_MONTHS = 12       # a voucher lives a year (Liza/Roman, 2026-11-25)
+
+
+async def fce_issue_vouchers(tid: int) -> dict:
+    """Hand a free game to everyone who shares first place in a finished
+    tournament. Safe to call again: the unique index means a tournament can
+    only ever mint one voucher per player."""
+    t = await get_tournament(tid)
+    if not t or t.get("status") != "finished" or t.get("mode") == "casual":
+        return {"issued": 0, "skipped": "не завершённый турнир"}
+    rows = await _ranked_standings(t)
+    winners = [pid for r in rows if r.get("place") == 1
+               for pid in (r.get("player_ids") or []) if pid]
+    if not winners:
+        return {"issued": 0}
+    # A coach plays to make the evening work, not to collect the sponsor's
+    # prizes — the same people excluded from the rating are excluded here.
+    async with conn() as db:
+        qmarks = ",".join("?" * len(winners))
+        cur = await db.execute(
+            f"SELECT id FROM players WHERE id IN ({qmarks}) AND rating_excluded=0",
+            winners)
+        winners = [r[0] for r in await cur.fetchall()]
+    if not winners:
+        return {"issued": 0, "skipped": "только тренеры"}
+    issued = 0
+    async with conn() as db:
+        for pid in winners:
+            cur = await db.execute(
+                "INSERT OR IGNORE INTO fce_vouchers(player_id, tournament_id, expires_at) "
+                "VALUES(?,?, date('now', ?))",
+                (pid, tid, f"+{FCE_VOUCHER_MONTHS} months"))
+            issued += cur.rowcount or 0
+        await db.commit()
+    return {"issued": issued, "winners": len(winners), "tournament_id": tid}
+
+
+def _voucher_state(v: dict, verified: bool) -> str:
+    """A voucher's state is derived, never stored: 'redeemed' once spent,
+    'expired' past its date, 'locked' while its owner has not registered with
+    FCE, otherwise 'active'. Deriving it means a player registering today
+    unlocks every voucher they already hold, with nothing to migrate."""
+    if v["redeemed_at"]:
+        return "redeemed"
+    from datetime import date
+    if v["expires_at"] and v["expires_at"] < date.today().isoformat():
+        return "expired"
+    return "active" if verified else "locked"
+
+
+async def fce_my_vouchers(tg_id: int) -> dict:
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id, COALESCE(fce_verified,0) AS v FROM players WHERE telegram_id=?",
+            (tg_id,))
+        me = await cur.fetchone()
+        if not me:
+            return {"vouchers": [], "active": 0}
+        cur = await db.execute(
+            """SELECT f.id, f.tournament_id, f.issued_at, f.expires_at, f.redeemed_at,
+                      t.name AS tournament
+                 FROM fce_vouchers f LEFT JOIN tournaments t ON t.id = f.tournament_id
+                WHERE f.player_id = ? ORDER BY f.issued_at DESC""", (me["id"],))
+        rows = [row_to_dict(r) for r in await cur.fetchall()]
+    for r in rows:
+        r["state"] = _voucher_state(r, bool(me["v"]))
+    return {"vouchers": rows, "active": sum(1 for r in rows if r["state"] == "active")}
+
+
+async def fce_all_vouchers(state: str | None = None) -> dict:
+    """Every voucher in the club, for the admin who pays for the games."""
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT f.id, f.player_id, p.name, COALESCE(p.fce_verified,0) AS verified,
+                      f.tournament_id, t.name AS tournament,
+                      f.issued_at, f.expires_at, f.redeemed_at, f.redeemed_by
+                 FROM fce_vouchers f
+                 JOIN players p ON p.id = f.player_id
+                 LEFT JOIN tournaments t ON t.id = f.tournament_id
+                ORDER BY f.redeemed_at IS NOT NULL, f.issued_at DESC""")
+        rows = [row_to_dict(r) for r in await cur.fetchall()]
+    for r in rows:
+        r["state"] = _voucher_state(r, bool(r["verified"]))
+    if state:
+        rows = [r for r in rows if r["state"] == state]
+    counts = {}
+    for r in rows:
+        counts[r["state"]] = counts.get(r["state"], 0) + 1
+    return {"vouchers": rows, "counts": counts}
+
+
+async def fce_redeem_voucher(voucher_id: int, admin_tg: int | None, note: str | None = None):
+    """Burn a voucher — the game has been paid for out of the sponsor's budget.
+    Full admins only, and only once."""
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT f.*, COALESCE(p.fce_verified,0) AS verified
+                 FROM fce_vouchers f JOIN players p ON p.id=f.player_id
+                WHERE f.id=?""", (voucher_id,))
+        v = row_to_dict(await cur.fetchone())
+        if not v:
+            raise ValueError("Ваучер не найден")
+        state = _voucher_state(v, bool(v["verified"]))
+        if state != "active":
+            raise ValueError({
+                "redeemed": "Ваучер уже погашен",
+                "expired": "Срок ваучера истёк",
+                "locked": "Игрок ещё не зарегистрировался на fce.global",
+            }.get(state, "Ваучер недоступен"))
+        await db.execute(
+            "UPDATE fce_vouchers SET redeemed_at=datetime('now'), redeemed_by=?, "
+            "note=COALESCE(?, note) WHERE id=?", (admin_tg, note, voucher_id))
+        await db.commit()
+    return {"ok": True, "voucher_id": voucher_id}
+
+
+async def fce_backfill_vouchers(since: str | None = None) -> dict:
+    """Issue vouchers for tournaments that finished before the feature existed
+    — used once when the programme opens, and harmless to repeat."""
+    async with conn() as db:
+        cur = await db.execute(
+            "SELECT id FROM tournaments WHERE status='finished' AND mode!='casual' "
+            "AND (? IS NULL OR date(created_at) >= date(?)) ORDER BY id", (since, since))
+        ids = [r[0] for r in await cur.fetchall()]
+    total = 0
+    for tid in ids:
+        total += (await fce_issue_vouchers(tid)).get("issued", 0)
+    return {"tournaments": len(ids), "issued": total}

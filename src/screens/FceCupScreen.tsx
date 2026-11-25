@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMe } from '../api/me';
-import { useSetMyFceEmail, useFceStandings, type FceStandingRow } from '../api/fce';
+import { useSetMyFceEmail, useFceStandings, useMyVouchers,
+         type FceStandingRow, type FceVoucher } from '../api/fce';
 import { FceBadge, FceMark } from '../components/FceBadge';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
@@ -20,6 +21,7 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
   const { data: me } = useMe();
   const save = useSetMyFceEmail();
   const { data: standings } = useFceStandings();
+  const { data: vouchers } = useMyVouchers();
   const player = me?.player ?? null;
   const verified = !!player?.fce_verified;
   const [email, setEmail] = useState(player?.fce_email ?? '');
@@ -123,6 +125,8 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
             </>
           )}
         </div>
+
+        <MyVouchers list={vouchers?.vouchers ?? []} />
 
         {/* what you can win */}
         <Section title="ЧТО МОЖНО ВЫИГРАТЬ">
@@ -316,6 +320,51 @@ function Row({ r, mine, lastPrize }: {
         fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 700,
         color: r.rate >= 0 ? BLUE : T.loss, fontVariantNumeric: 'tabular-nums',
       }}>{fmtRate(r.rate)}</div>
+    </div>
+  );
+}
+
+
+function MyVouchers({ list }: { list: FceVoucher[] }) {
+  const live = list.filter((v) => v.state === 'active' || v.state === 'locked');
+  if (live.length === 0) return null;
+  const active = live.filter((v) => v.state === 'active').length;
+  const locked = live.length - active;
+  return (
+    <div style={{
+      background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 12, padding: 14,
+    }}>
+      <div style={{
+        fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700,
+        letterSpacing: '0.18em', color: T.muted,
+      }}>МОИ БЕСПЛАТНЫЕ ИГРЫ</div>
+      <div style={{
+        marginTop: 6, fontFamily: T.fontSerif, fontSize: 22, fontWeight: 700,
+        color: active ? BLUE : T.muted,
+      }}>{live.length}</div>
+      <div style={{ marginTop: 2, fontFamily: T.fontSerif, fontSize: 13.5, color: T.ink2, lineHeight: 1.5 }}>
+        {locked > 0
+          ? `${locked} из них откроется после регистрации на fce.global. Оплату игры подтверждает организатор.`
+          : 'Скажи организатору перед игрой — он спишет её с твоего счёта.'}
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {live.slice(0, 5).map((v) => (
+          <div key={v.id} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontFamily: T.fontDisplay, fontSize: 12.5, color: T.ink,
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: 999, flexShrink: 0,
+              background: v.state === 'active' ? BLUE : T.paperEdge,
+            }} />
+            <span style={{
+              flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden',
+              textOverflow: 'ellipsis', color: v.state === 'active' ? T.ink : T.muted,
+            }}>{v.tournament ?? 'турнир'}</span>
+            <span style={{ color: T.muted, fontSize: 11.5 }}>до {v.expires_at}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

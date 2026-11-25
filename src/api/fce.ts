@@ -121,3 +121,56 @@ export function useFceSnapshot() {
     },
   });
 }
+
+export interface FceVoucher {
+  id: number;
+  player_id?: number;
+  name?: string;
+  tournament_id: number | null;
+  tournament: string | null;
+  issued_at: string;
+  expires_at: string;
+  redeemed_at: string | null;
+  state: 'active' | 'locked' | 'redeemed' | 'expired';
+}
+
+export function useMyVouchers() {
+  return useQuery<{ vouchers: FceVoucher[]; active: number }>({
+    queryKey: ['my-vouchers'],
+    queryFn: () => api('/api/me/vouchers'),
+  });
+}
+
+export function useFceVouchers() {
+  return useQuery<{ vouchers: FceVoucher[]; counts: Record<string, number> }>({
+    queryKey: ['fce-vouchers'],
+    queryFn: () => api('/api/admin/fce/vouchers'),
+  });
+}
+
+export function useRedeemVoucher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (voucher_id: number) =>
+      api<{ ok: boolean }>('/api/admin/fce/vouchers/redeem', {
+        method: 'POST',
+        body: JSON.stringify({ voucher_id }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fce-vouchers'] });
+      qc.invalidateQueries({ queryKey: ['my-vouchers'] });
+    },
+  });
+}
+
+export function useBackfillVouchers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (since: string | null) =>
+      api<{ tournaments: number; issued: number }>('/api/admin/fce/vouchers/backfill', {
+        method: 'POST',
+        body: JSON.stringify({ since }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fce-vouchers'] }),
+  });
+}

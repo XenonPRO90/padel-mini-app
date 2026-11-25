@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useFceAdmin, useFceImport, useFceResolve, useFceStandings,
-         useFceSnapshot, type FcePendingRow } from '../api/fce';
+         useFceSnapshot, useFceVouchers, useRedeemVoucher,
+         useBackfillVouchers, type FcePendingRow, type FceVoucher } from '../api/fce';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
 
@@ -25,6 +26,9 @@ export function FceAdminScreen({ onBack }: { onBack: () => void }) {
   const resolve = useFceResolve();
   const { data: standings } = useFceStandings();
   const snapshot = useFceSnapshot();
+  const { data: vouchers } = useFceVouchers();
+  const redeem = useRedeemVoucher();
+  const backfill = useBackfillVouchers();
   const [text, setText] = useState('');
   const [report, setReport] = useState<Record<string, number> | null>(null);
 
@@ -150,6 +154,59 @@ export function FceAdminScreen({ onBack }: { onBack: () => void }) {
           )}
         </div>
 
+        {/* Vouchers. The club pays the winners' games out of FCE's budget and
+            burns them here, so the count of what is still owed is visible. */}
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+            marginBottom: 8,
+          }}>
+            <span style={{
+              fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700,
+              letterSpacing: '0.18em', color: T.muted,
+            }}>БЕСПЛАТНЫЕ ИГРЫ</span>
+            <button
+              onClick={async () => {
+                if (!(await tgConfirm('Выдать ваучеры за все прошедшие турниры, где их ещё нет?'))) return;
+                try {
+                  const r = await backfill.mutateAsync(null);
+                  alert(`Просмотрено турниров: ${r.tournaments}, выдано: ${r.issued}`);
+                } catch (e) { alert((e as Error).message); }
+              }}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                fontFamily: T.fontDisplay, fontSize: 12, color: BLUE,
+              }}
+            >добрать за прошлые турниры</button>
+          </div>
+          {vouchers && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <Stat n={vouchers.counts.active ?? 0} label="можно гасить" accent />
+              <Stat n={vouchers.counts.locked ?? 0} label="ждут регистрации" />
+              <Stat n={vouchers.counts.redeemed ?? 0} label="погашено" />
+            </div>
+          )}
+          <div style={{
+            background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 12,
+            overflow: 'hidden',
+          }}>
+            {(vouchers?.vouchers ?? []).filter((v) => v.state !== 'redeemed').slice(0, 40)
+              .map((v) => (
+                <VoucherRow key={v.id} v={v} busy={redeem.isPending}
+                  onRedeem={async () => {
+                    if (!(await tgConfirm(`Погасить игру для ${v.name}? Это действие не отменяется.`))) return;
+                    try { await redeem.mutateAsync(v.id); }
+                    catch (e) { alert((e as Error).message.replace(/^API \d+: /, '')); }
+                  }} />
+              ))}
+            {(vouchers?.vouchers ?? []).filter((v) => v.state !== 'redeemed').length === 0 && (
+              <div style={{ padding: 14, fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted }}>
+                Непогашенных игр нет.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div>
           <div style={{
             fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700,
@@ -241,6 +298,44 @@ function Muted({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted, lineHeight: 1.5 }}>
       {children}
+    </div>
+  );
+}
+
+
+function VoucherRow({ v, busy, onRedeem }: {
+  v: FceVoucher; busy: boolean; onRedeem: () => void;
+}) {
+  const locked = v.state === 'locked';
+  const expired = v.state === 'expired';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+      borderTop: `1px solid ${T.paperEdge}`,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily: T.fontSerif, fontSize: 14.5, color: expired ? T.muted : T.ink,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{v.name}</div>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 11, color: T.muted }}>
+          {v.tournament ?? 'турнир'} · до {v.expires_at}
+          {locked && <span style={{ color: '#9a3b3b' }}> · нет регистрации</span>}
+          {expired && <span> · просрочен</span>}
+        </div>
+      </div>
+      <button
+        onClick={onRedeem}
+        disabled={busy || locked || expired}
+        style={{
+          padding: '7px 13px', borderRadius: 999, flexShrink: 0,
+          border: `1px solid ${locked || expired ? T.paperEdge : BLUE}`,
+          background: locked || expired ? 'transparent' : BLUE,
+          color: locked || expired ? T.muted : '#fff',
+          fontFamily: T.fontDisplay, fontSize: 12.5, fontWeight: 700,
+          cursor: locked || expired ? 'default' : 'pointer',
+        }}
+      >Погасить</button>
     </div>
   );
 }

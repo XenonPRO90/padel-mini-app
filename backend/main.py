@@ -452,6 +452,41 @@ async def fce_standings(code: str | None = None, _user=Depends(get_tg_user)):
     return await q.fce_standings(code)
 
 
+@app.get("/api/me/vouchers")
+async def my_vouchers(user=Depends(get_tg_user)):
+    if user.get("_dev_mode"):
+        return {"vouchers": [], "active": 0}
+    return await q.fce_my_vouchers(user["id"])
+
+
+@app.get("/api/admin/fce/vouchers")
+async def fce_vouchers_list(state: str | None = None, _admin=Depends(get_full_admin)):
+    return await q.fce_all_vouchers(state)
+
+
+class FceRedeemBody(BaseModel):
+    voucher_id: int
+    note: str | None = None
+
+
+@app.post("/api/admin/fce/vouchers/redeem")
+async def fce_voucher_redeem(body: FceRedeemBody, admin=Depends(get_full_admin)):
+    """Burn a voucher once the game has been paid for out of FCE's budget."""
+    try:
+        return await q.fce_redeem_voucher(body.voucher_id, admin.get("id"), body.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class FceBackfillBody(BaseModel):
+    since: str | None = None
+
+
+@app.post("/api/admin/fce/vouchers/backfill")
+async def fce_voucher_backfill(body: FceBackfillBody, _admin=Depends(get_full_admin)):
+    return await q.fce_backfill_vouchers(body.since)
+
+
 @app.get("/api/rackets/stats")
 async def rackets_stats(_user=Depends(get_tg_user)):
     return {"items": await q.get_racket_stats()}
