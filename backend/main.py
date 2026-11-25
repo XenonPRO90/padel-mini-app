@@ -287,7 +287,18 @@ async def player_profile(pid: int, user=Depends(get_tg_user)):
     # the settings row would have nothing to show (Roman/Liza, 2026-11-30).
     p = prof.get("player") or {}
     if not p.get("show_username") and p.get("telegram_id") != user.get("id"):
-        p["username"] = None
+        # A full admin is the exception: Roman, Liza and Katerina run the club
+        # and have to be able to reach a player who never ticked the box. The
+        # seven hosts are ordinary members who help run a Wednesday, so for them
+        # the opt-in holds. The extra flag tells the client to mark the handle as
+        # unpublished, so an admin does not mistake it for something the player
+        # agreed to show (Roman, 2026-11-25).
+        viewer_is_full_admin = bool(user.get("_dev_mode")) or \
+            await q.is_full_admin(user.get("id"))
+        if viewer_is_full_admin and p.get("username"):
+            p["username_private"] = True
+        else:
+            p["username"] = None
     return prof
 
 

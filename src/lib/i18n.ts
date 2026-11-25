@@ -105,6 +105,7 @@ export const STR = {
     en: 'Only you can see your handle' },
   'profile.noHandle': { ru: 'У тебя не задан ник в Telegram — его можно добавить в настройках Telegram',
     en: 'You have no Telegram @username — you can add one in Telegram settings' },
+  'profile.handleAdminOnly': { ru: 'только админам', en: 'admins only' },
   'elo.title': { ru: 'Рейтинг ELO', en: 'ELO rating' },
   'elo.forPeriod': { ru: 'за период', en: 'this period' },
   'elo.toNext': { ru: 'до {lvl} осталось {d}', en: '{d} to {lvl}' },
