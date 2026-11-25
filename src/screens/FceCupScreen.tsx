@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMe } from '../api/me';
-import { useSetMyFceEmail } from '../api/fce';
+import { useSetMyFceEmail, useFceStandings, type FceStandingRow } from '../api/fce';
 import { FceBadge } from '../components/FceBadge';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
@@ -19,6 +19,7 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
   const t = useT();
   const { data: me } = useMe();
   const save = useSetMyFceEmail();
+  const { data: standings } = useFceStandings();
   const player = me?.player ?? null;
   const verified = !!player?.fce_verified;
   const [email, setEmail] = useState(player?.fce_email ?? '');
@@ -139,12 +140,7 @@ export function FceCupScreen({ onBack }: { onBack: () => void }) {
           </Rule>
         </Section>
 
-        <div style={{
-          border: `1px dashed ${T.paperEdge}`, borderRadius: 12, padding: 16,
-          textAlign: 'center', fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted,
-        }}>
-          Таблица «Прорыв квартала» появится здесь 1 декабря.
-        </div>
+        <Standings data={standings} myId={player?.id ?? null} />
       </div>
     </div>
   );
@@ -178,6 +174,118 @@ function Rule({ n, head, children }: { n: string; head: string; children: React.
           {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+
+function Standings({ data, myId }: {
+  data: ReturnType<typeof useFceStandings>['data']; myId: number | null;
+}) {
+  if (!data?.quarter) {
+    return (
+      <div style={{
+        border: `1px dashed ${T.paperEdge}`, borderRadius: 12, padding: 16,
+        textAlign: 'center', fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted,
+      }}>
+        Таблица «Прорыв квартала» появится здесь 1 декабря.
+      </div>
+    );
+  }
+  const need = data.min_tournaments ?? 10;
+  const rows = data.rows;
+  const ranked = rows.filter((r) => r.place !== null);
+  const mine = myId ? rows.find((r) => r.player_id === myId) : undefined;
+
+  return (
+    <div>
+      <div style={{
+        fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
+        color: T.muted, marginBottom: 8,
+      }}>ПРОРЫВ КВАРТАЛА</div>
+
+      {/* Your own standing first: for most people the table is someone else's
+          race, while "4 of 10 played" is the thing they can act on. */}
+      {mine && (
+        <div style={{
+          background: BLUE_TINT, border: `1px solid ${BLUE}44`, borderRadius: 12,
+          padding: 12, marginBottom: 10,
+        }}>
+          {mine.eligible ? (
+            <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink }}>
+              Ты на <b>{mine.place} месте</b> — {fmtRate(mine.rate)} за турнир,
+              сыграно {mine.played}.
+            </div>
+          ) : (
+            <>
+              <div style={{ fontFamily: T.fontSerif, fontSize: 14, color: T.ink }}>
+                Сыграно <b>{mine.played} из {need}</b> турниров — этого пока мало для зачёта.
+              </div>
+              <div style={{
+                marginTop: 8, height: 6, borderRadius: 999, background: '#ffffff',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${Math.min(100, (mine.played / need) * 100)}%`,
+                  height: '100%', background: BLUE,
+                }} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 12,
+        overflow: 'hidden',
+      }}>
+        {ranked.length === 0 && (
+          <div style={{ padding: 14, fontFamily: T.fontSerif, fontSize: 13.5, color: T.muted }}>
+            Пока никто не набрал {need} турниров — таблица заполнится по ходу квартала.
+          </div>
+        )}
+        {ranked.map((r) => <Row key={r.player_id} r={r} mine={r.player_id === myId} />)}
+      </div>
+
+      <div style={{
+        marginTop: 8, fontFamily: T.fontSerif, fontSize: 12, color: T.muted, lineHeight: 1.45,
+      }}>
+        Считается средний прирост рейтинга за турнир. Места 1–3 — iPhone 18 Pro,
+        места 4–10 — форма FCE. Допуск: {need} турниров за квартал и 3 до его начала.
+      </div>
+    </div>
+  );
+}
+
+function fmtRate(v: number) {
+  return `${v >= 0 ? '+' : ''}${v.toFixed(4)}`;
+}
+
+function Row({ r, mine }: { r: FceStandingRow; mine: boolean }) {
+  const prize = r.prize === 'iphone' ? 'iPhone' : r.prize === 'kit' ? 'форма' : '';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+      borderTop: `1px solid ${T.paperEdge}`,
+      background: mine ? BLUE_TINT : 'transparent',
+    }}>
+      <div style={{
+        width: 22, textAlign: 'center', fontFamily: T.fontSerif, fontSize: 15,
+        fontWeight: 700, color: r.prize === 'iphone' ? BLUE : T.muted, flexShrink: 0,
+      }}>{r.place}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily: T.fontSerif, fontSize: 14.5, color: T.ink, fontWeight: mine ? 700 : 400,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{r.name}</div>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 11, color: T.muted }}>
+          {r.level} · {r.played} турн.{prize ? ` · ${prize}` : ''}
+        </div>
+      </div>
+      <div style={{
+        fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 700,
+        color: r.rate >= 0 ? BLUE : T.loss, fontVariantNumeric: 'tabular-nums',
+      }}>{fmtRate(r.rate)}</div>
     </div>
   );
 }

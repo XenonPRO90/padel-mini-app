@@ -3482,6 +3482,25 @@ async def ensure_schema():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_fce_rows_status ON fce_import_rows(status)")
 
+        # The quarter the cup runs over, and every player's rating at the moment
+        # it opened. The baseline is frozen deliberately: ELO is recomputed from
+        # the whole match history, so touching the engine mid-quarter would
+        # rewrite the starting point and could hand the iPhone to someone else
+        # after the fact (Roman, 2026-11-25).
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS fce_quarters (
+                   code TEXT PRIMARY KEY,
+                   start_date TEXT NOT NULL,
+                   end_date TEXT NOT NULL,
+                   taken_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS fce_snapshots (
+                   code TEXT NOT NULL,
+                   player_id INTEGER NOT NULL,
+                   elo REAL NOT NULL,
+                   tournaments_before INTEGER NOT NULL,
+                   PRIMARY KEY (code, player_id))""")
+
         # One row per (month, player) a recap went out to — makes the monthly
         # send idempotent across restarts and retries.
         await db.execute(
@@ -3942,3 +3961,107 @@ async def fce_stats() -> dict:
                  (SELECT COUNT(*) FROM fce_import_rows) AS rows_total""")
         r = await cur.fetchone()
     return dict(r)
+
+
+# ─── FCE Activity: the quarter standings ─────────────────────────────────
+# Rules agreed with Roman on 2026-11-25, after backtesting three metrics on
+# the club's own history:
+#   * one club-wide table, no level brackets — per-tournament growth turned out
+#     not to depend on strength (+0.0023 / +0.0028 / +0.0022 across thirds),
+#     so brackets would have protected nobody;
+#   * the metric is growth PER TOURNAMENT, not total — total growth tracks
+#     attendance, which is flat per tournament (+0.0020 / +0.0011 / +0.0024);
+#   * attendance is the gate instead: 10 tournaments in the quarter, and 3
+#     before it opened, which also shuts out a rating still calibrating and the
+#     "enter me a level lower" route to a prize.
+FCE_MIN_TOURNAMENTS = 10      # in the quarter — roughly once a week
+FCE_MIN_BEFORE = 3            # before it opened — the rating must be settled
+FCE_PRIZES = [("iphone", 3), ("kit", 7)]   # places 1-3, then 4-10
+
+
+async def fce_take_snapshot(code: str, start_date: str, end_date: str) -> dict:
+    """Freeze every player's rating at the opening of a quarter. Re-running it
+    replaces the snapshot, so a mistake before the start is fixable; once the
+    quarter is running it should not be touched."""
+    async with conn() as db:
+        await db.execute(
+            "INSERT INTO fce_quarters(code, start_date, end_date, taken_at) "
+            "VALUES(?,?,?,datetime('now')) ON CONFLICT(code) DO UPDATE SET "
+            "start_date=excluded.start_date, end_date=excluded.end_date, "
+            "taken_at=excluded.taken_at", (code, start_date, end_date))
+        await db.execute("DELETE FROM fce_snapshots WHERE code=?", (code,))
+        await db.execute(
+            """INSERT INTO fce_snapshots(code, player_id, elo, tournaments_before)
+               SELECT ?, p.id, p.elo,
+                      (SELECT COUNT(*) FROM elo_history h WHERE h.player_id = p.id)
+               FROM players p
+               WHERE p.elo IS NOT NULL AND p.rating_excluded = 0""", (code,))
+        cur = await db.execute("SELECT COUNT(*) FROM fce_snapshots WHERE code=?", (code,))
+        n = (await cur.fetchone())[0]
+        await db.commit()
+    return {"code": code, "start_date": start_date, "end_date": end_date, "players": n}
+
+
+async def fce_quarter(code: str | None = None):
+    async with conn() as db:
+        if code:
+            cur = await db.execute("SELECT * FROM fce_quarters WHERE code=?", (code,))
+        else:
+            cur = await db.execute(
+                "SELECT * FROM fce_quarters ORDER BY start_date DESC LIMIT 1")
+        return row_to_dict(await cur.fetchone())
+
+
+async def fce_standings(code: str | None = None) -> dict:
+    """The cup table. Everyone with a snapshot who played at least once in the
+    quarter appears; `eligible` says whether they are actually in the running,
+    and only eligible rows are ranked and given a prize."""
+    q = await fce_quarter(code)
+    if not q:
+        return {"quarter": None, "rows": []}
+    async with conn() as db:
+        cur = await db.execute(
+            """SELECT s.player_id AS pid, p.name, p.level, p.photo_url,
+                      COALESCE(p.fce_verified, 0) AS fce_verified,
+                      s.elo AS elo_start, s.tournaments_before AS before,
+                      p.elo AS elo_now,
+                      (SELECT COUNT(*) FROM elo_history h
+                         JOIN tournaments t ON t.id = h.tournament_id
+                        WHERE h.player_id = s.player_id
+                          AND date(t.created_at) >= date(?)
+                          AND date(t.created_at) <= date(?)) AS played
+               FROM fce_snapshots s JOIN players p ON p.id = s.player_id
+               WHERE s.code = ? AND p.rating_excluded = 0""",
+            (q["start_date"], q["end_date"], q["code"]))
+        rows = [row_to_dict(r) for r in await cur.fetchall()]
+
+    out = []
+    for r in rows:
+        if not r["played"]:
+            continue
+        growth = (r["elo_now"] or r["elo_start"]) - r["elo_start"]
+        out.append({
+            "player_id": r["pid"], "name": r["name"], "level": r["level"],
+            "photo_url": r["photo_url"], "fce_verified": bool(r["fce_verified"]),
+            "elo_start": round(r["elo_start"], 3),
+            "elo_now": round(r["elo_now"] or r["elo_start"], 3),
+            "growth": round(growth, 3),
+            "rate": round(growth / r["played"], 4),
+            "played": r["played"], "before": r["before"],
+            "eligible": r["played"] >= FCE_MIN_TOURNAMENTS and r["before"] >= FCE_MIN_BEFORE,
+        })
+
+    ranked = sorted([x for x in out if x["eligible"]],
+                    key=lambda x: (-x["rate"], -x["played"], x["name"]))
+    place = 0
+    for x in ranked:
+        place += 1
+        x["place"] = place
+        x["prize"] = ("iphone" if place <= 3 else ("kit" if place <= 10 else None))
+    rest = sorted([x for x in out if not x["eligible"]],
+                  key=lambda x: (-x["played"], -x["rate"]))
+    for x in rest:
+        x["place"] = None
+        x["prize"] = None
+    return {"quarter": q, "min_tournaments": FCE_MIN_TOURNAMENTS,
+            "min_before": FCE_MIN_BEFORE, "rows": ranked + rest}

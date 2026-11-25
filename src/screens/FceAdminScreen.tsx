@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useFceAdmin, useFceImport, useFceResolve, type FcePendingRow } from '../api/fce';
+import { useFceAdmin, useFceImport, useFceResolve, useFceStandings,
+         useFceSnapshot, type FcePendingRow } from '../api/fce';
 import { T } from '../lib/tokens';
 import { useT } from '../lib/i18n';
 
@@ -11,11 +12,19 @@ import { useT } from '../lib/i18n';
 // decision is one tap and not a search.
 const BLUE = '#1e78f0';
 
+function tgConfirm(message: string): Promise<boolean> {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.showConfirm) return new Promise((r) => tg.showConfirm!(message, (ok) => r(ok)));
+  return Promise.resolve(window.confirm(message));
+}
+
 export function FceAdminScreen({ onBack }: { onBack: () => void }) {
   const t = useT();
   const { data, isLoading } = useFceAdmin();
   const doImport = useFceImport();
   const resolve = useFceResolve();
+  const { data: standings } = useFceStandings();
+  const snapshot = useFceSnapshot();
   const [text, setText] = useState('');
   const [report, setReport] = useState<Record<string, number> | null>(null);
 
@@ -54,6 +63,52 @@ export function FceAdminScreen({ onBack }: { onBack: () => void }) {
             <Stat n={s.pending} label="ждут решения" />
           </div>
         )}
+
+        {/* The baseline the whole quarter is measured from. Taking it twice
+            while the quarter is running would move everyone's starting point,
+            so the button says what it does and asks first. */}
+        <div style={{
+          background: T.cream, border: `1px solid ${T.paperEdge}`, borderRadius: 12, padding: 12,
+        }}>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.18em', color: T.muted,
+          }}>КВАРТАЛ</div>
+          {standings?.quarter ? (
+            <div style={{ marginTop: 6, fontFamily: T.fontSerif, fontSize: 14, color: T.ink }}>
+              {standings.quarter.code}: {standings.quarter.start_date} — {standings.quarter.end_date}
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 12, color: T.muted, marginTop: 2 }}>
+                снапшот снят {standings.quarter.taken_at}
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 6, fontFamily: T.fontSerif, fontSize: 14, color: T.ink }}>
+              Снапшот ещё не снят — зачёт не считается.
+            </div>
+          )}
+          <button
+            onClick={async () => {
+              const again = !!standings?.quarter;
+              const msg = again
+                ? 'Снапшот уже снят. Снять заново? Стартовые рейтинги всех игроков будут перезаписаны текущими, и зачёт начнётся заново.'
+                : 'Зафиксировать текущие рейтинги как стартовые для квартала 1 декабря — 28 февраля?';
+              if (!(await tgConfirm(msg))) return;
+              try {
+                const r = await snapshot.mutateAsync({
+                  code: '2026-Q4', start_date: '2026-12-01', end_date: '2027-02-28' });
+                alert(`Снапшот снят: ${r.players} игроков`);
+              } catch (e) { alert((e as Error).message); }
+            }}
+            disabled={snapshot.isPending}
+            style={{
+              marginTop: 10, width: '100%', padding: '10px 14px', borderRadius: 10,
+              border: `1px solid ${standings?.quarter ? T.paperEdge : BLUE}`,
+              background: standings?.quarter ? 'transparent' : BLUE,
+              color: standings?.quarter ? T.muted : '#fff',
+              fontFamily: T.fontDisplay, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+            }}
+          >{snapshot.isPending ? '…' : standings?.quarter ? 'Снять снапшот заново' : 'Снять снапшот квартала'}</button>
+        </div>
 
         <div>
           <div style={{

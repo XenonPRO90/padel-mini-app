@@ -433,6 +433,25 @@ async def fce_admin_unverify(body: FceUnverifyBody, admin=Depends(get_full_admin
     return await q.fce_unverify(body.player_id, admin.get("id"))
 
 
+class FceSnapshotBody(BaseModel):
+    # The programme's first quarter, agreed with FCE: 1 Dec 2026 — 28 Feb 2027.
+    code: str = "2026-Q4"
+    start_date: str = "2026-12-01"
+    end_date: str = "2027-02-28"
+
+
+@app.post("/api/admin/fce/snapshot")
+async def fce_admin_snapshot(body: FceSnapshotBody, _admin=Depends(get_full_admin)):
+    """Freeze the ratings the quarter is measured from. Taken once, at the
+    announcement, before the first tournament of the quarter."""
+    return await q.fce_take_snapshot(body.code, body.start_date, body.end_date)
+
+
+@app.get("/api/fce/standings")
+async def fce_standings(code: str | None = None, _user=Depends(get_tg_user)):
+    return await q.fce_standings(code)
+
+
 @app.get("/api/rackets/stats")
 async def rackets_stats(_user=Depends(get_tg_user)):
     return {"items": await q.get_racket_stats()}

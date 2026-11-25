@@ -75,3 +75,49 @@ export function useFceResolve() {
     },
   });
 }
+
+export interface FceStandingRow {
+  player_id: number;
+  name: string;
+  level: string;
+  photo_url?: string | null;
+  fce_verified: boolean;
+  elo_start: number;
+  elo_now: number;
+  growth: number;
+  rate: number;
+  played: number;
+  before: number;
+  eligible: boolean;
+  place: number | null;
+  prize: 'iphone' | 'kit' | null;
+}
+
+export interface FceStandings {
+  quarter: { code: string; start_date: string; end_date: string; taken_at: string } | null;
+  min_tournaments?: number;
+  min_before?: number;
+  rows: FceStandingRow[];
+}
+
+export function useFceStandings() {
+  return useQuery<FceStandings>({
+    queryKey: ['fce-standings'],
+    queryFn: () => api('/api/fce/standings'),
+  });
+}
+
+export function useFceSnapshot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { code: string; start_date: string; end_date: string }) =>
+      api<{ code: string; players: number }>('/api/admin/fce/snapshot', {
+        method: 'POST',
+        body: JSON.stringify(v),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fce-admin'] });
+      qc.invalidateQueries({ queryKey: ['fce-standings'] });
+    },
+  });
+}
