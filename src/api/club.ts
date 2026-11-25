@@ -25,6 +25,8 @@ export interface ClubRow {
   verified?: boolean;
   elo_games?: number;
   validating?: boolean;
+  // FCE Activity: KYC confirmed, badge shown beside the name.
+  fce_verified?: boolean;
 }
 
 export interface ClubPair {

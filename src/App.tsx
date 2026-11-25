@@ -161,7 +161,6 @@ export default function App() {
               onTournamentFinished={(tid) => setStack([{ name: 'home' }, { name: 'celebration', tid }])}
               onOpenMyProfile={(p) => push({ name: 'playerProfile', player: p })}
               onOpenClub={() => setTab('club')}
-              onOpenFceCup={() => push({ name: 'fceCup' })}
               onOrganizeCasual={() => push({ name: 'casualCreate' })}
             />
           )}
@@ -176,7 +175,6 @@ export default function App() {
           )}
           {homePane('club',
             <ClubScreen
-              onOpenFceCup={() => push({ name: 'fceCup' })}
               onOpenPlayer={(p) => push({ name: 'playerProfile', player: p })}
               onOpenTournament={(tid) => push({ name: 'tournamentDetail', tid })}
             />
@@ -250,14 +248,16 @@ export default function App() {
           <button onClick={() => push({ name: 'fceCup' })} style={{
             display: 'flex', alignItems: 'center', gap: 8, width: '100%',
             background: '#091a38', border: 'none', borderTop: '1px solid #16294a',
-            padding: '7px 16px', cursor: 'pointer', textAlign: 'left',
+            padding: '11px 16px', cursor: 'pointer', textAlign: 'left',
           }}>
-            <FceMark size={16} />
-            <span style={{
-              flex: 1, minWidth: 0, fontFamily: T.fontSerif, fontSize: 12.5, color: '#dbe4f2',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              <b style={{ color: '#fff' }}>Кубок FCE</b> · бесплатные игры и iPhone за прорыв
+            <FceMark size={24} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontFamily: T.fontSerif, fontSize: 14.5,
+                             fontWeight: 700, color: '#fff' }}>Кубок FCE</span>
+              <span style={{
+                display: 'block', fontFamily: T.fontSerif, fontSize: 12, color: '#b9c7de',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>Бесплатные игры и iPhone 18 Pro за прорыв квартала</span>
             </span>
             <span style={{ color: '#8aa0c4', fontSize: 15, lineHeight: 1 }}>›</span>
           </button>
@@ -276,14 +276,13 @@ export default function App() {
 // Role-aware first screen (the 'tournament' tab). Inside the provider so it can
 // read /api/me: admins → management home, linked players → personal dashboard,
 // brand-new users → welcome + join.
-function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub, onOrganizeCasual, onOpenFceCup }: {
+function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished, onOpenMyProfile, onOpenClub, onOrganizeCasual }: {
   onOpenLiveRound: () => void;
   onCreateTournament: () => void;
   onTournamentFinished: (tid: number) => void;
   onOpenMyProfile: (p: Player) => void;
   onOpenClub: () => void;
   onOrganizeCasual: () => void;
-  onOpenFceCup: () => void;
 }) {
   const { data: me, isLoading } = useMe();
   if (isLoading) return null;
@@ -294,7 +293,6 @@ function HomeRouter({ onOpenLiveRound, onCreateTournament, onTournamentFinished,
         onOpenClub={onOpenClub}
         onOpenLiveRound={onOpenLiveRound}
         onOrganizeCasual={onOrganizeCasual}
-        onOpenFceCup={onOpenFceCup}
       />
     );
   }
