@@ -14,7 +14,7 @@ import urllib.request
 import aiofiles
 import aiohttp
 
-from .config import BOT_TOKEN, BRAND
+from .config import BOT_TOKEN, BRAND, FCE_SPONSOR
 
 # Playwright lives in its own directory with a pinned version, NOT in the Vite
 # frontend. Two reasons: as a devDependency there every Vercel build would
@@ -143,11 +143,42 @@ def _brandhead(logo_size=84, gap=6):
             f'text-transform:uppercase;margin-bottom:6px">{BRAND_EYEBROW}</div>')
 
 
+# The sponsor's own artwork, as supplied by FCE: the gradient diamond and the
+# lettering of the wordmark, not a redraw. Sized to sit quietly under the club's
+# own footer line rather than compete with it.
+def _fce_lockup(mark_px: int = 26, word_px: int = 19) -> str:
+    return (
+        f'<span style="display:inline-flex;align-items:center;gap:9px;vertical-align:middle">'
+        f'<svg width="{mark_px}" height="{round(mark_px * 115 / 108)}" viewBox="12 12 108 115" '
+        f'style="display:block"><defs>'
+        f'<linearGradient id="fceb" x1="56" y1="182" x2="164" y2="182" gradientUnits="userSpaceOnUse">'
+        f'<stop stop-color="#0074ff"/><stop offset=".55" stop-color="#0088ff"/>'
+        f'<stop offset="1" stop-color="#00dcf2"/></linearGradient>'
+        f'<linearGradient id="fcet" x1="75" y1="153" x2="102" y2="130" gradientUnits="userSpaceOnUse">'
+        f'<stop stop-color="#0080ff"/><stop offset="1" stop-color="#00d5ef"/></linearGradient></defs>'
+        f'<g transform="translate(-44 -111)"><g fill="url(#fceb)">'
+        f'<path d="M100 123 56 167 71 182 56 197 95 236 95 216 76 197 84 189 100 205 100 184 79 167 100 146Z"/>'
+        f'<path d="M100 158 90 168 100 178Z"/><path d="M110 130 164 184 110 238Z"/></g>'
+        f'<path fill="url(#fcet)" d="M100 123 75 148 85 159 100 146Z"/></g></svg>'
+        f'<svg height="{word_px}" width="{round(word_px * 2.46)}" viewBox="137 32 182 74" '
+        f'style="display:block"><g transform="translate(-44 -111)" fill="#080d25">'
+        f'<path d="M181 144H230V157H196V174H225V187H196V216H181Z"/>'
+        f'<path d="M304 169H289C287 161 282 157 274 157 261 157 253 166 253 180 253 195 261 204 274 204 282 204 287 199 290 191H305C301 208 291 217 274 217 252 217 238 203 238 180 238 158 252 143 274 143 290 143 301 152 304 169Z"/>'
+        f'<path d="M314 144H362V157H329V174H359V187H329V203H363V216H314Z"/></g></svg></span>')
+
+
 def _footer():
     fam = MONO if _IS_FCE else DISP
-    return (f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;'
-            f'font-family:{fam};font-size:14px;letter-spacing:5px;color:{MUTED};'
-            f'text-transform:uppercase">{BRAND_FOOTER}</div>')
+    out = (f'<div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;'
+           f'font-family:{fam};font-size:14px;letter-spacing:5px;color:{MUTED};'
+           f'text-transform:uppercase">{BRAND_FOOTER}</div>')
+    if FCE_SPONSOR:
+        out += (f'<div style="position:absolute;bottom:32px;left:0;right:0;'
+                f'display:flex;align-items:center;justify-content:center;gap:12px">'
+                f'<span style="font-family:{DISP};font-size:11px;letter-spacing:3px;'
+                f'color:{MUTED};text-transform:uppercase">при поддержке</span>'
+                f'{_fce_lockup()}</div>')
+    return out
 
 
 def _page(inner):

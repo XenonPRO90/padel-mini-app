@@ -49,3 +49,9 @@ BRAND = os.getenv("BRAND", "padel")
 FEATURES = {
     "social": BRAND == "fce",
 }
+
+# Sponsor presence on the cards the club sends after every tournament. Off by
+# default and switched on per instance, because the cards go out the same
+# evening: the logo must not appear before the programme is announced. Never
+# applies to the FCE instance itself, where it would be the club's own mark.
+FCE_SPONSOR = os.getenv("FCE_SPONSOR", "0") == "1" and BRAND != "fce"
