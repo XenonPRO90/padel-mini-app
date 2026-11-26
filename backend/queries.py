@@ -2976,6 +2976,28 @@ ELO_K = 0.05          # per-match step (tunable)
 # to happen (Roman, 2026-11-30). The winner's delta is floored here instead,
 # symmetrically, so the exchange still nets to zero.
 ELO_WIN_FLOOR = 0.001
+# Share of games, not probability of winning. Those are different quantities
+# and the engine was comparing one against the other: a pair that wins 72% of
+# its MATCHES takes only 57% of its GAMES, so the match-odds curve demanded of
+# a favourite a scoreline nobody produces and read every normal win as an
+# underperformance. Measured over the club's first 142 scored matches:
+#
+#   gap in pair strength   games actually taken   match-odds curve expected
+#   equal                          0.48                    0.51
+#   +0.25…0.6                      0.57                    0.72
+#   +0.6…1.0                       0.77                    0.84
+#   above +1.0                     0.85                    0.93
+#
+# Hence a second, flatter scale for the score term (Roman, 2026-11-26). 142
+# matches fix the direction, not the constant — recheck once there are
+# thousands.
+ELO_S_GAMES = 2.0
+# What a match with no score is worth. Treating it as 1.0 : 0.0 says every win
+# was a whitewash; across those same matches the winner took 0.724 of games on
+# average and only one win in five was a rout. Using the real average also
+# keeps the years before scores were entered on the same footing as the days
+# after, so a player's chart has no seam at the date we switched it on.
+ELO_NOSCORE_SHARE = 0.724
 # Ceiling on what a single match can move a rating. Stretching the upper levels
 # made rare wins over a much higher-labelled pair pay far more than before,
 # which both re-inflated the player Liza wanted held back and let the leader
@@ -3092,10 +3114,15 @@ async def recompute_club_elo(db):
         A = [m["p1"], m["p2"]]; B = [m["p3"], m["p4"]]
         ea = (elo[A[0]] + elo[A[1]]) / 2
         eb = (elo[B[0]] + elo[B[1]]) / 2
-        exp_a = 1 / (1 + 10 ** ((eb - ea) / ELO_S))
+        # Both sides of the comparison are shares of games, never a mix of a
+        # share and a win probability — see ELO_S_GAMES.
+        exp_a = 1 / (1 + 10 ** ((eb - ea) / ELO_S_GAMES))
         s1, s2 = m["score1"], m["score2"]
-        act_a = (s1 / (s1 + s2)) if (s1 is not None and s2 is not None and (s1 + s2) > 0) \
-            else (1.0 if m["winner"] == 1 else 0.0)
+        if s1 is not None and s2 is not None and (s1 + s2) > 0:
+            act_a = s1 / (s1 + s2)
+        else:
+            act_a = (ELO_NOSCORE_SHARE if m["winner"] == 1
+                     else 1.0 - ELO_NOSCORE_SHARE)
         d = ELO_K * (act_a - exp_a)
         if ELO_WIN_CAP:
             d = max(-ELO_WIN_CAP, min(ELO_WIN_CAP, d))
