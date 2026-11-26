@@ -2968,7 +2968,14 @@ ELO_S = 1.0           # logistic scale: one level step (0.5) ≈ 76% expected.
                       # Lowered from 1.5 so who you beat matters more: a win
                       # over a level-stronger pair is now worth 3.2x one over a
                       # level-weaker pair, where it used to be 2.2x.
-ELO_K = 0.05          # per-match step (tunable)
+# Per-match step. Raised from 0.05 when the score term was corrected: both
+# fixes shrink how far a single match can move a rating, and with 97% of the
+# club's history holding no score, the whole ladder compressed — the top lost
+# 0.25–0.45 and the spread the strong players had earned simply dissolved.
+# 0.09 puts the club back roughly where it stood (average move 0.024 instead
+# of 0.053) while keeping the corrected direction, so winning six of eight
+# pays properly again (Roman, 2026-11-26).
+ELO_K = 0.09
 # A win must always move the rating up. Counting games played makes that false
 # on its own — beat a much weaker pair 6:2 and you fall short of what the
 # formula expected, so the rating drops. That happened on 18% of wins in the
